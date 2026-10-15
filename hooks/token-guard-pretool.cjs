@@ -155,7 +155,29 @@ function copyFolderRecursive(src, dest) {
   }
 }
 
+let currentToolName = '';
+let currentArgs = {};
+
 function respond(decision, reason, overwrite) {
+  if (decision === 'deny' && reason) {
+    try {
+      const incidentsFile = path.join(CACHE_DIR, 'session-incidents.json');
+      let incidents = [];
+      if (fs.existsSync(incidentsFile)) {
+        try { incidents = JSON.parse(fs.readFileSync(incidentsFile, 'utf8')); } catch {}
+      }
+      incidents.push({
+        type: 'hard_gate_block',
+        tool: currentToolName || 'circuit_breaker',
+        reason: reason.split('\n')[0],
+        args: currentArgs || {},
+        timestamp: Date.now()
+      });
+      if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
+      fs.writeFileSync(incidentsFile, JSON.stringify(incidents.slice(-50), null, 2), 'utf8');
+    } catch {}
+  }
+
   const res = { decision };
   if (reason) res.reason = reason;
   if (overwrite && typeof overwrite === 'object' && Object.keys(overwrite).length > 0) {
@@ -193,6 +215,8 @@ async function main() {
   const toolCall = payload.toolCall || {};
   const toolName = (toolCall.name || payload.tool_name || '').toLowerCase();
   const args = toolCall.args || payload.tool_input || {};
+  currentToolName = toolName;
+  currentArgs = args;
 
   // 1. Gate for view_file
   if (toolName === 'view_file') {

@@ -252,6 +252,25 @@ data["token-efficiency-guard"] = {
         }
       ]
     }
+  ],
+  PostToolUse: [
+    {
+      matcher: "*",
+      hooks: [
+        {
+          type: "command",
+          command: "node hooks/token-guard-diagnostics.cjs",
+          timeout: 15
+        }
+      ]
+    }
+  ],
+  Stop: [
+    {
+      type: "command",
+      command: "node hooks/token-guard-diagnostics.cjs --summary",
+      timeout: 15
+    }
   ]
 };
 fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");

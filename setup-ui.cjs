@@ -385,6 +385,25 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
                   }
                 ]
               }
+            ],
+            "PostToolUse": [
+              {
+                "matcher": "*",
+                "hooks": [
+                  {
+                    "type": "command",
+                    "command": "node hooks/token-guard-diagnostics.cjs",
+                    "timeout": 15
+                  }
+                ]
+              }
+            ],
+            "Stop": [
+              {
+                "type": "command",
+                "command": "node hooks/token-guard-diagnostics.cjs --summary",
+                "timeout": 15
+              }
             ]
           }
         };
