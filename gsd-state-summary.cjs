@@ -4,12 +4,16 @@
 const fs = require('fs');
 const path = require('path');
 
-function findPlanningDir() {
-  let curr = process.cwd();
-  for (let i = 0; i < 4; i++) {
-    const candidate = path.join(curr, '.planning');
-    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
-      return candidate;
+function findPlanningDir(startDir) {
+  let curr = startDir || process.cwd();
+  for (let i = 0; i < 5; i++) {
+    const candidatePlanning = path.join(curr, '.planning');
+    if (fs.existsSync(candidatePlanning) && fs.statSync(candidatePlanning).isDirectory()) {
+      return candidatePlanning;
+    }
+    const candidateProject = path.join(curr, '.project');
+    if (fs.existsSync(candidateProject) && fs.statSync(candidateProject).isDirectory()) {
+      return candidateProject;
     }
     const parent = path.dirname(curr);
     if (parent === curr) break;
@@ -133,15 +137,16 @@ function findPendingUat(planningDir, phaseDir, stateBody) {
 }
 
 function main() {
-  const planningDir = findPlanningDir();
+  const startDir = process.argv[2] ? path.resolve(process.argv[2]) : process.cwd();
+  const planningDir = findPlanningDir(startDir);
   if (!planningDir) {
-    process.stderr.write('Error: .planning directory not found\n');
+    process.stderr.write('Error: .planning or .project directory not found\n');
     process.exit(1);
   }
 
   const stateFile = path.join(planningDir, 'STATE.md');
   if (!fs.existsSync(stateFile)) {
-    process.stderr.write('Error: .planning/STATE.md not found\n');
+    process.stderr.write(`Error: ${path.basename(planningDir)}/STATE.md not found\n`);
     process.exit(1);
   }
 
