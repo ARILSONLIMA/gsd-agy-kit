@@ -466,7 +466,7 @@ async function main() {
     }
 
     // 2.5 Normalização de caminhos Windows com barras invertidas (PowerShell / Windows)
-    if (process.platform === 'win32') {
+    if (process.platform === 'win32' || /(?:^|[\s"'=])([A-Za-z]):\/[^\s"']*/.test(sanitizedCmd) || /\.ps1\b/i.test(sanitizedCmd)) {
       // Normaliza letras de drive Windows com barras normais para barras invertidas (ex: D:/caminho -> D:\caminho)
       // Preserva estritamente esquemas de protocolo de rede (http://, https://, ftp://)
       if (/(?:^|[\s"'=])([A-Za-z]):\/[^\s"']*/.test(sanitizedCmd)) {
