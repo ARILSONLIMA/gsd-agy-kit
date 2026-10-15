@@ -1,0 +1,12 @@
+# Local caches and logs
+.agents/.recent-reads.json
+.agents/recent-reads.json
+.agents/tool-health.json
+.agents/memory/*.db
+.agents/memory/*.db-journal
+
+# Temporary files
+*.tmp
+*.log
+.DS_Store
+node_modules/
