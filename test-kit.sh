@@ -768,9 +768,12 @@ assert_test "Skeleton Engine (lib/skeleton-engine.cjs) extrai assinaturas com pr
 # ------------------------------------------------------------------------------
 # Teste 33: MCP Server JSON-RPC Stdio (mcp-server.cjs)
 # ------------------------------------------------------------------------------
+MCP_BIN="${SCRIPT_DIR}/mcp-server.cjs"
+
 MCP_TEST_RES=$(node -e '
 const { spawn } = require("child_process");
-const proc = spawn("node", ["./mcp-server.cjs"], { cwd: process.cwd() });
+const mcpBin = process.argv[1];
+const proc = spawn("node", [mcpBin], { cwd: process.cwd() });
 let output = "";
 proc.stdout.on("data", d => output += d.toString());
 proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }) + "\n");
@@ -780,12 +783,23 @@ setTimeout(() => {
     process.stdout.write("OK");
   }
 }, 600);
-' 2>/dev/null || echo "")
+' "${MCP_BIN}" 2>/dev/null || echo "")
 MCP_OK=0
 if [ "$MCP_TEST_RES" = "OK" ]; then
     MCP_OK=1
 fi
 assert_test "Servidor MCP Padronizado (mcp-server.cjs) responde tools/list via JSON-RPC" "$MCP_OK"
+
+# ------------------------------------------------------------------------------
+# Teste 34: MCP Server Dual-Mode CLI (run_command)
+# ------------------------------------------------------------------------------
+MCP_CLI_OUT=$(timeout 3s node "${MCP_BIN}" tools 2>/dev/null || echo "")
+MCP_SKEL_OUT=$(timeout 3s node "${MCP_BIN}" skeleton "${MCP_BIN}" 2>/dev/null || echo "")
+MCP_CLI_OK=0
+if [[ "$MCP_CLI_OUT" == *"mempalace_recall"* ]] && [[ "$MCP_SKEL_OUT" == *"Skeleton Outline"* ]]; then
+    MCP_CLI_OK=1
+fi
+assert_test "Servidor MCP Dual-Mode atende chamadas diretas de CLI (tools e skeleton)" "$MCP_CLI_OK"
 
 
 

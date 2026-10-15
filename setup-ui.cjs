@@ -523,7 +523,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {};
         mcpConfig.mcpServers['gsd-economy'] = {
           command: 'node',
-          args: ['mcp-server.cjs']
+          args: ['.agents/mcp-server.cjs']
         };
         fs.writeFileSync(mcpJsonPath, JSON.stringify(mcpConfig, null, 2), 'utf8');
 
@@ -537,6 +537,27 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         };
         fs.writeFileSync(path.join(pluginDir, 'plugin.json'), JSON.stringify(pluginManifest, null, 2), 'utf8');
         fs.writeFileSync(path.join(pluginDir, 'mcp_config.json'), JSON.stringify(mcpConfig, null, 2), 'utf8');
+
+        // Copiar motor para dentro do plugin para hermeticidade total
+        const mcpSrc = path.join(kitDir, 'mcp-server.cjs');
+        if (fs.existsSync(mcpSrc)) {
+          fs.copyFileSync(mcpSrc, path.join(pluginDir, 'mcp-server.cjs'));
+        }
+        const libSrc = path.join(kitDir, 'lib');
+        if (fs.existsSync(libSrc)) {
+          copyFolderRecursive(libSrc, path.join(pluginDir, 'lib'));
+        }
+
+        // Registrar plugins locais no Antigravity (.agents/plugins.json)
+        const pluginsJsonPath = path.join(agentsDir, 'plugins.json');
+        const pluginsConfig = {
+          entries: [
+            {
+              path: '.agents/plugins'
+            }
+          ]
+        };
+        fs.writeFileSync(pluginsJsonPath, JSON.stringify(pluginsConfig, null, 2), 'utf8');
 
         await sleep(60);
       }

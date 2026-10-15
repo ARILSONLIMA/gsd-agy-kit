@@ -233,21 +233,166 @@ function handleMessage(msg) {
   }
 }
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-  terminal: false
-});
-
-rl.on('line', line => {
-  const trimmed = line.trim();
-  if (!trimmed) return;
-  try {
-    const msg = JSON.parse(trimmed);
-    handleMessage(msg);
-  } catch (err) {
-    process.stderr.write(`[gsd-economy-mcp] Erro de parse JSON: ${err.message}\n`);
+function handleCli(args) {
+  const cmd = args[0];
+  if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
+    printHelp();
+    process.exit(0);
   }
-});
 
-process.stderr.write(`[gsd-economy-mcp] Servidor MCP iniciado para: ${PROJECT_ROOT}\n`);
+  if (cmd === 'tools' || cmd === 'list') {
+    if (args.includes('--json')) {
+      console.log(JSON.stringify(TOOLS_MANIFEST, null, 2));
+    } else {
+      console.log('🛠️  [gsd-economy-mcp] Ferramentas Disponíveis:');
+      for (const t of TOOLS_MANIFEST) {
+        console.log(`\n• \x1b[36m${t.name}\x1b[0m: ${t.description}`);
+      }
+      console.log('\nUso CLI: node .agents/mcp-server.cjs <comando> [argumentos]');
+    }
+    process.exit(0);
+  }
+
+  if (cmd === 'call') {
+    const toolName = args[1];
+    if (!toolName) {
+      console.error('Erro: informe o nome da ferramenta. Ex: node mcp-server.cjs call mempalace_recall \'{"query":"..."}\'');
+      process.exit(1);
+    }
+    let toolArgs = {};
+    if (args[2]) {
+      try {
+        toolArgs = JSON.parse(args[2]);
+      } catch (e) {
+        console.error(`Erro: argumentos JSON inválidos: ${e.message}`);
+        process.exit(1);
+      }
+    }
+    const { text, isError } = handleToolCall(toolName, toolArgs);
+    if (isError) {
+      console.error(text);
+      process.exit(1);
+    } else {
+      console.log(text);
+      process.exit(0);
+    }
+  }
+
+  // Ergonomic Shortcuts
+  if (cmd === 'recall') {
+    const query = args[1];
+    if (!query) {
+      console.error('Erro: informe o termo de busca. Ex: node mcp-server.cjs recall "rate limiting"');
+      process.exit(1);
+    }
+    const room = args[2] && ['decisions', 'problems', 'milestones'].includes(args[2]) ? args[2] : undefined;
+    const limit = args[3] ? Number(args[3]) : 5;
+    const { text, isError } = handleToolCall('mempalace_recall', { query, room, limit });
+    if (isError) { console.error(text); process.exit(1); }
+    console.log(text);
+    process.exit(0);
+  }
+
+  if (cmd === 'capture') {
+    const room = args[1];
+    const topic = args[2];
+    const content = args[3];
+    const rationale = args[4] || '';
+    if (!room || !topic || !content) {
+      console.error('Erro: uso: node mcp-server.cjs capture <decisions|problems|milestones> "<tópico>" "<conteúdo>" [motivo]');
+      process.exit(1);
+    }
+    const { text, isError } = handleToolCall('mempalace_capture', { room, topic, content, rationale });
+    if (isError) { console.error(text); process.exit(1); }
+    console.log(text);
+    process.exit(0);
+  }
+
+  if (cmd === 'skeleton') {
+    const filePath = args[1];
+    if (!filePath) {
+      console.error('Erro: informe o caminho do arquivo. Ex: node mcp-server.cjs skeleton "src/models/user.js"');
+      process.exit(1);
+    }
+    const { text, isError } = handleToolCall('view_skeleton', { file_path: filePath });
+    if (isError) { console.error(text); process.exit(1); }
+    console.log(text);
+    process.exit(0);
+  }
+
+  if (cmd === 'dep' || cmd === 'dependency') {
+    const pkgName = args[1];
+    if (!pkgName) {
+      console.error('Erro: informe o nome do pacote. Ex: node mcp-server.cjs dep "express"');
+      process.exit(1);
+    }
+    const { text, isError } = handleToolCall('check_dependency', { package_name: pkgName });
+    if (isError) { console.error(text); process.exit(1); }
+    console.log(text);
+    process.exit(0);
+  }
+
+  if (cmd === 'docs') {
+    const query = args[1];
+    if (!query) {
+      console.error('Erro: informe o termo de busca na documentação. Ex: node mcp-server.cjs docs "webhook"');
+      process.exit(1);
+    }
+    const maxResults = args[2] ? Number(args[2]) : 3;
+    const { text, isError } = handleToolCall('query_docs', { query, max_results: maxResults });
+    if (isError) { console.error(text); process.exit(1); }
+    console.log(text);
+    process.exit(0);
+  }
+
+  console.error(`Comando desconhecido: "${cmd}". Execute "node mcp-server.cjs help" para ver as opções.`);
+  process.exit(1);
+}
+
+function printHelp() {
+  console.log(`
+Antigravity GSD Kit - MCP Server & CLI Dispatcher (Dual-Mode)
+
+Uso CLI direto (via run_command):
+  node .agents/mcp-server.cjs recall "<query>" [room] [limit]
+  node .agents/mcp-server.cjs capture <room> "<tópico>" "<conteúdo>" [motivo]
+  node .agents/mcp-server.cjs skeleton "<caminho_arquivo>"
+  node .agents/mcp-server.cjs dep "<nome_pacote>"
+  node .agents/mcp-server.cjs docs "<query>" [max_results]
+  node .agents/mcp-server.cjs call <ferramenta> '<json_args>'
+  node .agents/mcp-server.cjs tools [--json]
+  node .agents/mcp-server.cjs help
+
+Uso MCP Stdio (Daemon):
+  node .agents/mcp-server.cjs
+  (Quando executado sem argumentos, opera em loop JSON-RPC 2.0 padrão para Antigravity)
+`);
+}
+
+function runStdioServer() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: false
+  });
+
+  rl.on('line', line => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    try {
+      const msg = JSON.parse(trimmed);
+      handleMessage(msg);
+    } catch (err) {
+      process.stderr.write(`[gsd-economy-mcp] Erro de parse JSON: ${err.message}\n`);
+    }
+  });
+
+  process.stderr.write(`[gsd-economy-mcp] Servidor MCP iniciado para: ${PROJECT_ROOT}\n`);
+}
+
+// Inicialização Dual-Mode
+if (process.argv.length > 2) {
+  handleCli(process.argv.slice(2));
+} else {
+  runStdioServer();
+}

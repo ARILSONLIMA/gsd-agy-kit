@@ -101,12 +101,12 @@ O kit opera em 4 camadas complementares:
 
    - **`sanitize-output.cjs` / `sanitize-command.ps1`:** Truncador no estilo Headroom que limita saídas longas a head + tail e preserva o dump integral em `.planning/debug/` ou `.project/debug/`.
 
-10. **Servidor MCP Padronizado & Motores de Economia (`mcp-server.cjs` & `lib/`):**
-    - **Servidor Stdio Nativo:** Comunicação via JSON-RPC 2.0 padrão em `.agents/mcp_config.json`, com zero dependências npm.
-    - **`mempalace_recall` / `mempalace_capture`:** Memória episódica estruturada persistida em SQLite (`.agents/memory/palace.db`) com busca FTS5 para decisões arquiteturais e soluções de bugs históricos sem amnésia.
-    - **`query_docs` (Mini-RAG para Markdown):** Indexação e busca semântica em arquivos `.md` do projeto, extraindo apenas os trechos e seções exatas das regras de negócio sem despejar arquivos de especificação inteiros.
-    - **`check_dependency` (Lente de Lockfiles):** Inspeção cirúrgica de pacotes e versões diretamente em `package-lock.json`, `go.sum`, `Cargo.lock` e `requirements.txt` sem sobrecarregar a janela de contexto.
-    - **`view_skeleton` (Esqueleto Estrutural):** Extração de assinaturas, structs, interfaces e tipos com números de linha para navegação cirúrgica.
+10. **Servidor MCP Padronizado & Motores de Economia Dual-Mode (`mcp-server.cjs` & `lib/`):**
+    - **Dual-Mode Transparente:** Opera como Servidor MCP Stdio JSON-RPC 2.0 em `.agents/mcp_config.json` e `.agents/plugins/gsd-economy/` quando montado pelo Antigravity, E simultaneamente como utilitário CLI ultra-rápido via `run_command` (`node .agents/mcp-server.cjs <cmd>`) com zero dependências npm.
+    - **`mempalace_recall` / `mempalace_capture`:** Memória episódica estruturada persistida em SQLite (`.agents/memory/palace.db`) com busca FTS5 para decisões arquiteturais e soluções de bugs históricos sem amnésia. CLI: `node .agents/mcp-server.cjs recall "<query>"` e `capture <room> "<tópico>" "<conteúdo>"`.
+    - **`query_docs` (Mini-RAG para Markdown):** Indexação e busca semântica em arquivos `.md` do projeto, extraindo apenas os trechos e seções exatas das regras de negócio sem despejar arquivos de especificação inteiros. CLI: `node .agents/mcp-server.cjs docs "<query>"`.
+    - **`check_dependency` (Lente de Lockfiles):** Inspeção cirúrgica de pacotes e versões diretamente em `package-lock.json`, `go.sum`, `Cargo.lock` e `requirements.txt` sem sobrecarregar a janela de contexto. CLI: `node .agents/mcp-server.cjs dep "<pacote>"`.
+    - **`view_skeleton` (Esqueleto Estrutural):** Extração de assinaturas, structs, interfaces e tipos com números de linha para navegação cirúrgica. CLI: `node .agents/mcp-server.cjs skeleton "<arquivo>"`.
 
 11. **Compatibilidade Universal Dual-Engine (`gsd-path` + `gsd-core`):**
     - Suporte automático e transparente para **GSD Path** (`.project/STATE.md`, `.gsd-path/`) e **GSD Core** (`.planning/STATE.md`, `.agents/gsd-core`).

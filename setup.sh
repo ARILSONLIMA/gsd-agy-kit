@@ -320,7 +320,7 @@ if (fs.existsSync(file)) {
 if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {};
 mcpConfig.mcpServers["gsd-economy"] = {
     command: "node",
-    args: ["mcp-server.cjs"]
+    args: [".agents/mcp-server.cjs"]
 };
 fs.writeFileSync(file, JSON.stringify(mcpConfig, null, 2), "utf8");
 ' "${MCP_JSON}"
@@ -336,7 +336,26 @@ cat << 'EOF' > "${PLUGIN_DIR}/plugin.json"
 }
 EOF
 cp -f "${MCP_JSON}" "${PLUGIN_DIR}/mcp_config.json"
+if [ -f "${KIT_DIR}/mcp-server.cjs" ]; then
+    cp -f "${KIT_DIR}/mcp-server.cjs" "${PLUGIN_DIR}/mcp-server.cjs"
+fi
+if [ -d "${KIT_DIR}/lib" ]; then
+    mkdir -p "${PLUGIN_DIR}/lib"
+    cp -rf "${KIT_DIR}/lib/"* "${PLUGIN_DIR}/lib/"
+fi
+
+# Gerar .agents/plugins.json para registro explícito no Antigravity
+cat << 'EOF' > "${AGENTS_DIR}/plugins.json"
+{
+  "entries": [
+    {
+      "path": ".agents/plugins"
+    }
+  ]
+}
+EOF
 echo -e "   \033[0;32mServidor MCP registrado em: ${MCP_JSON}\033[0m"
+echo -e "   \033[0;32mPlugin local registrado em: ${AGENTS_DIR}/plugins.json\033[0m"
 echo -e "   \033[0;32mMemória episódica (MemPalace) pronta em: ${MEMORY_DIR}\033[0m"
 
 # 9. Instalar Scripts Utilitários do Kit (scripts/)

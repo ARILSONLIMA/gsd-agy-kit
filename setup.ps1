@@ -327,7 +327,7 @@ $mcpConfig = @{
     mcpServers = @{
         "gsd-economy" = @{
             command = "node"
-            args = @("mcp-server.cjs")
+            args = @(".agents/mcp-server.cjs")
         }
     }
 }
@@ -344,7 +344,26 @@ $pluginManifest = @{
 } | ConvertTo-Json -Depth 3
 Set-Content -Path (Join-Path $pluginDir "plugin.json") -Value $pluginManifest -Encoding utf8
 Copy-Item -Path $mcpJsonPath -Destination (Join-Path $pluginDir "mcp_config.json") -Force
+if (Test-Path $mcpServerSrc) {
+    Copy-Item -Path $mcpServerSrc -Destination (Join-Path $pluginDir "mcp-server.cjs") -Force
+}
+if (Test-Path $kitLibDir) {
+    Copy-Item -Path "$kitLibDir\*" -Destination (Join-Path $pluginDir "lib") -Recurse -Force
+}
+
+# Gerar .agents/plugins.json para registro explícito no Antigravity
+$pluginsJsonPath = Join-Path $agentsDir "plugins.json"
+$pluginsConfig = @{
+    entries = @(
+        @{
+            path = ".agents/plugins"
+        }
+    )
+} | ConvertTo-Json -Depth 3
+Set-Content -Path $pluginsJsonPath -Value $pluginsConfig -Encoding utf8
+
 Write-Host "   Servidor MCP registrado em: $mcpJsonPath" -ForegroundColor Green
+Write-Host "   Plugin local registrado em: $pluginsJsonPath" -ForegroundColor Green
 Write-Host "   Memoria episodica (MemPalace) pronta em: $memoryDir" -ForegroundColor Green
 
 # 9. Instalar Scripts Utilitários do Kit (scripts/)

@@ -874,6 +874,26 @@ Assert-Test -Name "Hook PreToolUse sugere gsd-outline.cjs ao rejeitar view_file 
             -ErrorDetails "Sugestão de gsd-outline não encontrada no token-guard-pretool"
 
 # ------------------------------------------------------------------------------
+# Teste MCP Server Dual-Mode CLI (mcp-server.cjs)
+# ------------------------------------------------------------------------------
+$mcpBinPath = Join-Path $kitDir "mcp-server.cjs"
+if (Test-Path (Join-Path $agentsDir "mcp-server.cjs")) {
+    $mcpBinPath = Join-Path $agentsDir "mcp-server.cjs"
+}
+$mcpCliOk = $false
+try {
+    $toolsOut = node $mcpBinPath tools 2>$null
+    $skelOut = node $mcpBinPath skeleton $mcpBinPath 2>$null
+    if ($toolsOut -match "mempalace_recall" -and $skelOut -match "Skeleton Outline") {
+        $mcpCliOk = $true
+    }
+} catch {}
+
+Assert-Test -Name "Servidor MCP Dual-Mode atende chamadas diretas de CLI (tools e skeleton)" `
+            -Condition $mcpCliOk `
+            -ErrorDetails "mcp-server.cjs falhou ao responder aos comandos CLI 'tools' ou 'skeleton'"
+
+# ------------------------------------------------------------------------------
 # Resumo Final
 # ------------------------------------------------------------------------------
 Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
