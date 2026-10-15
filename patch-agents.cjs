@@ -62,7 +62,7 @@ function buildProtocolBlock(targetDir) {
     '<token_efficiency_protocol priority="critical">',
     `## PROTOCOLO OBRIGATÓRIO DE ECONOMIA DE TOKENS E ANÁLISE DE CÓDIGO (${stack.name.toUpperCase()})`,
     'Ao analisar ou modificar código, você DEVE seguir rigorosamente esta ordem:',
-    '1. graphify query "<pergunta>" (via run_command) para entender arquitetura macro e relações.',
+    '1. graphify query "<pergunta>" (via run_command) para entender arquitetura macro e relações (execute graphify update . se graphify-out/ ainda não existir).',
     `2. ${stack.lsp} para resolver assinaturas, tipos, pacotes e diagnósticos.`,
     `3. ast-grep CLI (via run_command: ast-grep run -p '<padrão>'${astLang}) para buscas sintáticas na AST.`,
     '4. view_file CIRÚRGICO APENAS: Sempre especifique StartLine e EndLine (máximo de 100 linhas).',

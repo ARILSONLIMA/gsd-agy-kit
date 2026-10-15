@@ -1,15 +1,22 @@
 ---
 trigger: always_on
-description: Consult the graphify knowledge graph at graphify-out/ for codebase and architecture questions.
+description: Protocolo obrigatório de consulta e manutenção do grafo de conhecimento graphify em graphify-out/.
 ---
 
-## graphify
+## graphify: Protocolo Obrigatório de Navegação e Arquitetura
 
-This project has a graphify knowledge graph at graphify-out/.
+Este projeto possui um grafo de conhecimento gerado pelo **graphify** localizado em `graphify-out/`.
 
-Rules:
-- For codebase or architecture questions, when `graphify-out/graph.json` exists, first run `graphify query "<question>"` (CLI) or `query_graph` (MCP). Use `graphify path "<A>" "<B>"` / `shortest_path` for relationships and `graphify explain "<concept>"` / `get_node` for focused concepts. These return a scoped subgraph, usually much smaller than `GRAPH_REPORT.md` or raw grep output.
-- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context
-- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
-- Para checagem de status ou frescor do grafo (`graphify status` ou `gsd_run graphify status`), o ambiente possui suporte transparente retornando os metadados do grafo.
+### Regras Mandatórias de Execução:
+1. **Inicialização Imediata (se ausente):** Se `graphify-out/graph.json` ainda não existir no início da sessão, execute **imediatamente** `graphify update .` (via `run_command`). A extração é instantânea (~1s), local (via AST) e sem consumo de tokens de API.
+2. **Primeiro Passo de Forense e Planejamento:** Antes de abrir arquivos ou suítes de testes com `view_file` para entender requisitos, componentes, funções ou rotas, execute **obrigatoriamente**:
+   - `graphify query "<sua pergunta ou componente>"` (via `run_command` ou MCP `query_graph`).
+   - Retorna um subgrafo cirúrgico com os nós, conexões e arquivos exatos relacionados ao problema.
+3. **Mapeamento de Relações e Símbolos:**
+   - Use `graphify path "<Origem>" "<Destino>"` para inspecionar relações e chamadas entre componentes.
+   - Use `graphify explain "<símbolo>"` para obter um resumo contextual focado de um nó e seus vizinhos.
+4. **Proibição de Leitura Cega:** É terminantemente proibido tentar entender a arquitetura do projeto lendo arquivos de código ou de teste inteiros com `view_file`. Sempre utilize `graphify query` para identificar os pontos de interesse e restrinja `view_file` a trechos cirúrgicos (máximo 100 linhas).
+5. **Navegação Wiki:** Se `graphify-out/wiki/index.md` existir, priorize a navegação pela wiki estruturada antes de inspecionar arquivos brutos.
+6. **Visão Ampla do Grafo:** Leia `graphify-out/GRAPH_REPORT.md` apenas para revisões de arquitetura macro quando queries específicas não fornecerem contexto suficiente.
+7. **Sincronização Pós-Edição:** Sempre que criar, renomear ou modificar arquivos de código (`src/`), execute `graphify update .` para sincronizar o grafo com as novas alterações.
+8. **Status e Saúde:** Para checar o frescor ou nós do grafo, utilize `graphify status` ou `graphify god-nodes`.

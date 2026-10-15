@@ -2,13 +2,13 @@
 
 ## 1. Ordem de Prioridade Inflexível (Zero Desperdício de Tokens)
 1. `mempalace_recall`: Consulte o MemPalace para verificar decisões anteriores e soluções de bugs já validadas antes de propor soluções ou re-ler históricos.
-2. `graphify query "<pergunta>"`: Entendimento de arquitetura macro, god nodes e dependências entre módulos.
+2. `graphify query "<pergunta>"`: Entendimento de arquitetura macro, god nodes e dependências entre módulos. Se `graphify-out/` não existir, execute `graphify update .` imediatamente.
 3. `query_docs`: Para buscar regras de negócio em arquivos `.md` (PRDs, especificações) sem ler arquivos inteiros.
 4. `view_skeleton`: Use para visualizar o esqueleto (assinaturas, structs, interfaces) com números de linha antes de ler trechos específicos.
 5. `check_dependency`: Use para verificar se uma biblioteca está instalada e sua versão. NUNCA abra arquivos de lockfile (`package-lock.json`, `go.sum`).
 6. `gopls` / LSP: Para resolver assinaturas, referências cruzadas e diagnósticos com precisão do compilador.
 7. `ast-grep` CLI (`ast-grep run -p '<padrão>'`): Buscas sintáticas e estruturais precisas na AST.
-8. `view_file` CIRÚRGICO APENAS: É estritamente proibido ler arquivos sem limites de linhas (`StartLine`/`EndLine`) ou com mais de 100 linhas.
+8. `view_file` CIRÚRGICO APENAS: É estritamente proibido ler arquivos sem limites de linhas (`StartLine`/`EndLine`), com mais de 100 linhas ou para explorar repositório sem antes consultar `graphify`.
 
 ## 2. Memória Contínua (MemPalace)
 - Ao tomar uma decisão técnica ou resolver um bug complexo, registre o fato no MemPalace via `mempalace_capture` para evitar retrabalho em sessões futuras.

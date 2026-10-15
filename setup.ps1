@@ -506,6 +506,12 @@ if (Test-Path $gitignorePath) {
     Write-Host "   Entradas de protecao (.agents/.cache/ e kits) garantidas no .gitignore" -ForegroundColor Green
 }
 
+# 12.5. Inicializacao do Grafo Graphify
+try {
+    & graphify update . 2>$null
+    Write-Host "   Grafo de conhecimento inicializado com graphify update" -ForegroundColor Green
+} catch {}
+
 # 13. Resumo Final
 Write-Host "`n✅ [Antigravity GSD Kit] Instalacao e blindagem concluidas com sucesso!" -ForegroundColor Green
 Write-Host "   - Ferramentas normalizadas para Antigravity CLI (write_to_file, sem glob/grep_search/call_mcp_tool)" -ForegroundColor Gray

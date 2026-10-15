@@ -315,9 +315,10 @@ async function main() {
           'deny',
           '🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: É proibido ler arquivos de código (.go, .ts, .js, etc.) inteiros com view_file!\n' +
           'Ordem obrigatória:\n' +
-          `1) ${langToolHint} para localizar o trecho exato.\n` +
-          '2) Para ler o código via view_file, informe obrigatoriamente StartLine e EndLine cirúrgicos (máximo de 100 linhas).\n' +
-          `3) Para ler toda a estrutura do arquivo de forma barata, use ${outlineScriptPath} <arquivo>.`
+          '1) Para entender arquitetura e dependências, consulte o grafo: graphify query "<pergunta>"\n' +
+          `2) ${langToolHint} para localizar o trecho exato.\n` +
+          '3) Para ler o código via view_file, informe obrigatoriamente StartLine e EndLine cirúrgicos (máximo de 100 linhas).\n' +
+          `4) Para ler toda a estrutura do arquivo de forma barata, use ${outlineScriptPath} <arquivo>.`
         );
       }
     }

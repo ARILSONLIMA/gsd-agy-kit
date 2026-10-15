@@ -616,6 +616,17 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         }
         await sleep(60);
       }
+    },
+    {
+      title: 'Inicialização do Grafo de Conhecimento (graphify update .)',
+      run: async () => {
+        try {
+          execSync('graphify update .', { cwd: targetDir, stdio: 'ignore' });
+        } catch (e) {
+          // Ignora se o projeto for vazio ou não possuir arquivos de código ainda
+        }
+        await sleep(60);
+      }
     }
   ];
 
