@@ -410,8 +410,9 @@ if (Test-Path $configJsonPath) {
     try {
         $rawConfig = Get-Content $configJsonPath -Raw -Encoding utf8 | ConvertFrom-Json
 
-        # 1. Idioma canônico
+        # 1. Idioma canônico e Modo do Kit
         $rawConfig | Add-Member -NotePropertyName "response_language" -NotePropertyValue "pt-BR" -Force
+        $rawConfig | Add-Member -NotePropertyName "kit_mode" -NotePropertyValue "smart-assist" -Force
 
         # 2. Governança de Workflow
         if (-not $rawConfig.workflow) {
@@ -524,6 +525,17 @@ if (Test-Path $gitignorePath) {
     }
     Write-Host "   Entradas de protecao (.agents/.cache/ e kits) garantidas no .gitignore" -ForegroundColor Green
 }
+
+# 12.2 Blindagem de Índices (.graphifyignore e .astgrepignore)
+$graphifyIgnoreSrc = Join-Path $kitDir ".graphifyignore"
+if (Test-Path $graphifyIgnoreSrc) {
+    Copy-Item -Path $graphifyIgnoreSrc -Destination (Join-Path $TargetDir ".graphifyignore") -Force
+}
+$astgrepIgnoreSrc = Join-Path $kitDir ".astgrepignore"
+if (Test-Path $astgrepIgnoreSrc) {
+    Copy-Item -Path $astgrepIgnoreSrc -Destination (Join-Path $TargetDir ".astgrepignore") -Force
+}
+Write-Host "   Blindagem de indices (.graphifyignore e .astgrepignore) aplicada com sucesso" -ForegroundColor Green
 
 # 12.5. Inicializacao do Grafo Graphify
 try {

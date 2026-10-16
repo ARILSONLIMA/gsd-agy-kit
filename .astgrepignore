@@ -1,0 +1,11 @@
+# AST-Grep Ignore File
+gsd-agy-kit/
+.agents/
+.planning/
+.project/
+.cache/
+.gemini/
+node_modules/
+dist/
+build/
+coverage/

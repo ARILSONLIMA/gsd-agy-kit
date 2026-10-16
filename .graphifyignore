@@ -1,0 +1,13 @@
+# Graphify Ignore File - Prevents knowledge graph pollution
+gsd-agy-kit/
+.agents/
+.planning/
+.project/
+.cache/
+.gemini/
+node_modules/
+coverage/
+dist/
+build/
+*.db
+*.pyc

@@ -100,9 +100,11 @@ function recordIncident(incident) {
 // -----------------------------------------------------------------------------
 function handlePostToolUse(payload) {
   const toolCall = payload.toolCall || {};
-  const toolName = toolCall.name || '';
+  const toolName = (toolCall.name || '').toLowerCase();
   const error = payload.error || '';
   const stepIdx = payload.stepIdx;
+  const args = toolCall.args || {};
+  const output = payload.output || payload.result || '';
 
   if (error && typeof error === 'string' && error.trim().length > 0) {
     recordIncident({
@@ -110,8 +112,49 @@ function handlePostToolUse(payload) {
       tool: toolName,
       stepIdx: stepIdx,
       error: error.trim(),
-      args: toolCall.args || {}
+      args: args
     });
+  }
+
+  // Monitorar comandos de teste para Auto-Isolate, Checkpoints e MemPalace v2
+  if (toolName === 'run_command' || toolName === 'bash' || toolName === 'shell') {
+    const cmd = args.CommandLine || args.command || '';
+    const isTestCmd = /\b(npm\s+test|node\s+--test|pytest|go\s+test|cargo\s+test)\b/i.test(cmd);
+    if (isTestCmd) {
+      try {
+        const TestIsolate = require('../lib/test-isolate.cjs');
+        const testIsolate = new TestIsolate(PROJECT_ROOT);
+        const combinedOutput = `${output}\n${error}`;
+        const failures = testIsolate.parseFailures(combinedOutput);
+
+        if (failures.length > 0 || (error && error.trim().length > 0)) {
+          testIsolate.recordFailures(failures.length > 0 ? failures : ['Erro na execução de testes'], cmd);
+        } else {
+          const hadPreviousFailures = testIsolate.getFailedTests().length > 0;
+          testIsolate.recordSuccess(cmd);
+
+          if (hadPreviousFailures) {
+            // Transição Vermelho -> Verde detectada!
+            try {
+              const MemPalace = require('../lib/mempalace-engine.cjs');
+              const mempalace = new MemPalace(PROJECT_ROOT);
+              mempalace.capture({
+                room: 'problems',
+                topic: `Teste Verde: ${cmd.slice(0, 50)}`,
+                content: `Testes passaram após correção no código.`,
+                rationale: 'Auto-captura heurística do GSD AGY Kit na resolução do teste.'
+              });
+            } catch {}
+
+            try {
+              const Checkpoint = require('../lib/checkpoint-engine.cjs');
+              const checkpoint = new Checkpoint(PROJECT_ROOT);
+              checkpoint.createCheckpoint('green-test');
+            } catch {}
+          }
+        }
+      } catch {}
+    }
   }
 
   // Resposta obrigatória do PostToolUse: JSON vazio

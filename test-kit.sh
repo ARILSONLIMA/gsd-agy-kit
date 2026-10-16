@@ -821,6 +821,165 @@ if [[ "$MCP_CLI_OUT" == *"mempalace_recall"* ]] && [[ "$MCP_SKEL_OUT" == *"Skele
 fi
 assert_test "Servidor MCP Dual-Mode atende chamadas diretas de CLI (tools e skeleton)" "$MCP_CLI_OK"
 
+# ------------------------------------------------------------------------------
+# Teste 35: MCP Server CLI ast_query
+# ------------------------------------------------------------------------------
+AST_QUERY_OUT=$(timeout 5s node "${MCP_BIN}" ast "class \$NAME" js "${SCRIPT_DIR}/lib" 2>/dev/null || echo "")
+AST_QUERY_OK=0
+if [[ "$AST_QUERY_OUT" == *"AST Query"* ]] && [[ "$AST_QUERY_OUT" == *"correspondência"* ]]; then
+    AST_QUERY_OK=1
+fi
+assert_test "Tool ast_query nativa no MCP Server localiza padrões estruturais sem falhas de escape" "$AST_QUERY_OK"
+
+# ------------------------------------------------------------------------------
+# Teste 36: Test Isolate Engine (lib/test-isolate.cjs e CLI)
+# ------------------------------------------------------------------------------
+TEST_ISO_RES=$(node -e '
+const TestIsolate = require("./lib/test-isolate.cjs");
+const t = new TestIsolate();
+const out = "✖ Scenario 10 - Circuit Breaker (50ms)\nnot ok 2 - should retry";
+const f = t.parseFailures(out);
+if (f.length === 2 && f.includes("Scenario 10 - Circuit Breaker")) {
+  process.stdout.write("OK");
+}
+' 2>/dev/null || echo "")
+TEST_ISO_OK=0
+if [ "$TEST_ISO_RES" = "OK" ]; then
+    TEST_ISO_OK=1
+fi
+assert_test "Test Isolate Engine (lib/test-isolate.cjs) extrai falhas pontuais para reexecução cirúrgica" "$TEST_ISO_OK"
+
+# ------------------------------------------------------------------------------
+# Teste 37: Checkpoint Engine (lib/checkpoint-engine.cjs)
+# ------------------------------------------------------------------------------
+CHK_RES=$(node -e '
+const Checkpoint = require("./lib/checkpoint-engine.cjs");
+const c = new Checkpoint();
+const list = c.listCheckpoints();
+if (Array.isArray(list)) {
+  process.stdout.write("OK");
+}
+' 2>/dev/null || echo "")
+CHK_OK=0
+if [ "$CHK_RES" = "OK" ]; then
+    CHK_OK=1
+fi
+assert_test "Checkpoint Engine (lib/checkpoint-engine.cjs) gerencia micro-checkpoints para rollback seguro" "$CHK_OK"
+
+# ------------------------------------------------------------------------------
+# Teste 38: Skeleton Engine Multi-Stack (PHP, Ruby, Dart, Elixir)
+# ------------------------------------------------------------------------------
+SKEL_MULTI_RES=$(node -e '
+const Skeleton = require("./lib/skeleton-engine.cjs");
+const fs = require("fs");
+const path = require("path");
+const skel = new Skeleton(process.cwd());
+const testDir = path.join(process.cwd(), ".agents", "temp-multi-test");
+fs.mkdirSync(testDir, { recursive: true });
+fs.writeFileSync(path.join(testDir, "test.php"), "<?php\nclass UserService { public function find() {} }", "utf8");
+fs.writeFileSync(path.join(testDir, "test.rb"), "class OrderController\n  def create\n  end\nend", "utf8");
+fs.writeFileSync(path.join(testDir, "test.dart"), "class ProductBloc { void dispatch() {} }", "utf8");
+fs.writeFileSync(path.join(testDir, "test.ex"), "defmodule PaymentGateway do\n  def process() do\n  end\nend", "utf8");
+const oPhp = skel.getOutline(path.join(testDir, "test.php"));
+const oRb = skel.getOutline(path.join(testDir, "test.rb"));
+const oDart = skel.getOutline(path.join(testDir, "test.dart"));
+const oEx = skel.getOutline(path.join(testDir, "test.ex"));
+fs.rmSync(testDir, { recursive: true, force: true });
+if (oPhp.includes("class UserService") && oRb.includes("class OrderController") && oDart.includes("class ProductBloc") && oEx.includes("defmodule PaymentGateway")) {
+  process.stdout.write("OK");
+}
+' 2>/dev/null || echo "")
+SKEL_MULTI_OK=0
+if [ "$SKEL_MULTI_RES" = "OK" ]; then
+    SKEL_MULTI_OK=1
+fi
+assert_test "Skeleton Engine suporta extração estrutural em PHP, Ruby, Dart e Elixir" "$SKEL_MULTI_OK"
+
+# ------------------------------------------------------------------------------
+# Teste 39: Lockfile Lens Multi-Stack (PHP, Ruby, Dart)
+# ------------------------------------------------------------------------------
+LENS_MULTI_RES=$(node -e '
+const Lens = require("./lib/lockfile-lens.cjs");
+const fs = require("fs");
+const path = require("path");
+const testDir = path.join(process.cwd(), ".agents", "temp-lens-multi");
+fs.mkdirSync(testDir, { recursive: true });
+fs.writeFileSync(path.join(testDir, "composer.json"), JSON.stringify({ require: { "laravel/framework": "^10.0" } }), "utf8");
+fs.writeFileSync(path.join(testDir, "Gemfile"), "source \"https://rubygems.org\"\ngem \"rails\", \"~> 7.0\"\n", "utf8");
+fs.writeFileSync(path.join(testDir, "pubspec.yaml"), "name: my_app\ndependencies:\n  dio: ^5.0.0\n", "utf8");
+const lens = new Lens(testDir);
+const resPhp = lens.inspect("laravel/framework");
+const resRb = lens.inspect("rails");
+const resDart = lens.inspect("dio");
+fs.rmSync(testDir, { recursive: true, force: true });
+if (resPhp.found && resRb.found && resDart.found) {
+  process.stdout.write("OK");
+}
+' 2>/dev/null || echo "")
+LENS_MULTI_OK=0
+if [ "$LENS_MULTI_RES" = "OK" ]; then
+    LENS_MULTI_OK=1
+fi
+assert_test "Lockfile Lens inspeciona dependências PHP (composer), Ruby (Gemfile) e Dart (pubspec)" "$LENS_MULTI_OK"
+
+# ------------------------------------------------------------------------------
+# Teste 40: Greenfield vs Brownfield Protocol Generator (patch-agents.cjs)
+# ------------------------------------------------------------------------------
+PROTO_TEST_RES=$(node -e '
+const fs = require("fs");
+const path = require("path");
+const { execSync } = require("child_process");
+const testDir = path.join(process.cwd(), ".agents", "temp-proto-test");
+fs.mkdirSync(path.join(testDir, ".agents", "agents"), { recursive: true });
+fs.writeFileSync(path.join(testDir, ".agents", "agents", "gsd-executor.md"), "---\nname: gsd-executor\ntools:\n  - view_file\n---\nExecutor", "utf8");
+execSync(`node "${path.join(process.cwd(), "patch-agents.cjs")}" "${testDir}"`, { stdio: "ignore" });
+const content = fs.readFileSync(path.join(testDir, ".agents", "agents", "gsd-executor.md"), "utf8");
+fs.rmSync(testDir, { recursive: true, force: true });
+if (content.includes("GREENFIELD FAST-TRACK") && content.includes("mode=\"greenfield\"")) {
+  process.stdout.write("OK");
+}
+' 2>/dev/null || echo "")
+PROTO_OK=0
+if [ "$PROTO_TEST_RES" = "OK" ]; then
+    PROTO_OK=1
+fi
+assert_test "Normalizador detecta maturidade de projeto e injeta protocolo Greenfield Fast-Track" "$PROTO_OK"
+
+# ------------------------------------------------------------------------------
+# Teste 41: Smart-Assist Proactive Auto-Slicing Mode (res.overwrite)
+# ------------------------------------------------------------------------------
+AUTO_SLICE_RES=$(node -e '
+const fs = require("fs");
+const path = require("path");
+const dummyFile = path.join(process.cwd(), ".agents", "temp-slice-test.js");
+fs.writeFileSync(dummyFile, Array(150).fill("console.log(1);").join("\n"), "utf8");
+const { execSync } = require("child_process");
+const payload = JSON.stringify({ toolCall: { name: "view_file", args: { AbsolutePath: dummyFile, StartLine: 1, EndLine: 150 } } });
+const res = execSync(`node "${path.join(process.cwd(), "hooks", "token-guard-pretool.cjs")}"`, {
+  input: payload,
+  env: { ...process.env, GSD_KIT_MODE: "smart-assist" },
+  encoding: "utf8"
+});
+fs.rmSync(dummyFile, { force: true });
+const parsed = JSON.parse(res.trim());
+if (parsed.decision === "allow" && parsed.overwrite && parsed.overwrite.EndLine === 100) {
+  process.stdout.write("OK");
+}
+' 2>/dev/null || echo "")
+AUTO_SLICE_OK=0
+if [ "$AUTO_SLICE_RES" = "OK" ]; then
+    AUTO_SLICE_OK=1
+fi
+assert_test "Hook PreToolUse auto-corrige range excessivo via overwrite em modo smart-assist" "$AUTO_SLICE_OK"
+
+# ------------------------------------------------------------------------------
+# Teste 42: Blindagem de Índices (.graphifyignore e .astgrepignore)
+# ------------------------------------------------------------------------------
+IGNORE_TEMPLATES_OK=0
+if [ -f "${SCRIPT_DIR}/.graphifyignore" ] && [ -f "${SCRIPT_DIR}/.astgrepignore" ] && grep -q "gsd-agy-kit/" "${SCRIPT_DIR}/.graphifyignore"; then
+    IGNORE_TEMPLATES_OK=1
+fi
+assert_test "Arquivos de blindagem de índices (.graphifyignore e .astgrepignore) presentes no kit" "$IGNORE_TEMPLATES_OK"
 
 
 echo -e "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -830,3 +989,4 @@ if [ "$FAILED" -eq 0 ]; then
 else
     echo -e "\033[0;31m⚠️ ATENÇÃO: ${FAILED} testes falharam de um total de $((PASSED + FAILED)).\033[0m\n"
 fi
+

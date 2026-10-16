@@ -414,6 +414,7 @@ if [ -f "${CONFIG_JSON}" ]; then
         const raw = JSON.parse(fs.readFileSync(file, "utf8"));
 
         raw.response_language = "pt-BR";
+        raw.kit_mode = "smart-assist";
 
         raw.workflow = raw.workflow || {};
         raw.workflow.ui_phase = hasFrontend;
@@ -505,6 +506,15 @@ if [ -f "${GITIGNORE_FILE}" ]; then
     fi
     echo -e "   \033[0;32mEntradas de proteção (.agents/.cache/ e kits) garantidas no .gitignore\033[0m"
 fi
+
+# 12.1 Blindagem de Índices (.graphifyignore e .astgrepignore)
+if [ -f "${KIT_DIR}/.graphifyignore" ]; then
+    cp -f "${KIT_DIR}/.graphifyignore" "${TARGET_DIR}/.graphifyignore"
+fi
+if [ -f "${KIT_DIR}/.astgrepignore" ]; then
+    cp -f "${KIT_DIR}/.astgrepignore" "${TARGET_DIR}/.astgrepignore"
+fi
+echo -e "   \033[0;32mBlindagem de índices (.graphifyignore e .astgrepignore) aplicada com sucesso\033[0m"
 
 # 13. Resumo Final
 echo -e "\n\033[0;32m✅ [Antigravity GSD Kit] Instalação e blindagem concluídas com sucesso!\033[0m"

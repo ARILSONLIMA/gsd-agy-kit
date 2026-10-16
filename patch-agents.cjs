@@ -52,16 +52,72 @@ function detectStack(targetDir) {
   };
 }
 
+function detectProjectMaturity(targetDir) {
+  let codeCount = 0;
+  const codeExts = new Set(['.go', '.ts', '.tsx', '.js', '.jsx', '.py', '.rs', '.java', '.cs', '.php', '.rb', '.dart', '.ex', '.cpp', '.c']);
+  const scanDirs = ['src', 'lib', 'app', 'cmd', 'server', 'client', 'api', 'pkg', 'services'];
+
+  for (const sub of scanDirs) {
+    const subPath = path.join(targetDir, sub);
+    if (fs.existsSync(subPath)) {
+      try {
+        const files = fs.readdirSync(subPath, { recursive: true });
+        for (const f of files) {
+          const ext = path.extname(f).toLowerCase();
+          if (codeExts.has(ext)) codeCount++;
+        }
+      } catch {}
+    }
+  }
+
+  try {
+    const topEntries = fs.readdirSync(targetDir, { withFileTypes: true });
+    for (const e of topEntries) {
+      if (e.isFile()) {
+        const ext = path.extname(e.name).toLowerCase();
+        if (codeExts.has(ext)) codeCount++;
+      }
+    }
+  } catch {}
+
+  return codeCount <= 2 ? 'greenfield' : 'brownfield';
+}
+
 function buildProtocolBlock(targetDir) {
   const stack = detectStack(targetDir);
+  const maturity = detectProjectMaturity(targetDir);
   const astLang = stack.lang !== 'generic' 
     ? (stack.lang.includes(',') ? ' --lang <go|ts|py>' : ` --lang ${stack.lang}`) 
     : '';
+
+  if (maturity === 'greenfield') {
+    return [
+      PROTOCOL_MARKER_START,
+      '<token_efficiency_protocol priority="critical" mode="greenfield">',
+      `## PROTOCOLO OBRIGATÓRIO DE ECONOMIA DE TOKENS (GREENFIELD FAST-TRACK - ${stack.name.toUpperCase()})`,
+      'Projeto em fase inicial de construção (Greenfield). Siga o fluxo direto e enxuto:',
+      '1. SCAFFOLDING & CONTRATOS: Crie os arquivos estruturais e especificações diretamente sem varreduras forenses pesadas.',
+      '2. ESCRITA DE CÓDIGO: Use write_to_file para novos arquivos e replace_file_content cirúrgico para modificações.',
+      '3. INSPEÇÃO CIRÚRGICA: view_file sempre com StartLine e EndLine cirúrgicos (máximo de 100 linhas).',
+      '4. TESTES CONCENTRADOS: Execute apenas a suíte do módulo em desenvolvimento (sem flags verbosas -v).',
+      '5. MEMPALACE: Registre decisões arquiteturais chave com node .agents/mcp-server.cjs capture decisions "<tópico>" "<decisão>".',
+      '',
+      'REGRAS RÍGIDAS DE SEGURANÇA E CONTEXTO:',
+      '- PROIBIDO: Usar view_file sem StartLine/EndLine em arquivos de código.',
+      '- PROIBIDO: Usar comandos de despejo bruto no terminal (cat, Get-Content, type, head).',
+      '- PROIBIDO: Sobrescrever arquivos de código inteiros existentes (use SEMPRE replace_file_content cirúrgico).',
+      '- PROIBIDO: Usar ast-grep com flags de reescrita em lote (-r, --rewrite).',
+      `- PROIBIDO: Executar testes em modo verboso (${stack.testCmd}) em lote.`,
+      '</token_efficiency_protocol>',
+      PROTOCOL_MARKER_END
+    ].join('\n');
+  }
+
   return [
     PROTOCOL_MARKER_START,
-    '<token_efficiency_protocol priority="critical">',
+    '<token_efficiency_protocol priority="critical" mode="brownfield">',
     `## PROTOCOLO OBRIGATÓRIO DE ECONOMIA DE TOKENS E ANÁLISE DE CÓDIGO (${stack.name.toUpperCase()})`,
-    'Ao analisar ou modificar código, você DEVE seguir rigorosamente esta ordem:',
+    'Ao analisar ou modificar código em base existente (Brownfield), você DEVE seguir rigorosamente esta esteira:',
     '1. mempalace_recall via CLI: node .agents/mcp-server.cjs recall "<query>" (verificar decisões e bugs já resolvidos no MemPalace).',
     '2. graphify query "<pergunta>" (via run_command) para entender arquitetura macro e relações (execute graphify update . se graphify-out/ ainda não existir).',
     '3. query_docs via CLI: node .agents/mcp-server.cjs docs "<query>" para regras em PRDs e documentação .md.',

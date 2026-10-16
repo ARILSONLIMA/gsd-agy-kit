@@ -1,6 +1,6 @@
-# Antigravity GSD Kit 🚀
+# Antigravity GSD Kit v1.4.0 🚀
 
-> **Adaptador Universal de Governança, Compatibilidade e Auto-Cura para GSD no Antigravity CLI**
+> **Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens para GSD no Antigravity CLI**
 
 Este módulo transforma o ecossistema **GSD (Get Stuff Done)** para funcionar com **100% de compatibilidade** com o **Antigravity CLI**, garantindo a imposição estrita do protocolo de economia de tokens e proteção contra updates do GSD.
 
@@ -103,12 +103,28 @@ O kit opera em 4 camadas complementares:
 
 10. **Servidor MCP Padronizado & Motores de Economia Dual-Mode (`mcp-server.cjs` & `lib/`):**
     - **Dual-Mode Transparente:** Opera como Servidor MCP Stdio JSON-RPC 2.0 em `.agents/mcp_config.json` e `.agents/plugins/gsd-economy/` quando montado pelo Antigravity, E simultaneamente como utilitário CLI ultra-rápido via `run_command` (`node .agents/mcp-server.cjs <cmd>`) com zero dependências npm.
-    - **`mempalace_recall` / `mempalace_capture`:** Memória episódica estruturada persistida em SQLite (`.agents/memory/palace.db`) com busca FTS5 para decisões arquiteturais e soluções de bugs históricos sem amnésia. CLI: `node .agents/mcp-server.cjs recall "<query>"` e `capture <room> "<tópico>" "<conteúdo>"`.
+    - **`ast_query` (Busca Estrutural AST Segura):** Executa buscas sintáticas no `ast-grep` via JSON-RPC/CLI sem risco de corrupção por aspas ou expansão de variáveis `$` no PowerShell/Bash. CLI: `node .agents/mcp-server.cjs ast "<pattern>" [lang] [path]`.
+    - **`test_isolate` (Isolador Cirúrgico de Testes):** Detecta testes que falharam recentemente e gera comandos pontuais para rodar apenas o teste quebrado (Node `--test`, Jest/Vitest, Go, Pytest) sem rodar a suíte completa. CLI: `node .agents/mcp-server.cjs test-isolate`.
+    - **`checkpoint_manager` (Micro-Checkpoints Git & Anti-Alucinação):** Cria tags e snapshots git antes/depois de refatorações críticas e permite rollback instantâneo caso o modelo entre em loops de quebra de código. CLI: `node .agents/mcp-server.cjs checkpoint <create|list|rollback> [arg]`.
+    - **`mempalace_recall` / `mempalace_capture` (MemPalace v2):** Memória episódica estruturada persistida em SQLite (`.agents/memory/palace.db`) com busca FTS5 para decisões arquiteturais e soluções de bugs com auto-captura heurística silenciosa na transição vermelho ➔ verde. CLI: `node .agents/mcp-server.cjs recall "<query>"` e `capture <room> "<tópico>" "<conteúdo>"`.
     - **`query_docs` (Mini-RAG para Markdown):** Indexação e busca semântica em arquivos `.md` do projeto, extraindo apenas os trechos e seções exatas das regras de negócio sem despejar arquivos de especificação inteiros. CLI: `node .agents/mcp-server.cjs docs "<query>"`.
-    - **`check_dependency` (Lente de Lockfiles):** Inspeção cirúrgica de pacotes e versões diretamente em `package-lock.json`, `go.sum`, `Cargo.lock` e `requirements.txt` sem sobrecarregar a janela de contexto. CLI: `node .agents/mcp-server.cjs dep "<pacote>"`.
-    - **`view_skeleton` (Esqueleto Estrutural):** Extração de assinaturas, structs, interfaces e tipos com números de linha para navegação cirúrgica. CLI: `node .agents/mcp-server.cjs skeleton "<arquivo>"`.
+    - **`check_dependency` (Lente Multi-Stack de Lockfiles):** Inspeção cirúrgica de pacotes e versões em `package-lock.json`, `go.sum`, `Cargo.lock`, `requirements.txt`, `composer.json`, `Gemfile` e `pubspec.yaml` sem sobrecarregar a janela de contexto. CLI: `node .agents/mcp-server.cjs dep "<pacote>"`.
+    - **`view_skeleton` (Esqueleto Estrutural Universal):** Extração de assinaturas, structs, interfaces e tipos com números de linha para TypeScript, JavaScript, Go, Python, Rust, C#, Java, PHP, Ruby, Dart e Elixir. CLI: `node .agents/mcp-server.cjs skeleton "<arquivo>"`.
 
-11. **Compatibilidade Universal Dual-Engine (`gsd-path` + `gsd-core`):**
+11. **Modo Smart-Assist & Auto-Slicing Proativo (`res.overwrite`):**
+    - Substitui rejeições mecânicas (`deny`) que custavam turnos extras e milhares de tokens de repetição por correções automáticas e transparentes via `overwrite`.
+    - Auto-injeta limites cirúrgicos de 100 linhas em arquivos não paginados ou trunca ranges excessivos sem quebrar o fluxo do agente.
+    - Suporta modos configuráveis: `smart-assist` (padrão), `strict` (hard gates) e `permissive`.
+
+12. **Protocolo Context-Aware (Greenfield Fast-Track vs Brownfield):**
+    - O normalizador detecta automaticamente a maturidade do projeto (contagem de arquivos de código existentes).
+    - Em projetos novos (**Greenfield**): elimina varreduras forenses pesadas de AST/Graphify/MemPalace na Phase 1, focando em scaffolding direto e contratos, cortando mais de 50.000 tokens de overhead.
+    - Em projetos existentes (**Brownfield**): mantém a esteira analítica profunda completa.
+
+13. **Blindagem de Grafos e Índices (`.graphifyignore` & `.astgrepignore`):**
+    - Instala templates de exclusão que impedem o `graphify` e o `ast-grep` de indexarem os scripts do kit e arquivos internos de controle, eliminando centenas de milhares de nós e arestas inúteis do grafo de conhecimento.
+
+14. **Compatibilidade Universal Dual-Engine (`gsd-path` + `gsd-core`):**
     - Suporte automático e transparente para **GSD Path** (`.project/STATE.md`, `.gsd-path/`) e **GSD Core** (`.planning/STATE.md`, `.agents/gsd-core`).
     - O instalador detecta a arquitetura do projeto e aplica a governança ideal sem quebras ou conflitos.
 
@@ -182,9 +198,16 @@ Para validar a integridade de todas as proteções, execute o validador incluíd
   gsd-agy-kit/test-kit.sh
   ```
 
-O validador testa e confirma 100% dos 40 cenários e regras de proteção:
+O validador testa e confirma 100% dos 85 testes e regras de proteção:
 - ✅ **Normalização dos subagentes:** ausência de `glob`/`grep_search` e protocolo injetado em todos os agentes ativos e no pool.
-- ✅ **Hard Gate `view_file`:** bloqueio sem paginação, bloqueio com range > 100 linhas, liberação cirúrgica (≤ 100 linhas) e liberação irrestrita para documentação.
+- ✅ **Hard Gate `view_file`:** bloqueio sem paginação em modo estrito, bloqueio com range > 100 linhas, liberação cirúrgica (≤ 100 linhas) e liberação irrestrita para documentação.
+- ✅ **Smart-Assist Auto-Slicing:** auto-correção proativa de ranges e paginação cirúrgica via `res.overwrite` sem penalidade de turnos.
+- ✅ **Greenfield Fast-Track:** detecção automática de maturidade do projeto e supressão de esteira forense pesada para projetos novos.
+- ✅ **Tool MCP `ast_query`:** busca estrutural segura via ast-grep eliminando erros de escape no shell.
+- ✅ **Test Isolate Engine:** detecção e isolamento de testes falhos para reexecução cirúrgica via Node, Jest, Go e Pytest.
+- ✅ **Git Micro-Checkpoints:** criação de snapshots e rollback instantâneo para prevenção de loops de alucinação.
+- ✅ **Expansão Multi-Stack:** Skeleton Engine e Lockfile Lens para TypeScript, Go, Python, Rust, C#, Java, PHP, Ruby, Dart e Elixir.
+- ✅ **Blindagem de Índices:** arquivos `.graphifyignore` e `.astgrepignore` garantindo isolamento total do kit e cache.
 - ✅ **Gate Universal de Linguagens:** bloqueio cirúrgico estendido para `.vue`, `.svelte`, `.cs`, `.php`, `.rb`, `.swift`, `.kt`, `.sql`, `.dart`.
 - ✅ **Higienização de URIs:** suporte transparente a esquemas `file:///` e caminhos com til (`~`).
 - ✅ **Hard Gate `run_command`:** bloqueio de despejo cego (`cat`/`Get-Content`/`gc`/`head`), bloqueio de `go test -v`, bloqueio de reescrita em massa com `ast-grep` (`-r -u`) e bloqueio de aspas duplas com `$` no Windows.
@@ -199,7 +222,7 @@ O validador testa e confirma 100% dos 40 cenários e regras de proteção:
 - ✅ **Governança e Git Hooks:** integridade de `.agents/hooks.json` (com matchers para ferramentas e subagentes) e hooks `post-merge`/`post-checkout` em `.git/hooks/`.
 - ✅ **Telemetria de tokens:** operacionalidade do comando `/gsd-tokens` (`token-report.cjs`).
 - ✅ **Hard Stop de Pré-requisitos:** detecção estrita de `Node.js`, `ast-grep`, `graphify` e `gsd-core`.
-- ✅ **Defaults Enxutos e Governança:** validação automática de `response_language: pt-BR`, `source_grounding_authority: ast-grep`, `graphify`, `mempalace` e flags econômicas em `.planning/config.json`.
+- ✅ **Defaults Enxutos e Governança:** validação automática de `response_language: pt-BR`, `kit_mode: smart-assist`, `source_grounding_authority: ast-grep`, `graphify`, `mempalace` e flags econômicas em `.planning/config.json`.
 - ✅ **Motor de UI do Instalador:** integridade, paridade e validação sintática do `setup-ui.cjs`.
 - ✅ **Deduplicação de Leituras Recentes:** bloqueio imediato de releituras idênticas do mesmo trecho de código em turnos consecutivos.
 - ✅ **Auto-Limitador Inteligente:** reescrita preventiva de `git log` (`-n 20`), `docker logs` (`--tail 100`), `Get-ChildItem -Recurse` (`-Depth 3`), `find .` (`-maxdepth 3`) e `npm list` (`--depth=0`) com respeito aos limites sintáticos de comandos.

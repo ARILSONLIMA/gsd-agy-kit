@@ -15,6 +15,9 @@ const MemPalaceEngine = require('./lib/mempalace-engine.cjs');
 const RagDocsEngine = require('./lib/rag-docs-engine.cjs');
 const LockfileLens = require('./lib/lockfile-lens.cjs');
 const SkeletonEngine = require('./lib/skeleton-engine.cjs');
+const TestIsolate = require('./lib/test-isolate.cjs');
+const CheckpointEngine = require('./lib/checkpoint-engine.cjs');
+const { spawnSync } = require('child_process');
 
 function resolveProjectRoot() {
   if (process.env.PROJECT_ROOT && fs.existsSync(process.env.PROJECT_ROOT)) {
@@ -37,6 +40,51 @@ const mempalace = new MemPalaceEngine(PROJECT_ROOT);
 const ragDocs = new RagDocsEngine(PROJECT_ROOT);
 const lockfileLens = new LockfileLens(PROJECT_ROOT);
 const skeletonEngine = new SkeletonEngine(PROJECT_ROOT);
+const testIsolate = new TestIsolate(PROJECT_ROOT);
+const checkpointEngine = new CheckpointEngine(PROJECT_ROOT);
+
+function runAstQuery({ pattern, lang, path: targetPath = '.', limit = 10 }) {
+  if (!pattern) return { text: 'Erro: padrão (pattern) é obrigatório.', isError: true };
+  const bin = 'ast-grep';
+  const cmdArgs = ['run', '-p', pattern];
+  if (lang) cmdArgs.push('--lang', lang);
+  if (targetPath && targetPath !== '.') cmdArgs.push(targetPath);
+  cmdArgs.push('--json=stream');
+
+  try {
+    let res = spawnSync(bin, cmdArgs, { cwd: PROJECT_ROOT, encoding: 'utf8', timeout: 15000 });
+    if (res.error) {
+      res = spawnSync('npx', ['-y', '--package', '@ast-grep/cli', 'ast-grep', ...cmdArgs], { cwd: PROJECT_ROOT, encoding: 'utf8', timeout: 20000 });
+    }
+    const stdout = res.stdout || '';
+    if (!stdout.trim()) {
+      return { text: `Nenhuma correspondência encontrada para o padrão: "${pattern}".`, isError: false };
+    }
+
+    const lines = stdout.trim().split('\n');
+    const matches = [];
+    for (const line of lines) {
+      try {
+        const item = JSON.parse(line);
+        const rel = path.relative(PROJECT_ROOT, item.file || '');
+        const start = (item.range && item.range.start && item.range.start.line + 1) || 1;
+        const end = (item.range && item.range.end && item.range.end.line + 1) || start;
+        const textSnippet = (item.text || '').split('\n').slice(0, 3).join(' ');
+        matches.push(`📄 ${rel}:${start}-${end} ➔ ${textSnippet}`);
+        if (matches.length >= limit) break;
+      } catch {}
+    }
+
+    if (matches.length === 0) {
+      return { text: `Nenhuma correspondência encontrada para o padrão: "${pattern}".`, isError: false };
+    }
+
+    const header = `🔍 [AST Query] ${matches.length} correspondência(s) encontrada(s) para '${pattern}':\n`;
+    return { text: header + matches.join('\n'), isError: false };
+  } catch (err) {
+    return { text: `Erro ao executar ast-grep: ${err.message}`, isError: true };
+  }
+}
 
 const TOOLS_MANIFEST = [
   {
@@ -99,6 +147,43 @@ const TOOLS_MANIFEST = [
       },
       required: ['file_path']
     }
+  },
+  {
+    name: 'ast_query',
+    description: 'Executa busca sintática AST via ast-grep sem risco de escape de aspas ou expansão de variáveis no shell.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: 'Padrão estrutural do ast-grep (ex: "function $NAME($$$)")' },
+        lang: { type: 'string', description: 'Linguagem (ex: js, ts, go, py, rust, cs, java, php, rb, dart). Opcional.' },
+        path: { type: 'string', description: 'Arquivo ou diretório alvo (padrão: ".")' },
+        limit: { type: 'number', description: 'Número máximo de ocorrências (padrão: 10)' }
+      },
+      required: ['pattern']
+    }
+  },
+  {
+    name: 'test_isolate',
+    description: 'Detecta testes que falharam recentemente e retorna o comando cirúrgico para rodar apenas os testes falhos sem rodar a suíte completa.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        runner: { type: 'string', enum: ['auto', 'npm', 'node', 'go', 'pytest'], description: 'Runner de testes (padrão: auto)' }
+      }
+    }
+  },
+  {
+    name: 'checkpoint_manager',
+    description: 'Cria, lista ou desfaz para micro-checkpoints git antes/depois de refatorações críticas para evitar espirais de alucinação.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['create', 'list', 'rollback'], description: 'Ação a executar' },
+        tag: { type: 'string', description: 'Nome do checkpoint para rollback (opcional)' },
+        phase: { type: 'string', description: 'Fase ou contexto do checkpoint (ex: green-test, phase-3)' }
+      },
+      required: ['action']
+    }
   }
 ];
 
@@ -145,6 +230,35 @@ function handleToolCall(name, args) {
         const filePath = args.file_path || args.path;
         const text = skeletonEngine.getOutline(filePath);
         return { text, isError: false };
+      }
+      case 'ast_query': {
+        return runAstQuery({
+          pattern: args.pattern,
+          lang: args.lang,
+          path: args.path,
+          limit: args.limit || 10
+        });
+      }
+      case 'test_isolate': {
+        const res = testIsolate.getIsolatedCommand(args.runner);
+        return { text: res.message, isError: false, data: res };
+      }
+      case 'checkpoint_manager': {
+        const action = args.action || 'list';
+        if (action === 'create') {
+          const res = checkpointEngine.createCheckpoint(args.phase || 'manual');
+          return { text: res.message || res.error, isError: !res.ok };
+        } else if (action === 'rollback') {
+          const res = checkpointEngine.rollback(args.tag);
+          return { text: res.message || res.error, isError: !res.ok };
+        } else {
+          const list = checkpointEngine.listCheckpoints();
+          if (list.length === 0) {
+            return { text: 'Nenhum micro-checkpoint registrado ainda.', isError: false };
+          }
+          const formatted = list.map(c => `🏷️ ${c.tag} (commit ${c.commit}) - Fase: ${c.phase} [${c.date}]`).join('\n');
+          return { text: `📋 Checkpoints Registrados:\n${formatted}`, isError: false };
+        }
       }
       default:
         return { text: `Ferramenta desconhecida: "${name}"`, isError: true };
@@ -345,6 +459,41 @@ function handleCli(args) {
     process.exit(0);
   }
 
+  if (cmd === 'ast') {
+    const pattern = args[1];
+    if (!pattern) {
+      console.error('Erro: informe o padrão AST. Ex: node mcp-server.cjs ast "function $NAME($$$)" [lang] [path]');
+      process.exit(1);
+    }
+    const lang = args[2] || undefined;
+    const targetPath = args[3] || '.';
+    const limit = args[4] ? Number(args[4]) : 10;
+    const { text, isError } = handleToolCall('ast_query', { pattern, lang, path: targetPath, limit });
+    if (isError) { console.error(text); process.exit(1); }
+    console.log(text);
+    process.exit(0);
+  }
+
+  if (cmd === 'test-isolate') {
+    const runner = args[1] || 'auto';
+    const { text, isError } = handleToolCall('test_isolate', { runner });
+    if (isError) { console.error(text); process.exit(1); }
+    console.log(text);
+    process.exit(0);
+  }
+
+  if (cmd === 'checkpoint') {
+    const action = args[1] || 'list';
+    const param = args[2];
+    const payload = { action };
+    if (action === 'create') payload.phase = param || 'manual';
+    if (action === 'rollback') payload.tag = param;
+    const { text, isError } = handleToolCall('checkpoint_manager', payload);
+    if (isError) { console.error(text); process.exit(1); }
+    console.log(text);
+    process.exit(0);
+  }
+
   console.error(`Comando desconhecido: "${cmd}". Execute "node mcp-server.cjs help" para ver as opções.`);
   process.exit(1);
 }
@@ -359,6 +508,9 @@ Uso CLI direto (via run_command):
   node .agents/mcp-server.cjs skeleton "<caminho_arquivo>"
   node .agents/mcp-server.cjs dep "<nome_pacote>"
   node .agents/mcp-server.cjs docs "<query>" [max_results]
+  node .agents/mcp-server.cjs ast "<pattern>" [lang] [path] [limit]
+  node .agents/mcp-server.cjs test-isolate [runner]
+  node .agents/mcp-server.cjs checkpoint <create|list|rollback> [arg]
   node .agents/mcp-server.cjs call <ferramenta> '<json_args>'
   node .agents/mcp-server.cjs tools [--json]
   node .agents/mcp-server.cjs help

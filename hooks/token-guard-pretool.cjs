@@ -72,6 +72,27 @@ function verifyToolsHealth() {
   return health;
 }
 
+function getKitMode() {
+  if (process.env.GSD_KIT_MODE) {
+    return process.env.GSD_KIT_MODE.toLowerCase().trim();
+  }
+  const configPaths = [
+    path.join(PROJECT_ROOT, '.planning', 'config.json'),
+    path.join(PROJECT_ROOT, '.agents', 'config.json'),
+    path.join(PROJECT_ROOT, '.project', 'config.json')
+  ];
+  for (const cfgPath of configPaths) {
+    if (fs.existsSync(cfgPath)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        if (data.kit_mode) return data.kit_mode.toLowerCase().trim();
+        if (data.mode) return data.mode.toLowerCase().trim();
+      } catch {}
+    }
+  }
+  return 'strict';
+}
+
 function sanitizePath(rawPath) {
   if (typeof rawPath !== 'string') return '';
   let p = rawPath.trim();
@@ -300,12 +321,26 @@ async function main() {
           ? 'node gsd-outline.cjs'
           : 'node .agents/kit/gsd-outline.cjs');
 
+    const kitMode = getKitMode();
+
     // 1.1 Se linhas não foram especificadas:
     if (isNaN(startLine) || isNaN(endLine)) {
+      if (kitMode === 'permissive') {
+        return respond('allow', null, modifiedArgs);
+      }
+
       // Auto-injeção transparente para arquivos pequenos (<= 100 linhas no disco)
       if (fileTotalLines > 0 && fileTotalLines <= 100) {
         startLine = isNaN(startLine) ? 1 : Math.max(1, startLine);
         endLine = isNaN(endLine) ? fileTotalLines : Math.min(fileTotalLines, endLine);
+        modifiedArgs = Object.assign({}, modifiedArgs || {}, {
+          StartLine: startLine,
+          EndLine: endLine
+        });
+      } else if (kitMode === 'smart-assist' && fileTotalLines > 0) {
+        // Smart-Assist Auto-Slicing: Em vez de fail/deny, aplica overwrite cirúrgico de 100 linhas
+        startLine = isNaN(startLine) ? 1 : Math.max(1, startLine);
+        endLine = Math.min(fileTotalLines, startLine + 99);
         modifiedArgs = Object.assign({}, modifiedArgs || {}, {
           StartLine: startLine,
           EndLine: endLine
@@ -325,11 +360,24 @@ async function main() {
 
     const range = endLine - startLine + 1;
     if (range > 100) {
-      return respond(
-        'deny',
-        `🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: O intervalo de ${range} linhas excede o limite permitido (máximo 100 linhas para arquivos de código). ` +
-        `Utilize ${outlineScriptPath} <arquivo> para ver a estrutura limpa, ou ${langToolHint} para o bloco exato, reduzindo o range do view_file.`
-      );
+      if (kitMode === 'permissive') {
+        return respond('allow', null, modifiedArgs);
+      }
+
+      if (kitMode === 'smart-assist') {
+        // Smart-Assist: Auto-slicing suave cortando para teto de 100 linhas
+        endLine = startLine + 99;
+        modifiedArgs = Object.assign({}, modifiedArgs || {}, {
+          StartLine: startLine,
+          EndLine: endLine
+        });
+      } else {
+        return respond(
+          'deny',
+          `🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: O intervalo de ${range} linhas excede o limite permitido (máximo 100 linhas para arquivos de código). ` +
+          `Utilize ${outlineScriptPath} <arquivo> para ver a estrutura limpa, ou ${langToolHint} para o bloco exato, reduzindo o range do view_file.`
+        );
+      }
     }
 
     // 1.2 Deduplicação de Leituras Recentes em arquivos de código

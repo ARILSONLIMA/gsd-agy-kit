@@ -121,7 +121,7 @@ function renderHubBanner(targetDir) {
   const statusBadge = status.isInstalled ? `${C.bGreen}[🟢 Blindado & Operacional]${C.reset}` : `${C.bYellow}[⚪ Não Configurado]${C.reset}`;
   
   console.log(`\n${C.bCyan}╭────────────────────────────────────────────────────────────────────────╮${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT - PAINEL DE CONTROLE v1.3.0${C.reset}                   ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT - PAINEL DE CONTROLE v1.4.0${C.reset}                   ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.dim}Workspace:${C.reset} ${C.white}${targetDir}${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.dim}Status:${C.reset}    ${statusBadge}  •  ${C.dim}Stack:${C.reset} ${C.bWhite}${status.stack}${C.reset}`);
   if (status.isInstalled) {
@@ -136,7 +136,7 @@ function renderHubBanner(targetDir) {
 
 function renderBanner() {
   console.log(`\n${C.bCyan}╭────────────────────────────────────────────────────────────────────────╮${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT v1.3.0${C.reset}                                        ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT v1.4.0${C.reset}                                        ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.dim}Adaptador de Governança, Compatibilidade e Auto-Cura para Antigravity${C.reset}${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}╰────────────────────────────────────────────────────────────────────────╯${C.reset}\n`);
 }
