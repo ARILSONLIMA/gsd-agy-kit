@@ -30,6 +30,8 @@ const C = {
 };
 
 function findProjectRoot() {
+  const hooksParent = path.resolve(__dirname, '..');
+  if (path.basename(hooksParent) === '.agents') return path.dirname(hooksParent);
   let curr = process.cwd();
   for (let i = 0; i < 6; i++) {
     if (fs.existsSync(path.join(curr, '.agents')) || fs.existsSync(path.join(curr, '.git'))) {
@@ -46,6 +48,20 @@ const PROJECT_ROOT = findProjectRoot();
 const CACHE_DIR = path.join(PROJECT_ROOT, '.agents', '.cache');
 const INCIDENTS_FILE = path.join(CACHE_DIR, 'session-incidents.json');
 const REPORT_FILE = path.join(CACHE_DIR, 'latest-session-report.json');
+const MODIFIED_FILES_PATH = path.join(CACHE_DIR, 'session-modified-files.json');
+const STOP_GATE_PATH = path.join(CACHE_DIR, 'stop-verify-gate.json');
+const LAST_TEST_STATUS_PATH = path.join(CACHE_DIR, 'last-test-status.json');
+const FAILED_TESTS_PATH = path.join(CACHE_DIR, 'failed-tests.json');
+
+function findLibModule(name) {
+  const candidates = [
+    path.resolve(__dirname, '..', 'lib', name),
+    path.resolve(__dirname, '..', 'kit', 'lib', name),
+    path.join(PROJECT_ROOT, '.agents', 'lib', name),
+    path.join(PROJECT_ROOT, 'lib', name)
+  ];
+  return candidates.find(p => fs.existsSync(p)) || null;
+}
 
 function writeJsonAtomic(filePath, data) {
   try {
@@ -106,6 +122,24 @@ function recordIncident(incident) {
   saveIncidents(trimmed);
 }
 
+function recordModifiedCodeFile(rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') return;
+  if (!/\.(go|ts|tsx|js|jsx|cjs|mjs|py|java|c|cpp|cc|cxx|h|hpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|dart|lua|sh|bash|ex|exs|tf|sql)$/i.test(rawPath)) {
+    return;
+  }
+  try {
+    const resolved = path.resolve(PROJECT_ROOT, rawPath);
+    let list = [];
+    if (fs.existsSync(MODIFIED_FILES_PATH)) {
+      try { list = JSON.parse(fs.readFileSync(MODIFIED_FILES_PATH, 'utf8')) || []; } catch {}
+    }
+    const now = Date.now();
+    list = list.filter(item => item && item.file !== resolved && (now - Number(item.timestamp || 0)) < 300000);
+    list.push({ file: resolved, timestamp: now });
+    writeJsonAtomic(MODIFIED_FILES_PATH, list.slice(-15));
+  } catch {}
+}
+
 // -----------------------------------------------------------------------------
 // Estágio: PostToolUse (Captura de Falhas)
 // -----------------------------------------------------------------------------
@@ -117,14 +151,37 @@ function handlePostToolUse(payload) {
   const args = toolCall.args || {};
   const output = payload.output || payload.result || '';
 
-  if (error && typeof error === 'string' && error.trim().length > 0) {
+  const egMod = findLibModule('error-guard.cjs');
+  const ErrorGuard = egMod ? require(egMod) : null;
+
+  const isErr = Boolean((error && typeof error === 'string' && error.trim().length > 0) || payload.isError);
+  if (isErr) {
+    const errMsg = String(error || payload.error || 'Falha na execução da ferramenta').trim();
     recordIncident({
       type: 'tool_error',
       tool: toolName,
       stepIdx: stepIdx,
-      error: error.trim(),
+      error: errMsg,
       args: args
     });
+    if (ErrorGuard) {
+      ErrorGuard.emitError(PROJECT_ROOT, {
+        category: 'TOOL',
+        component: `tool:${toolName}`,
+        title: `Falha na execução da ferramenta "${toolName}" (Passo ${stepIdx || '?'})`,
+        stderr: errMsg,
+        command: args.CommandLine || args.command || null,
+        file: args.AbsolutePath || args.TargetFile || args.file_path || null,
+        hint: 'Verifique a saída e os parâmetros informados para a ferramenta.',
+        severity: 'error'
+      });
+      if (['run_command', 'ast_query', 'lsp_diagnostics'].includes(toolName)) {
+        ErrorGuard.invalidateHealthCache(PROJECT_ROOT);
+      }
+    }
+  } else if (['replace_file_content', 'multi_replace_file_content', 'write_to_file', 'write'].includes(toolName)) {
+    const editedPath = args.TargetFile || args.AbsolutePath || args.path || args.file_path || '';
+    recordModifiedCodeFile(editedPath);
   }
 
   // Monitorar comandos de teste para Auto-Isolate, Checkpoints e MemPalace v2
@@ -133,7 +190,8 @@ function handlePostToolUse(payload) {
     const isTestCmd = /\b(npm\s+test|node\s+--test|pytest|go\s+test|cargo\s+test)\b/i.test(cmd);
     if (isTestCmd) {
       try {
-        const TestIsolate = require('../lib/test-isolate.cjs');
+        const tiMod = findLibModule('test-isolate.cjs');
+        const TestIsolate = tiMod ? require(tiMod) : require('../lib/test-isolate.cjs');
         const testIsolate = new TestIsolate(PROJECT_ROOT);
         const combinedOutput = `${output}\n${error}`;
         const failures = testIsolate.parseFailures(combinedOutput);
@@ -143,11 +201,13 @@ function handlePostToolUse(payload) {
         } else {
           const hadPreviousFailures = testIsolate.getFailedTests().length > 0;
           testIsolate.recordSuccess(cmd);
+          try { if (fs.existsSync(STOP_GATE_PATH)) fs.unlinkSync(STOP_GATE_PATH); } catch {}
 
           if (hadPreviousFailures) {
             // Transição Vermelho -> Verde detectada!
             try {
-              const MemPalace = require('../lib/mempalace-engine.cjs');
+              const mpMod = findLibModule('mempalace-engine.cjs');
+              const MemPalace = mpMod ? require(mpMod) : require('../lib/mempalace-engine.cjs');
               const mempalace = new MemPalace(PROJECT_ROOT);
               mempalace.capture({
                 room: 'problems',
@@ -158,7 +218,8 @@ function handlePostToolUse(payload) {
             } catch {}
 
             try {
-              const Checkpoint = require('../lib/checkpoint-engine.cjs');
+              const chkMod = findLibModule('checkpoint-engine.cjs');
+              const Checkpoint = chkMod ? require(chkMod) : require('../lib/checkpoint-engine.cjs');
               const checkpoint = new Checkpoint(PROJECT_ROOT);
               checkpoint.createCheckpoint('green-test');
             } catch {}
@@ -173,23 +234,105 @@ function handlePostToolUse(payload) {
   process.exit(0);
 }
 
+function checkAutoVerifyStopGate(terminationReason) {
+  // Só intercepta paradas normais por conclusão de turno (NO_TOOL_CALL)
+  if (terminationReason !== 'NO_TOOL_CALL') {
+    return null;
+  }
+
+  const now = Date.now();
+  let gateState = { retryCount: 0, timestamp: 0 };
+  if (fs.existsSync(STOP_GATE_PATH)) {
+    try {
+      gateState = JSON.parse(fs.readFileSync(STOP_GATE_PATH, 'utf8')) || gateState;
+    } catch {}
+  }
+
+  // Se já interceptou 1 vez nos últimos 5 minutos, libera o Stop e limpa a trava anti-loop
+  if (gateState.retryCount >= 1 && (now - Number(gateState.timestamp || 0)) < 300000) {
+    try { fs.unlinkSync(STOP_GATE_PATH); } catch {}
+    try { if (fs.existsSync(MODIFIED_FILES_PATH)) fs.unlinkSync(MODIFIED_FILES_PATH); } catch {}
+    return null;
+  }
+
+  // 1. Verificar se o último teste executado na sessão está quebrado (< 5 min)
+  for (const statusFile of [LAST_TEST_STATUS_PATH, FAILED_TESTS_PATH]) {
+    if (fs.existsSync(statusFile)) {
+      try {
+        const testStatus = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+        const hasFailed = testStatus && (testStatus.passed === false || (Array.isArray(testStatus.failures) && testStatus.failures.length > 0));
+        if (hasFailed && (now - Number(testStatus.timestamp || 0)) < 300000) {
+          writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+          return (
+            '🛑 [AUTO-VERIFY GATE] Parada prematura interceptada: há teste(s) falhando na última execução registrada.\n' +
+            'Execute o teste isolado (node .agents/mcp-server.cjs test-isolate) e corrija a regressão antes de concluir.'
+          );
+        }
+      } catch {}
+    }
+  }
+
+  // 2. Verificar diagnósticos sintáticos/LSP nos arquivos de código editados na sessão
+  if (fs.existsSync(MODIFIED_FILES_PATH)) {
+    try {
+      const modifiedList = JSON.parse(fs.readFileSync(MODIFIED_FILES_PATH, 'utf8')) || [];
+      try { fs.unlinkSync(MODIFIED_FILES_PATH); } catch {}
+      const recentFiles = modifiedList
+        .filter(item => item && item.file && (now - Number(item.timestamp || 0)) < 300000 && fs.existsSync(item.file))
+        .slice(-3);
+
+      if (recentFiles.length > 0) {
+        const lspMod = findLibModule('lsp-engine.cjs');
+        if (lspMod) {
+          const LspEngine = require(lspMod);
+          const lsp = new LspEngine(PROJECT_ROOT);
+          for (const item of recentFiles) {
+            const diag = lsp.diagnostics({ file_path: item.file });
+            if (diag && (diag.isError || diag.hasDiagnostics)) {
+              writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+              return (
+                `🛑 [AUTO-VERIFY GATE] Parada prematura interceptada: erro de sintaxe/compilação detectado em ${path.basename(item.file)}:\n` +
+                `${diag.text}\nCorrija o erro antes de finalizar o turno.`
+              );
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
 // -----------------------------------------------------------------------------
-// Estágio: Stop (Renderização do Sumário de Diagnóstico no Fim da Sessão)
+// Estágio: Stop (Renderização do Sumário de Diagnóstico e Auto-Verify Gate)
 // -----------------------------------------------------------------------------
 function handleStop(payload) {
   const terminationReason = payload.terminationReason || '';
   const topError = payload.error || '';
   const incidents = loadIncidents();
 
-  const hasErrors = incidents.length > 0 || (topError && topError.trim().length > 0) || terminationReason === 'ERROR';
+  // Verificar Gate Anti-Parada Prematura (TDD / LSP) quando terminationReason === NO_TOOL_CALL
+  const autoVerifyReason = checkAutoVerifyStopGate(terminationReason);
+  if (autoVerifyReason) {
+    process.stdout.write(JSON.stringify({ decision: 'continue', reason: autoVerifyReason }) + '\n');
+    process.exit(0);
+  }
+
+  const egMod = findLibModule('error-guard.cjs');
+  const ErrorGuard = egMod ? require(egMod) : null;
+  const loggedErrors = ErrorGuard ? ErrorGuard.listErrors(PROJECT_ROOT, { onlyUnresolved: true }) : [];
+
+  const hasErrors = incidents.length > 0 || loggedErrors.length > 0 || (topError && topError.trim().length > 0) || terminationReason === 'ERROR';
 
   if (hasErrors) {
     const reportData = {
       timestamp: new Date().toISOString(),
       terminationReason,
       topError: topError || null,
-      totalIncidents: incidents.length,
-      incidents: incidents
+      totalIncidents: incidents.length + loggedErrors.length,
+      incidents: incidents,
+      loggedErrors: loggedErrors
     };
 
     // Salvar relatório para inspeção histórica
@@ -199,7 +342,7 @@ function handleStop(payload) {
     } catch {}
 
     // Montar Card Visual de Diagnóstico no stderr (visível diretamente no console)
-    const errCount = incidents.length + (topError ? 1 : 0);
+    const errCount = incidents.length + loggedErrors.length + (topError ? 1 : 0);
     const border = '─'.repeat(70);
 
     let output = `\n${C.bYellow}╭─ ⚠️  RELATÓRIO DE DIAGNÓSTICO E INCIDENTES (GSD-AGY-KIT) ${border.slice(52)}╮${C.reset}\n`;

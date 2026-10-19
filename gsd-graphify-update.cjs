@@ -200,6 +200,7 @@ async function main() {
     }
   } catch {}
 
+  let lastStderr = '';
   try {
     const res = spawnSync(graphifyBin, ['update', '.'], {
       cwd: projectRoot,
@@ -207,6 +208,7 @@ async function main() {
       encoding: 'utf8',
     });
     exitCode = res.status ?? 1;
+    lastStderr = (res.stderr || res.stdout || '').trim();
 
     if (exitCode === 0) {
       const outDir = path.join(projectRoot, 'graphify-out');
@@ -239,9 +241,30 @@ async function main() {
           });
         }
       } catch {}
+    } else {
+      let ErrorGuard = null;
+      try {
+        ErrorGuard = require('./lib/error-guard.cjs');
+      } catch {
+        try {
+          ErrorGuard = require(path.join(projectRoot, '.agents', 'lib', 'error-guard.cjs'));
+        } catch {}
+      }
+      if (ErrorGuard) {
+        ErrorGuard.recordError(projectRoot, {
+          source: 'graphify-update',
+          message: 'Falha ao atualizar grafo Graphify',
+          stderr: lastStderr || `Graphify encerrou com código ${exitCode}`,
+          remediation: 'Execute "graphify update ." no terminal para diagnosticar erros no grafo.',
+          fatal: false
+        });
+      }
+      process.stderr.write(`[gsd-graphify-update] ❌ Falha na atualização do grafo (exit ${exitCode}):\n${lastStderr}\n`);
     }
   } catch (err) {
     exitCode = 1;
+    lastStderr = err.stack || err.message;
+    process.stderr.write(`[gsd-graphify-update] ❌ Exceção ao executar graphify: ${lastStderr}\n`);
   }
 
   const msEnd = Date.now();
@@ -259,6 +282,7 @@ async function main() {
         duration_ms: duration,
         head_at_build: headSha,
         graphify_version: version,
+        error_detail: exitCode === 0 ? null : lastStderr
       },
       null,
       2
@@ -272,9 +296,15 @@ async function main() {
     }
   } catch {}
 
-  process.exit(0);
+  const isHookInvocation = Boolean(stdinData);
+  if (isHookInvocation) {
+    process.exit(0);
+  } else {
+    process.exit(exitCode);
+  }
 }
 
-main().catch(() => {
-  process.exit(0);
+main().catch(err => {
+  process.stderr.write(`[gsd-graphify-update] ❌ Erro fatal: ${err.message}\n`);
+  process.exit(1);
 });

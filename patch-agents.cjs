@@ -29,15 +29,30 @@ function detectStack(targetDir) {
 
   const hasGo = hasFile('go.mod');
   const hasTs = hasFile('tsconfig.json') || hasFile('package.json');
-  const hasPy = hasFile('pyproject.toml') || hasFile('requirements.txt');
+  const hasPy = hasFile('pyproject.toml') || hasFile('requirements.txt') || hasFile('setup.py');
+  const hasRust = hasFile('Cargo.toml');
+  const hasPhp = hasFile('composer.json');
+  const hasCpp = hasFile('CMakeLists.txt') || hasFile('compile_commands.json') || hasFile('Makefile');
+  const hasJava = hasFile('pom.xml') || hasFile('build.gradle') || hasFile('build.gradle.kts');
+  const hasRuby = hasFile('Gemfile');
+  const hasDart = hasFile('pubspec.yaml');
+  const hasElixir = hasFile('mix.exs');
 
+  const lspCliHint = 'node .agents/mcp-server.cjs lsp <diagnostics|definition|references|hover|rename>';
   const detected = [];
-  if (hasGo) detected.push({ name: 'Go', lsp: 'gopls CLI / MCP (ou view_skeleton via mcp-server.cjs)', lang: 'go', testCmd: 'go test -v' });
-  if (hasTs) detected.push({ name: 'TypeScript/JavaScript', lsp: 'LSP / TypeScript MCP', lang: 'ts', testCmd: 'npm test -- --verbose' });
-  if (hasPy) detected.push({ name: 'Python', lsp: 'Pyright / LSP MCP', lang: 'py', testCmd: 'pytest -vv' });
+  if (hasGo) detected.push({ name: 'Go', lsp: `gopls / ${lspCliHint}`, lang: 'go', testCmd: 'go test -v' });
+  if (hasTs) detected.push({ name: 'TypeScript/JavaScript', lsp: `TS/JS LSP (${lspCliHint})`, lang: 'ts', testCmd: 'npm test -- --verbose' });
+  if (hasPy) detected.push({ name: 'Python', lsp: `Pyright/Python LSP (${lspCliHint})`, lang: 'py', testCmd: 'pytest -vv' });
+  if (hasRust) detected.push({ name: 'Rust', lsp: `rust-analyzer/cargo (${lspCliHint})`, lang: 'rust', testCmd: 'cargo test -- --nocapture' });
+  if (hasPhp) detected.push({ name: 'PHP', lsp: `intelephense/PHP LSP (${lspCliHint})`, lang: 'php', testCmd: 'phpunit --verbose' });
+  if (hasCpp) detected.push({ name: 'C/C++', lsp: `clangd/C++ LSP (${lspCliHint})`, lang: 'cpp', testCmd: 'ctest -V' });
+  if (hasJava) detected.push({ name: 'Java', lsp: `jdtls/javac (${lspCliHint})`, lang: 'java', testCmd: 'mvn test -X' });
+  if (hasRuby) detected.push({ name: 'Ruby', lsp: `solargraph/Ruby LSP (${lspCliHint})`, lang: 'rb', testCmd: 'rspec --format documentation' });
+  if (hasDart) detected.push({ name: 'Dart', lsp: `dart analyze/LSP (${lspCliHint})`, lang: 'dart', testCmd: 'dart test -r expanded' });
+  if (hasElixir) detected.push({ name: 'Elixir', lsp: `elixir-ls (${lspCliHint})`, lang: 'elixir', testCmd: 'mix test --trace' });
 
   if (detected.length === 0) {
-    return { name: 'Geral', lsp: 'LSP / Language Server MCP', lang: 'generic', testCmd: 'test verboso' };
+    return { name: 'Geral', lsp: `Multi-LSP Híbrido (${lspCliHint})`, lang: 'generic', testCmd: 'test verboso' };
   }
   if (detected.length === 1) {
     return detected[0];
@@ -46,7 +61,7 @@ function detectStack(targetDir) {
   // Multi-Stack / Monorepo
   return {
     name: detected.map(d => d.name).join(' + '),
-    lsp: detected.map(d => `${d.name}: ${d.lsp}`).join(' | '),
+    lsp: `Multi-LSP Híbrido (${lspCliHint})`,
     lang: detected.map(d => d.lang).join(','),
     testCmd: detected.map(d => d.testCmd).join(' e ')
   };

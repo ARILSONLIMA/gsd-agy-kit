@@ -10,7 +10,8 @@
    - Execute: `node .agents/mcp-server.cjs skeleton "<arquivo>"` (ou use a ferramenta MCP se disponível no schema).
 5. `check_dependency`: Use para verificar se uma biblioteca está instalada e sua versão. NUNCA abra arquivos de lockfile (`package-lock.json`, `go.sum`).
    - Execute: `node .agents/mcp-server.cjs dep "<pacote>"` (ou use a ferramenta MCP se disponível no schema).
-6. `gopls` / LSP: Para resolver assinaturas, referências cruzadas e diagnósticos com precisão do compilador.
+6. `lsp_*` (Multi-LSP Híbrido — 20 Ecossistemas): Para resolver definições (`lsp_definition`), referências cruzadas (`lsp_references`), assinaturas/tipos (`lsp_hover`), renomeações seguras (`lsp_rename`) e diagnósticos (`lsp_diagnostics`) em qualquer linguagem (Go, TS/JS/Node, Python, Rust, PHP, C/C++, Java, C#, Ruby, Dart, Elixir, Lua, Bash/Shell, Web/HTML/CSS/JSON, YAML/K8s, SQL, Docker, Kotlin, Swift, Terraform).
+   - Execute: `node .agents/mcp-server.cjs lsp <diagnostics|definition|references|hover|symbols|rename>` (ou use as ferramentas MCP `lsp_*`).
 7. `ast-grep` CLI (`ast-grep run -p '<padrão>'`): Buscas sintáticas e estruturais precisas na AST.
 8. `view_file` CIRÚRGICO APENAS: É estritamente proibido ler arquivos sem limites de linhas (`StartLine`/`EndLine`), com mais de 100 linhas ou para explorar repositório sem antes consultar `graphify` e `view_skeleton`.
 
@@ -27,5 +28,5 @@
 - Proibição de comandos de despejo cego no terminal (`cat`, `Get-Content`, `type`, `head`, `tail`) em arquivos de código.
 
 ## 5. Circuit Breaker (Hard Stop)
-- É inegociável que `ast-grep` e `graphify` (e `gopls` em Go) estejam operacionais.
+- É inegociável que `ast-grep`, `graphify` e o servidor/verificador LSP da linguagem do projeto estejam operacionais.
 - Se qualquer uma falhar, todas as atividades devem parar imediatamente até o reparo da ferramenta.

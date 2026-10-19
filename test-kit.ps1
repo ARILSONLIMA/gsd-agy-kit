@@ -893,7 +893,7 @@ $rulesDir = if (Test-Path (Join-Path $kitDir "rules")) {
     Join-Path $PSScriptRoot "rules"
 }
 
-$expectedRules = @("ast-grep.md", "gopls.md", "graphify.md", "idioma.md", "token-protocol.md")
+$expectedRules = @("ast-grep.md", "lsp.md", "graphify.md", "idioma.md", "token-protocol.md")
 $rulesAllOk = $true
 foreach ($rule in $expectedRules) {
     $rulePath = Join-Path $rulesDir $rule
@@ -922,12 +922,21 @@ $gsdTestSkill = if (Test-Path (Join-Path $kitDir "skills\gsd-test\SKILL.md")) {
     Join-Path $PSScriptRoot "skills\gsd-test\SKILL.md"
 }
 
-$skillOk = (Test-Path $gsdTokensSkill) -and ((Get-Content $gsdTokensSkill -Raw) -match "name:\s*gsd-tokens") -and `
-           (Test-Path $gsdTestSkill) -and ((Get-Content $gsdTestSkill -Raw) -match "name:\s*gsd-test")
+$gsdUpdateSkill = if (Test-Path (Join-Path $kitDir "skills\gsd-agy-update\SKILL.md")) {
+    Join-Path $kitDir "skills\gsd-agy-update\SKILL.md"
+} elseif (Test-Path (Join-Path $TargetDir ".agents\skills\gsd-agy-update\SKILL.md")) {
+    Join-Path $TargetDir ".agents\skills\gsd-agy-update\SKILL.md"
+} else {
+    Join-Path $PSScriptRoot "skills\gsd-agy-update\SKILL.md"
+}
 
-Assert-Test -Name "Skills canônicas (/gsd-tokens e /gsd-test) presentes com frontmatter valido" `
+$skillOk = (Test-Path $gsdTokensSkill) -and ((Get-Content $gsdTokensSkill -Raw) -match "name:\s*gsd-tokens") -and `
+           (Test-Path $gsdTestSkill) -and ((Get-Content $gsdTestSkill -Raw) -match "name:\s*gsd-test") -and `
+           (Test-Path $gsdUpdateSkill) -and ((Get-Content $gsdUpdateSkill -Raw) -match "name:\s*gsd-agy-update")
+
+Assert-Test -Name "Skills canônicas (/gsd-tokens, /gsd-test e /gsd-agy-update) presentes com frontmatter valido" `
             -Condition $skillOk `
-            -ErrorDetails "skills/gsd-tokens ou skills/gsd-test ausente ou sem frontmatter valido"
+            -ErrorDetails "skills/gsd-tokens, skills/gsd-test ou skills/gsd-agy-update ausente ou sem frontmatter valido"
 
 
 
@@ -1199,14 +1208,436 @@ Assert-Test -Name "Arquivos de blindagem de índices (.graphifyignore e .astgrep
             -ErrorDetails "Arquivos .graphifyignore ou .astgrepignore ausentes ou sem graphify-out/"
 
 # ------------------------------------------------------------------------------
+# Teste Multi-LSP Hybrid Engine (lib/lsp-engine.cjs)
+# ------------------------------------------------------------------------------
+$lspEngineOk = $false
+try {
+    $lspRes = node -e '
+    const path = require("path");
+    const fs = require("fs");
+    const libDir = process.argv[1];
+    const targetDir = process.argv[2];
+    const LspEngine = require(path.join(libDir, "lsp-engine.cjs"));
+    const testDir = path.join(targetDir, ".agents", "temp-lsp-test-ps");
+    fs.mkdirSync(testDir, { recursive: true });
+    fs.writeFileSync(path.join(testDir, "service.ts"), "// Docstring\nexport class PaymentProcessor {\n  processOrder() { return true; }\n}\nconst p = new PaymentProcessor();\n", "utf8");
+    fs.writeFileSync(path.join(testDir, "worker.py"), "def calculate_tax(amount):\n    return amount * 0.1\n\nval = calculate_tax(100)\n", "utf8");
+    const lsp = new LspEngine(testDir);
+    const defTs = lsp.definition({ symbol: "PaymentProcessor", lang: "ts" });
+    const refsTs = lsp.references({ symbol: "PaymentProcessor", lang: "ts" });
+    const hovPy = lsp.hover({ symbol: "calculate_tax", lang: "py" });
+    const diagJs = lsp.diagnostics({ file_path: path.join(testDir, "service.ts"), lang: "ts" });
+    const renTs = lsp.rename({ symbol: "PaymentProcessor", new_name: "OrderGateway", path: testDir, lang: "ts" });
+    const updatedContent = fs.readFileSync(path.join(testDir, "service.ts"), "utf8");
+    fs.rmSync(testDir, { recursive: true, force: true });
+    if (
+      defTs.text.includes("service.ts:2") &&
+      refsTs.text.includes("[DEF]") &&
+      refsTs.text.includes("[REF]") &&
+      hovPy.text.includes("def calculate_tax") &&
+      diagJs.text.includes("Zero erros") &&
+      renTs.text.includes("OrderGateway") &&
+      updatedContent.includes("export class OrderGateway")
+    ) {
+      process.stdout.write("OK");
+    }
+    ' "$mcpLibDir" "$TargetDir" 2>$null
+    if ($lspRes -eq "OK") { $lspEngineOk = $true }
+} catch {}
+
+Assert-Test -Name "Motor Multi-LSP Híbrido (lib/lsp-engine.cjs) resolve definition, references, hover, diagnostics e rename" `
+            -Condition $lspEngineOk `
+            -ErrorDetails "lib/lsp-engine.cjs falhou nas operacoes Multi-LSP"
+
+# ------------------------------------------------------------------------------
+# Teste CLI Dual-Mode Multi-LSP (node mcp-server.cjs lsp ...)
+# ------------------------------------------------------------------------------
+$mcpLspCliOk = $false
+try {
+    $lspDefOut = node $mcpBinPath lsp definition "LspEngine" "$mcpLibDir/lsp-engine.cjs" 2>$null
+    $lspDiagOut = node $mcpBinPath lsp diagnostics "$mcpBinPath" 2>$null
+    if ($lspDefOut -match "LSP Definition" -and $lspDiagOut -match "Zero erros") {
+        $mcpLspCliOk = $true
+    }
+} catch {}
+
+Assert-Test -Name "CLI Dual-Mode (mcp-server.cjs lsp) responde comandos definition e diagnostics com precisão" `
+            -Condition $mcpLspCliOk `
+            -ErrorDetails "mcp-server.cjs lsp falhou ao responder definition ou diagnostics"
+
+# ------------------------------------------------------------------------------
+# Teste 45: Auto-Isolamento Proativo de Testes no PreToolUse (res.overwrite)
+# ------------------------------------------------------------------------------
+$proactiveIsoOk = $false
+try {
+    $isoProRes = node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const { execSync } = require("child_process");
+    const hookPath = process.argv[1];
+    const targetDir = process.argv[2];
+    const cacheDir = path.join(targetDir, ".agents", ".cache");
+    fs.mkdirSync(cacheDir, { recursive: true });
+    const failedFile = path.join(cacheDir, "failed-tests.json");
+    const backup = fs.existsSync(failedFile) ? fs.readFileSync(failedFile, "utf8") : null;
+    try {
+      fs.writeFileSync(failedFile, JSON.stringify({
+        timestamp: Date.now(),
+        command: "pytest",
+        failures: ["test_auth_login"],
+        file: "tests/test_auth.py",
+        failureStreak: 1
+      }), "utf8");
+      const payload = JSON.stringify({ toolCall: { name: "run_command", args: { CommandLine: "pytest" } } });
+      const out = execSync(`node "${hookPath}"`, {
+        input: payload,
+        env: { ...process.env, GSD_KIT_MODE: "smart-assist" },
+        encoding: "utf8"
+      });
+      const parsed = JSON.parse(out.trim());
+      if (parsed.decision === "allow" && parsed.overwrite && parsed.overwrite.CommandLine && parsed.overwrite.CommandLine.includes("test_auth")) {
+        process.stdout.write("OK");
+      }
+    } finally {
+      if (backup !== null) fs.writeFileSync(failedFile, backup, "utf8");
+      else try { fs.unlinkSync(failedFile); } catch {}
+    }
+    ' "$pretoolHook" "$TargetDir" 2>$null
+    if ($isoProRes -eq "OK") { $proactiveIsoOk = $true }
+} catch {}
+
+Assert-Test -Name "Hook PreToolUse reescreve suite global de testes para teste isolado via overwrite quando ha falha recente" `
+            -Condition $proactiveIsoOk `
+            -ErrorDetails "token-guard-pretool.cjs falhou no auto-isolamento proativo de testes"
+
+# ------------------------------------------------------------------------------
+# Teste 46: Gate Anti-Parada Prematura no Stop Hook (Auto-Verify TDD/LSP + Anti-Loop)
+# ------------------------------------------------------------------------------
+$stopGateOk = $false
+try {
+    $diagHookPath = Join-Path $TargetDir ".agents\hooks\token-guard-diagnostics.cjs"
+    if (-not (Test-Path $diagHookPath)) { $diagHookPath = Join-Path $kitDir "hooks\token-guard-diagnostics.cjs" }
+    $stopRes = node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const { execSync } = require("child_process");
+    const diagHook = process.argv[1];
+    const targetDir = process.argv[2];
+    const cacheDir = path.join(targetDir, ".agents", ".cache");
+    fs.mkdirSync(cacheDir, { recursive: true });
+    const failedFile = path.join(cacheDir, "failed-tests.json");
+    const gateFile = path.join(cacheDir, "stop-verify-gate.json");
+    const backupFailed = fs.existsSync(failedFile) ? fs.readFileSync(failedFile, "utf8") : null;
+    try {
+      try { fs.unlinkSync(gateFile); } catch {}
+      fs.writeFileSync(failedFile, JSON.stringify({
+        timestamp: Date.now(),
+        command: "npm test",
+        failures: ["should validate token"],
+        file: "src/auth.test.js",
+        failureStreak: 2
+      }), "utf8");
+      const payload = JSON.stringify({ hookEventName: "Stop", terminationReason: "NO_TOOL_CALL" });
+      const out1 = execSync(`node "${diagHook}" --summary`, { input: payload, encoding: "utf8" });
+      const res1 = JSON.parse(out1.trim());
+      const out2 = execSync(`node "${diagHook}" --summary`, { input: payload, encoding: "utf8" });
+      const res2 = JSON.parse(out2.trim());
+      if (res1.decision === "continue" && res1.reason && res2.decision !== "continue") {
+        process.stdout.write("OK");
+      }
+    } finally {
+      try { fs.unlinkSync(gateFile); } catch {}
+      if (backupFailed !== null) fs.writeFileSync(failedFile, backupFailed, "utf8");
+      else try { fs.unlinkSync(failedFile); } catch {}
+    }
+    ' "$diagHookPath" "$TargetDir" 2>$null
+    if ($stopRes -eq "OK") { $stopGateOk = $true }
+} catch {}
+
+Assert-Test -Name "Hook Stop bloqueia parada prematura com teste quebrado (decision: continue) e respeita trava anti-loop" `
+            -Condition $stopGateOk `
+            -ErrorDetails "token-guard-diagnostics.cjs falhou no gate anti-parada prematura"
+
+# ------------------------------------------------------------------------------
+# Teste 47: Detector de Loop de Alucinacao no PreInvocation (injectSteps)
+# ------------------------------------------------------------------------------
+$loopDetectOk = $false
+try {
+    $preInvHookPath = Join-Path $TargetDir ".agents\hooks\token-guard-preinvocation.cjs"
+    if (-not (Test-Path $preInvHookPath)) { $preInvHookPath = Join-Path $kitDir "hooks\token-guard-preinvocation.cjs" }
+    $loopRes = node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const { execSync } = require("child_process");
+    const preInvHook = process.argv[1];
+    const targetDir = process.argv[2];
+    const cacheDir = path.join(targetDir, ".agents", ".cache");
+    fs.mkdirSync(cacheDir, { recursive: true });
+    const incFile = path.join(cacheDir, "session-incidents.json");
+    const alertStateFile = path.join(cacheDir, "loop-alert-state.json");
+    const backupInc = fs.existsSync(incFile) ? fs.readFileSync(incFile, "utf8") : null;
+    try {
+      try { fs.unlinkSync(alertStateFile); } catch {}
+      const now = Date.now();
+      fs.writeFileSync(incFile, JSON.stringify([
+        { timestamp: now - 5000, tool: "replace_file_content", target: "src/index.ts", type: "tool_error" },
+        { timestamp: now - 3000, tool: "replace_file_content", target: "src/index.ts", type: "tool_error" },
+        { timestamp: now - 1000, tool: "replace_file_content", target: "src/index.ts", type: "tool_error" }
+      ]), "utf8");
+      const out = execSync(`node "${preInvHook}"`, { encoding: "utf8" });
+      const parsed = JSON.parse(out.trim());
+      if (parsed.injectSteps && parsed.injectSteps[0] && parsed.injectSteps[0].ephemeralMessage.includes("Token Guard Anti-Loop")) {
+        process.stdout.write("OK");
+      }
+    } finally {
+      try { fs.unlinkSync(alertStateFile); } catch {}
+      if (backupInc !== null) fs.writeFileSync(incFile, backupInc, "utf8");
+      else try { fs.unlinkSync(incFile); } catch {}
+    }
+    ' "$preInvHookPath" "$TargetDir" 2>$null
+    if ($loopRes -eq "OK") { $loopDetectOk = $true }
+} catch {}
+
+Assert-Test -Name "Hook PreInvocation detecta loop de 3+ falhas seguidas e injeta ephemeralMessage corretivo" `
+            -Condition $loopDetectOk `
+            -ErrorDetails "token-guard-preinvocation.cjs falhou ao detectar loop de alucinacao"
+
+# ------------------------------------------------------------------------------
+# Teste 48: Briefing Zero-Read na Inicializacao (SessionStart Hook)
+# ------------------------------------------------------------------------------
+$sessionStartOk = $false
+try {
+    $ssHookPath = Join-Path $TargetDir ".agents\hooks\token-guard-sessionstart.cjs"
+    if (-not (Test-Path $ssHookPath)) { $ssHookPath = Join-Path $kitDir "hooks\token-guard-sessionstart.cjs" }
+    $ssOut = "{}" | node $ssHookPath 2>$null
+    if ($ssOut -match '"injectSteps"' -and $ssOut -match "Zero-Read") {
+        $sessionStartOk = $true
+    }
+} catch {}
+
+Assert-Test -Name "Hook SessionStart (token-guard-sessionstart.cjs) injeta Briefing Zero-Read na inicializacao" `
+            -Condition $sessionStartOk `
+            -ErrorDetails "token-guard-sessionstart.cjs falhou ao injetar briefing de sessao"
+
+# ------------------------------------------------------------------------------
+# Teste 49: Tools MCP impact_analysis + env_skeleton e Secret Shield no PreToolUse
+# ------------------------------------------------------------------------------
+$impactEnvOk = $false
+try {
+    $impEnvRes = node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const { execSync } = require("child_process");
+    const libDir = process.argv[1];
+    const hookPath = process.argv[2];
+    const targetDir = process.argv[3];
+    const EnvSkeletonEngine = require(path.join(libDir, "env-skeleton.cjs"));
+    const ImpactEngine = require(path.join(libDir, "impact-engine.cjs"));
+
+    const tempEnvDir = path.join(targetDir, ".agents", "temp-env-test-ps");
+    fs.mkdirSync(tempEnvDir, { recursive: true });
+    const envFile = path.join(tempEnvDir, ".env");
+    const envExample = path.join(tempEnvDir, ".env.example");
+    fs.writeFileSync(envFile, "DATABASE_URL=postgres://admin:super_secret_pw@localhost:5432/db\nEMPTY_KEY=\n", "utf8");
+    fs.writeFileSync(envExample, "DATABASE_URL=\nEMPTY_KEY=\nREDIS_URL=\n", "utf8");
+
+    const envEngine = new EnvSkeletonEngine(tempEnvDir);
+    const skelRes = envEngine.inspect(".env");
+
+    const impactEngine = new ImpactEngine(targetDir);
+    const impRes = impactEngine.analyze({ symbol: "LspEngine", file_path: path.join(libDir, "lsp-engine.cjs") });
+
+    const denyPayload = JSON.stringify({ toolCall: { name: "view_file", args: { AbsolutePath: envFile } } });
+    const allowPayload = JSON.stringify({ toolCall: { name: "view_file", args: { AbsolutePath: envExample } } });
+    const denyOut = JSON.parse(execSync(`node "${hookPath}"`, { input: denyPayload, encoding: "utf8" }).trim());
+    const allowOut = JSON.parse(execSync(`node "${hookPath}"`, { input: allowPayload, encoding: "utf8" }).trim());
+
+    fs.rmSync(tempEnvDir, { recursive: true, force: true });
+
+    if (
+      skelRes.text.includes("DATABASE_URL=[SET]") &&
+      !skelRes.text.includes("super_secret_pw") &&
+      skelRes.missingFromEnv.includes("REDIS_URL") &&
+      impRes.text.includes("Impact Analysis") &&
+      denyOut.decision === "deny" &&
+      allowOut.decision === "allow"
+    ) {
+      process.stdout.write("OK");
+    }
+    ' "$mcpLibDir" "$pretoolHook" "$TargetDir" 2>$null
+    if ($impEnvRes -eq "OK") { $impactEnvOk = $true }
+} catch {}
+
+Assert-Test -Name "Tools impact_analysis e env_skeleton operacionais com Secret Shield bloqueando leitura crua de .env" `
+            -Condition $impactEnvOk `
+            -ErrorDetails "impact_analysis, env_skeleton ou Secret Shield falhou"
+
+# ------------------------------------------------------------------------------
+# Teste 50: Telemetria de ROI & Economia Ativa (lib/token-savings.cjs e token-report.cjs)
+# ------------------------------------------------------------------------------
+$roiOk = $false
+try {
+    $roiRes = node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const libDir = process.argv[1];
+    const targetDir = process.argv[2];
+    const { TokenSavingsTracker } = require(path.join(libDir, "token-savings.cjs"));
+    const tempRoiDir = path.join(targetDir, ".agents", "temp-roi-test-ps");
+    fs.mkdirSync(path.join(tempRoiDir, ".agents", ".cache"), { recursive: true });
+    const tracker = new TokenSavingsTracker(tempRoiDir);
+    tracker.record("pretool_redirect", 1500, "test redirect");
+    tracker.record("test_isolation", 900, "pytest isolated");
+    const summary = tracker.getSummary();
+    fs.rmSync(tempRoiDir, { recursive: true, force: true });
+    if (summary.totalTokensSaved === 2400 && summary.totalEvents === 2 && summary.topCategories.length === 2) {
+      process.stdout.write("OK");
+    }
+    ' "$mcpLibDir" "$TargetDir" 2>$null
+    if ($roiRes -eq "OK") { $roiOk = $true }
+} catch {}
+
+Assert-Test -Name "Rastreador de ROI (lib/token-savings.cjs) contabiliza tokens poupados por categoria com precisao" `
+            -Condition $roiOk `
+            -ErrorDetails "lib/token-savings.cjs falhou ao contabilizar economia ativa"
+
+# ------------------------------------------------------------------------------
+# Teste 51: Catálogo Multi-LSP 20 Ecossistemas & Esqueletos Infra/Web/Dados
+# ------------------------------------------------------------------------------
+$multiLsp20Ok = $false
+try {
+    $multiLsp20Res = node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const libDir = process.argv[1];
+    const targetDir = process.argv[2];
+    const LspEngine = require(path.join(libDir, "lsp-engine.cjs"));
+    const SkeletonEngine = require(path.join(libDir, "skeleton-engine.cjs"));
+    const reg = LspEngine.LANGUAGE_REGISTRY;
+
+    const hasAll =
+      reg.ts.lspBinaries.includes("vtsls") &&
+      reg.python.lspBinaries.includes("basedpyright") &&
+      reg.csharp.lspBinaries.includes("Microsoft.CodeAnalysis.LanguageServer") &&
+      reg.lua && reg.bash && reg.web && reg.yaml && reg.sql && reg.docker &&
+      reg.kotlin && reg.swift && reg.terraform;
+
+    const tempDir = path.join(targetDir, ".agents", "temp-lsp20-test-ps");
+    fs.mkdirSync(tempDir, { recursive: true });
+    const sqlFile = path.join(tempDir, "schema.sql");
+    const dockerFile = path.join(tempDir, "Dockerfile");
+    const luaFile = path.join(tempDir, "module.lua");
+    const badJsonFile = path.join(tempDir, "broken.json");
+
+    fs.writeFileSync(sqlFile, "CREATE TABLE users (\n  id INT PRIMARY KEY\n);\n", "utf8");
+    fs.writeFileSync(dockerFile, "FROM node:20-alpine AS builder\nWORKDIR /app\nEXPOSE 3000\n", "utf8");
+    fs.writeFileSync(luaFile, "local M = {}\nfunction M.greet(name)\n  return name\nend\nreturn M\n", "utf8");
+    fs.writeFileSync(badJsonFile, "{ \"name\": \"broken\", }", "utf8");
+
+    const skel = new SkeletonEngine(tempDir);
+    const lsp = new LspEngine(tempDir);
+
+    const sqlOut = skel.getOutline(sqlFile);
+    const dockerOut = skel.getOutline(dockerFile);
+    const luaOut = skel.getOutline(luaFile);
+    const jsonDiag = lsp.diagnostics({ file_path: badJsonFile });
+    const sqlDef = lsp.definition({ symbol: "users", file_path: sqlFile });
+
+    fs.rmSync(tempDir, { recursive: true, force: true });
+
+    if (
+      hasAll &&
+      sqlOut.includes("CREATE TABLE users") &&
+      dockerOut.includes("FROM node:20-alpine AS builder") &&
+      luaOut.includes("function M.greet") &&
+      jsonDiag.hasDiagnostics &&
+      sqlDef.text.includes("schema.sql:1")
+    ) {
+      process.stdout.write("OK");
+    }
+    ' "$mcpLibDir" "$TargetDir" 2>$null
+    if ($multiLsp20Res -eq "OK") { $multiLsp20Ok = $true }
+} catch {}
+
+Assert-Test -Name "Catálogo Multi-LSP 20 ecossistemas (vtsls, basedpyright, roslyn, lua, bash, web, yaml, sql, docker, terraform) operacional" `
+            -Condition $multiLsp20Ok `
+            -ErrorDetails "Catálogo Multi-LSP de 20 ecossistemas falhou"
+
+# ------------------------------------------------------------------------------
+# Teste 52: Controle Rigoroso de Erros (ErrorGuard, Triple Visibility, Circuit Breaker e Diagnóstico Estrito)
+# ------------------------------------------------------------------------------
+$strictErrorOk = $false
+try {
+    $strictErrorRes = node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const libDir = process.argv[1];
+    const targetDir = process.argv[2];
+
+    const ErrorGuard = require(path.join(libDir, "error-guard.cjs"));
+    const LspEngine = require(path.join(libDir, "lsp-engine.cjs"));
+
+    // 1. Testar mascaramento de segredos
+    const masked = ErrorGuard.maskSecrets("TOKEN=ghp_1234567890abcdef1234567890 password: my-secret-pass");
+    const secretSafe = masked.includes("[MASCARADO]") && !masked.includes("ghp_") && !masked.includes("my-secret-pass");
+
+    // 2. Testar recordError e listErrors
+    const testDir = path.join(targetDir, ".agents", "temp-err-test-ps");
+    fs.mkdirSync(path.join(testDir, ".agents", ".cache"), { recursive: true });
+    const rec = ErrorGuard.recordError(testDir, {
+      component: "test-comp",
+      title: "Teste de erro",
+      stderr: "Erro intencional de teste"
+    });
+    const list = ErrorGuard.listErrors(testDir);
+    const recorded = list.length === 1 && list[0].component === "test-comp";
+    ErrorGuard.clearErrors(testDir);
+    const cleared = ErrorGuard.listErrors(testDir).length === 0;
+
+    // 3. Testar formatação de banner visual
+    const banner = ErrorGuard.formatErrorBanner({
+      category: "TOOL",
+      component: "ast-grep",
+      title: "Sintaxe inválida no padrão AST",
+      stderr: "parse error at line 1"
+    }, { color: false });
+    const bannerOk = banner.includes("ERRO CRÍTICO") && banner.includes("TOOL • ast-grep") && banner.includes("parse error");
+
+    // 4. Testar LSP Engine diagnostics isError: true em código quebrado
+    const badJs = path.join(testDir, "bad.js");
+    fs.writeFileSync(badJs, "const a = ;", "utf8");
+    const lsp = new LspEngine(testDir);
+    const diag = lsp.diagnostics({ file_path: badJs });
+    const lspErrorOk = diag && diag.isError === true && diag.kind === "code";
+
+    // 5. Testar LSP Engine checkStackHealth
+    const health = lsp.checkStackHealth(testDir);
+    const healthOk = typeof health.ok === "boolean";
+
+    fs.rmSync(testDir, { recursive: true, force: true });
+
+    if (secretSafe && recorded && cleared && bannerOk && lspErrorOk && healthOk) {
+      process.stdout.write("OK");
+    }
+    ' "$mcpLibDir" "$TargetDir" 2>$null
+    if ($strictErrorRes -eq "OK") { $strictErrorOk = $true }
+} catch {}
+
+Assert-Test -Name "Controle Rigoroso de Erros (ErrorGuard, Triple Visibility, Circuit Breaker e Diagnóstico Estrito)" `
+            -Condition $strictErrorOk `
+            -ErrorDetails "ErrorGuard ou verificação de erro estrito falhou"
+
+# ------------------------------------------------------------------------------
 # Resumo Final
 # ------------------------------------------------------------------------------
 Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
 if ($failed -eq 0) {
     Write-Host "🎉 SUCESSO TOTAL: Todos os $passed testes passaram com exito!" -ForegroundColor Green
     Write-Host "   O kit esta 100% blindado e operacional para este workspace.`n" -ForegroundColor Gray
+    exit 0
 } else {
     Write-Host "⚠️ ATENCAO: $failed testes falharam de um total de $($passed + $failed)." -ForegroundColor Red
+    exit 1
 }
 
 

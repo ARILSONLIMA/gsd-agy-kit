@@ -37,6 +37,12 @@ param (
     [Parameter(ParameterSetName = "Graphify")]
     [switch]$Graphify,
 
+    [Parameter(ParameterSetName = "Lsp")]
+    [switch]$Lsp,
+
+    [Parameter(ParameterSetName = "Errors")]
+    [switch]$Errors,
+
     [Parameter(ParameterSetName = "Menu")]
     [switch]$Menu,
 
@@ -90,6 +96,8 @@ if (Test-Path $uiScript) {
     elseif ($Doctor) { $cmdArg = "--doctor" }
     elseif ($Health) { $cmdArg = "--health" }
     elseif ($Graphify) { $cmdArg = "--graphify" }
+    elseif ($Lsp) { $cmdArg = "--lsp" }
+    elseif ($Errors) { $cmdArg = "--errors" }
     elseif ($Install -or $null -ne $HasFrontend) {
         $cmdArg = "--install"
         if ($null -ne $HasFrontend) { $extraArg = if ($HasFrontend) { "true" } else { "false" } }
@@ -233,6 +241,13 @@ if (Test-Path $kitHooksDir) {
 $hooksJsonPath = Join-Path $agentsDir "hooks.json"
 $hooksConfig = @{
     "token-efficiency-guard" = @{
+        "SessionStart" = @(
+            @{
+                "type" = "command"
+                "command" = "node hooks/token-guard-sessionstart.cjs"
+                "timeout" = 15
+            }
+        )
         "PreInvocation" = @(
             @{
                 "type" = "command"
@@ -387,7 +402,7 @@ if (Test-Path $kitLibDir) {
     Copy-Item -Path "$kitLibDir\*" -Destination $targetScriptsLibDir -Recurse -Force
 }
 
-$kitScripts = @("test-kit.ps1", "test-kit.sh", "setup-ui.cjs", "setup.ps1", "setup.sh", "install.ps1", "install.sh", "package.json", "uninstall.ps1", "uninstall.sh", "skills-profile.ps1", "skills-profile.sh", "optimize-tokens.ps1", "optimize-tokens.sh", "sanitize-command.ps1", "token-report.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs", "patch-agents.cjs", "optimize-tokens.cjs", "skills-manager.cjs", "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs", "shrink-prompts.cjs", "gsd-outline.cjs", "gsd-read-strip.cjs", "mcp-server.cjs")
+$kitScripts = @("test-kit.ps1", "test-kit.sh", "setup-ui.cjs", "setup.ps1", "setup.sh", "install.ps1", "install.sh", "package.json", "CHANGELOG.md", "uninstall.ps1", "uninstall.sh", "skills-profile.ps1", "skills-profile.sh", "optimize-tokens.ps1", "optimize-tokens.sh", "sanitize-command.ps1", "token-report.cjs", "gsd-update.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs", "patch-agents.cjs", "optimize-tokens.cjs", "skills-manager.cjs", "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs", "shrink-prompts.cjs", "gsd-outline.cjs", "gsd-read-strip.cjs", "mcp-server.cjs")
 foreach ($sName in $kitScripts) {
     $src = Join-Path $kitDir $sName
     if (Test-Path $src) {
@@ -404,9 +419,9 @@ foreach ($sName in @("test-kit.ps1", "test-kit.sh")) {
 }
 Write-Host "   Pacote completo do kit instalado nativamente em: $targetKitDir" -ForegroundColor Green
 
-# 10. Copiar Skills Especializadas (.agents/skills/gsd-tokens e gsd-test)
+# 10. Copiar Skills Especializadas (.agents/skills/gsd-tokens, gsd-test e gsd-agy-update)
 $skillsDir = Join-Path $agentsDir "skills"
-foreach ($skName in @("gsd-tokens", "gsd-test")) {
+foreach ($skName in @("gsd-tokens", "gsd-test", "gsd-agy-update")) {
     $skSrc = Join-Path $kitDir "skills\$skName"
     if (Test-Path $skSrc) {
         $skDest = Join-Path $skillsDir $skName
@@ -499,7 +514,9 @@ if (Test-Path $gitHooksDir) {
     $autoHealContent = @"
 #!/bin/sh
 # Antigravity GSD Kit Auto-Heal Hook
-if [ -f "scripts/patch-agents.cjs" ]; then
+if [ -f ".agents/kit/patch-agents.cjs" ]; then
+    node .agents/kit/patch-agents.cjs >/dev/null 2>&1 || true
+elif [ -f "scripts/patch-agents.cjs" ]; then
     node scripts/patch-agents.cjs >/dev/null 2>&1 || true
 elif [ -f "gsd-agy-kit/patch-agents.cjs" ]; then
     node gsd-agy-kit/patch-agents.cjs >/dev/null 2>&1 || true
@@ -512,7 +529,9 @@ fi
 
     $postCommitCmd = Join-Path $gitHooksDir "post-commit.cmd"
     '@echo off
-if exist scripts\gsd-graphify-update.cjs (
+if exist .agents\kit\gsd-graphify-update.cjs (
+    start /B node .agents\kit\gsd-graphify-update.cjs >nul 2>&1
+) else if exist scripts\gsd-graphify-update.cjs (
     start /B node scripts\gsd-graphify-update.cjs >nul 2>&1
 ) else if exist gsd-agy-kit\gsd-graphify-update.cjs (
     start /B node gsd-agy-kit\gsd-graphify-update.cjs >nul 2>&1
@@ -523,7 +542,9 @@ if exist scripts\gsd-graphify-update.cjs (
     $postCommitSh = Join-Path $gitHooksDir "post-commit"
     $postCommitShContent = @"
 #!/bin/sh
-if [ -f "scripts/gsd-graphify-update.cjs" ]; then
+if [ -f ".agents/kit/gsd-graphify-update.cjs" ]; then
+    node .agents/kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
+elif [ -f "scripts/gsd-graphify-update.cjs" ]; then
     node scripts/gsd-graphify-update.cjs >/dev/null 2>&1 &
 elif [ -f "gsd-agy-kit/gsd-graphify-update.cjs" ]; then
     node gsd-agy-kit/gsd-graphify-update.cjs >/dev/null 2>&1 &

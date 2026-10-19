@@ -90,9 +90,58 @@ function getWorkspaceConvId(cacheFile, cwd) {
 }
 
 /**
- * Analisa o arquivo transcript.jsonl e extrai as métricas de tokens
+ * Carrega a telemetria de economia ativa do GSD Kit e status de orçamento
  */
-function analyzeTranscript(transcriptPath) {
+function loadKitSavingsAndBudget(cwd, totalTokens) {
+  let kitSavings = {
+    totalEvents: 0,
+    totalTokensSaved: 0,
+    categories: {},
+    topCategories: []
+  };
+
+  const candidates = [
+    path.resolve(__dirname, 'lib', 'token-savings.cjs'),
+    path.resolve(__dirname, '..', 'lib', 'token-savings.cjs'),
+    path.join(cwd, '.agents', 'lib', 'token-savings.cjs'),
+    path.join(cwd, 'lib', 'token-savings.cjs')
+  ];
+  const trackerPath = candidates.find(p => fs.existsSync(p));
+  if (trackerPath) {
+    try {
+      const { TokenSavingsTracker } = require(trackerPath);
+      const tracker = new TokenSavingsTracker(cwd);
+      kitSavings = tracker.getSummary();
+    } catch (_) {}
+  }
+
+  let budgetLimit = Number(process.env.GSD_TOKEN_BUDGET_WARN || 0);
+  if (!budgetLimit) {
+    const cfgPath = path.join(cwd, '.planning', 'config.json');
+    if (fs.existsSync(cfgPath)) {
+      try {
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        budgetLimit = Number(cfg.token_budget || cfg.budget_tokens || 0);
+      } catch (_) {}
+    }
+  }
+
+  const usedPct = budgetLimit > 0 ? (totalTokens / budgetLimit) * 100 : 0;
+  const budgetStatus = {
+    configured: budgetLimit > 0,
+    limit: budgetLimit,
+    used: totalTokens,
+    usedPercent: Number(usedPct.toFixed(2)),
+    status: budgetLimit <= 0 ? 'UNLIMITED' : (usedPct >= 100 ? 'EXCEEDED' : (usedPct >= 80 ? 'WARNING' : 'OK'))
+  };
+
+  return { kitSavings, budgetStatus };
+}
+
+/**
+ * Analisa o arquivo transcript.jsonl e extrai as métricas de tokens e ferramentas
+ */
+function analyzeTranscript(transcriptPath, cwd = process.cwd()) {
   if (!fs.existsSync(transcriptPath)) {
     return null;
   }
@@ -106,6 +155,7 @@ function analyzeTranscript(transcriptPath) {
   let outputTokens = 0;
   let firstTimestamp = null;
   let lastTimestamp = null;
+  const toolCounts = {};
 
   for (const line of lines) {
     try {
@@ -114,6 +164,15 @@ function analyzeTranscript(transcriptPath) {
       if (entry.created_at) {
         if (!firstTimestamp) firstTimestamp = entry.created_at;
         lastTimestamp = entry.created_at;
+      }
+
+      if (Array.isArray(entry.tool_calls)) {
+        for (const tc of entry.tool_calls) {
+          const tName = (tc && (tc.name || tc.tool_name || (tc.function && tc.function.name))) || null;
+          if (tName) {
+            toolCounts[tName] = (toolCounts[tName] || 0) + 1;
+          }
+        }
       }
 
       // Considera chamadas com retorno do modelo (PLANNER_RESPONSE ou métricas de tokens)
@@ -136,6 +195,13 @@ function analyzeTranscript(transcriptPath) {
   const totalTokens = promptTotal + outputTokens;
   const cacheHitRate = promptTotal > 0 ? (cacheReadTokens / promptTotal) * 100 : 0;
 
+  const topTools = Object.entries(toolCounts)
+    .map(([name, calls]) => ({ name, calls }))
+    .sort((a, b) => b.calls - a.calls)
+    .slice(0, 5);
+
+  const { kitSavings, budgetStatus } = loadKitSavingsAndBudget(cwd, totalTokens);
+
   return {
     path: transcriptPath,
     steps,
@@ -146,6 +212,9 @@ function analyzeTranscript(transcriptPath) {
     totalTokens,
     cacheHitRate,
     savedTokens: cacheReadTokens,
+    kitSavings,
+    topTools,
+    budgetStatus,
     firstTimestamp,
     lastTimestamp
   };
@@ -163,7 +232,7 @@ function printReport(sessionInfo, metrics) {
   console.log(`╠${line}╣`);
   console.log(`║ Sessão:      ${sessionInfo.id.padEnd(58)} ║`);
   if (sessionInfo.workspace) {
-    console.log(`║ Workspace:   ${sessionInfo.workspace.padEnd(58)} ║`);
+    console.log(`║ Workspace:   ${sessionInfo.workspace.slice(0, 58).padEnd(58)} ║`);
   }
   const dateStr = metrics.lastTimestamp
     ? new Date(metrics.lastTimestamp).toLocaleString('pt-BR')
@@ -174,8 +243,8 @@ function printReport(sessionInfo, metrics) {
   console.log(`╠${'─'.repeat(45)}┼${'─'.repeat(28)}╣`);
 
   const printRow = (label, valStr) => {
-    const l = label.padEnd(43);
-    const v = valStr.padStart(26);
+    const l = label.slice(0, 43).padEnd(43);
+    const v = String(valStr).slice(0, 26).padStart(26);
     console.log(`║ ${l} │ ${v} ║`);
   };
 
@@ -190,15 +259,45 @@ function printReport(sessionInfo, metrics) {
 
   console.log(`╠${'─'.repeat(45)}┼${'─'.repeat(28)}╣`);
   printRow('Taxa de Acerto de Cache (Cache Hit Rate)', fmtPercent(metrics.cacheHitRate));
-  printRow('Tokens Poupados da Quota (Economia)', fmtNum(metrics.savedTokens));
+  printRow('Tokens Poupados via Prompt Cache', fmtNum(metrics.savedTokens));
+
+  if (metrics.kitSavings) {
+    console.log(`╠${'─'.repeat(45)}┼${'─'.repeat(28)}╣`);
+    printRow('Economia Ativa do GSD Kit (Tokens Poupados)', fmtNum(metrics.kitSavings.totalTokensSaved));
+    printRow('Intervenções de Economia do Kit (Eventos)', fmtNum(metrics.kitSavings.totalEvents));
+    if (Array.isArray(metrics.kitSavings.topCategories) && metrics.kitSavings.topCategories.length > 0) {
+      for (const cat of metrics.kitSavings.topCategories.slice(0, 3)) {
+        printRow(`  └─ ${cat.category} (${cat.events}x)`, `${fmtNum(cat.tokensSaved)} tok`);
+      }
+    }
+  }
+
+  if (Array.isArray(metrics.topTools) && metrics.topTools.length > 0) {
+    console.log(`╠${'─'.repeat(45)}┼${'─'.repeat(28)}╣`);
+    const topStr = metrics.topTools.slice(0, 3).map(t => `${t.name}(${t.calls})`).join(', ');
+    printRow('Top Ferramentas Invocadas', topStr);
+  }
+
+  if (metrics.budgetStatus && metrics.budgetStatus.configured) {
+    console.log(`╠${'─'.repeat(45)}┼${'─'.repeat(28)}╣`);
+    printRow(
+      `Orçamento de Tokens (${metrics.budgetStatus.status})`,
+      `${fmtPercent(metrics.budgetStatus.usedPercent)} de ${fmtNum(metrics.budgetStatus.limit)}`
+    );
+  }
 
   console.log(`╚${doubleLine}╝`);
 
   if (metrics.cacheHitRate > 0) {
     console.log(`\n💡 Destaque: ${fmtPercent(metrics.cacheHitRate)} do contexto foi servido via Cache!`);
-    console.log(`   Foram economizados ${fmtNum(metrics.savedTokens)} tokens de processamento novo na API.\n`);
+    console.log(`   Foram economizados ${fmtNum(metrics.savedTokens)} tokens de processamento novo na API.`);
   } else {
-    console.log(`\nℹ️  Nenhum token em cache reutilizado até o momento nesta sessão.\n`);
+    console.log(`\nℹ️  Nenhum token em cache reutilizado até o momento nesta sessão.`);
+  }
+  if (metrics.kitSavings && metrics.kitSavings.totalTokensSaved > 0) {
+    console.log(`🛡️  GSD Kit ROI: ${fmtNum(metrics.kitSavings.totalTokensSaved)} tokens poupados ativamente em ${fmtNum(metrics.kitSavings.totalEvents)} intervenções.\n`);
+  } else {
+    console.log('');
   }
 }
 

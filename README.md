@@ -1,4 +1,4 @@
-# Antigravity GSD Kit v1.4.0 🚀
+# Antigravity GSD Kit v1.5.0 🚀
 
 > **Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens para GSD no Antigravity CLI**
 
@@ -58,7 +58,7 @@ O kit opera em 4 camadas complementares:
    - Bloqueia sobrescrita integral de arquivos existentes com `write_to_file` (exigindo `replace_file_content`).
    - Bloqueia `ast-grep` com flags de reescrita em massa (`-r`, `--rewrite`).
    - Bloqueia `go test -v` em lote.
-   - **Circuit Breaker Completo:** Testa a saúde operacional de `gopls` (em projetos Go), `ast-grep` e `graphify` antes de permitir execuções de ferramentas.
+   - **Circuit Breaker Estrito por Stack:** Testa a saúde operacional de `ast-grep`, `graphify` e das ferramentas LSP/compiladores de cada linguagem detectada no projeto (`gopls`, `typescript-language-server`/`tsc`/`node`, `pyright`, `rust-analyzer`/`cargo`, `intelephense`/`php`, `clangd`/`clang++`, `jdtls`/`javac`, `csharp-ls`, `solargraph`) antes de permitir execuções de ferramentas.
    - **JIT Auto-Promoter Reativo (Agentes & Skills):** Intercepta chamadas a `invoke_subagent` e leituras de skills via `view_file`, promovendo itens adormecidos do pool (`.agents/agents-pool/` e `.agents/skills-pool/`) para o catálogo ativo em tempo real (2ms), com busca case-insensitive para Linux/POSIX e renovação automática de TTL (5 turnos por acesso ativo).
 
 4. **Motor de Otimização de Tokens & Dynamic Agent Pool (`optimize-tokens.cjs`):**
@@ -81,7 +81,7 @@ O kit opera em 4 camadas complementares:
 
 6. **Terminal UI & Animações em Tempo Real (`setup-ui.cjs`):**
    - Motor de interface 100% nativo em Node.js (sem dependências npm).
-   - Card interativo estruturado para seleção de arquitetura (Backend vs Fullstack).
+   - Card interativo estruturado para seleção de arquitetura (Backend vs Fullstack) e **seletor interativo para baixar e instalar servidores LSP por linguagem** (`--lsp`).
    - Barra de progresso geral no topo `[████████░░░░] 50%`.
    - Stepper com spinners animados em tempo real (`⠋ ⠙ ⠹`) e cronometragem precisa por etapa.
    - Dashboard final em estilo Bento com status de governança e métricas de tokens.
@@ -103,17 +103,26 @@ O kit opera em 4 camadas complementares:
 
 10. **Servidor MCP Padronizado & Motores de Economia Dual-Mode (`mcp-server.cjs` & `lib/`):**
     - **Dual-Mode Transparente:** Opera como Servidor MCP Stdio JSON-RPC 2.0 em `.agents/mcp_config.json` e `.agents/plugins/gsd-economy/` quando montado pelo Antigravity, E simultaneamente como utilitário CLI ultra-rápido via `run_command` (`node .agents/mcp-server.cjs <cmd>`) com zero dependências npm.
+    - **Motor Multi-LSP Híbrido (`lib/lsp-engine.cjs`):** Suporte unificado a **20 ecossistemas** — **Go (`gopls`), TypeScript/JavaScript (`vtsls`, `ts_ls`), Python (`pyright`, `basedpyright`, `ruff`), Rust (`rust-analyzer`), C/C++ (`clangd`), C# (`roslyn`, `csharp-ls`), Java (`jdtls`), Lua (`lua-language-server`), PHP (`intelephense`), Shell/Bash (`bash-language-server`, `shellcheck`), HTML/CSS/JSON (`vscode-langservers-extracted`), YAML/Helm (`yaml-language-server`, `helm_ls`), SQL (`sqls`, `sqlfluff`), Docker (`docker-langserver`, `hadolint`), Ruby (`solargraph`, `ruby-lsp`), Dart (`dart`), Elixir (`elixir-ls`), Kotlin (`kotlin-language-server`), Swift (`sourcekit-lsp`) e Terraform (`terraform-ls`)**, combinando binários LSP/compiladores nativos com fallback AST/estrutural:
+      - `lsp_diagnostics` (`node .agents/mcp-server.cjs lsp diagnostics [arquivo]`): checagem ultra-compacta de erros de tipagem e sintaxe.
+      - `lsp_definition` (`node .agents/mcp-server.cjs lsp definition "<símbolo>"`): localização exata da declaração de funções, classes, structs, tabelas SQL, estágios Docker e recursos Terraform.
+      - `lsp_references` (`node .agents/mcp-server.cjs lsp references "<símbolo>"`): mapeamento de todas as referências cruzadas no projeto antes de editar assinaturas.
+      - `lsp_hover` (`node .agents/mcp-server.cjs lsp hover "<símbolo>"` ou `lsp symbols "<arquivo>"`): inspeção de assinatura, tipo e docstring sem ler o arquivo inteiro.
+      - `lsp_rename` (`node .agents/mcp-server.cjs lsp rename "<antigo>" "<novo>" [caminho] [--dry-run]`): renomeação segura de símbolos em múltiplos arquivos.
     - **`ast_query` (Busca Estrutural AST Segura):** Executa buscas sintáticas no `ast-grep` via JSON-RPC/CLI sem risco de corrupção por aspas ou expansão de variáveis `$` no PowerShell/Bash. CLI: `node .agents/mcp-server.cjs ast "<pattern>" [lang] [path]`.
     - **`test_isolate` (Isolador Cirúrgico de Testes):** Detecta testes que falharam recentemente e gera comandos pontuais para rodar apenas o teste quebrado (Node `--test`, Jest/Vitest, Go, Pytest) sem rodar a suíte completa. CLI: `node .agents/mcp-server.cjs test-isolate`.
     - **`checkpoint_manager` (Micro-Checkpoints Git & Anti-Alucinação):** Cria tags e snapshots git antes/depois de refatorações críticas e permite rollback instantâneo caso o modelo entre em loops de quebra de código. CLI: `node .agents/mcp-server.cjs checkpoint <create|list|rollback> [arg]`.
     - **`mempalace_recall` / `mempalace_capture` (MemPalace v2):** Memória episódica estruturada persistida em SQLite (`.agents/memory/palace.db`) com busca FTS5 para decisões arquiteturais e soluções de bugs com auto-captura heurística silenciosa na transição vermelho ➔ verde. CLI: `node .agents/mcp-server.cjs recall "<query>"` e `capture <room> "<tópico>" "<conteúdo>"`.
     - **`query_docs` (Mini-RAG para Markdown):** Indexação e busca semântica em arquivos `.md` do projeto, extraindo apenas os trechos e seções exatas das regras de negócio sem despejar arquivos de especificação inteiros. CLI: `node .agents/mcp-server.cjs docs "<query>"`.
     - **`check_dependency` (Lente Multi-Stack de Lockfiles):** Inspeção cirúrgica de pacotes e versões em `package-lock.json`, `go.sum`, `Cargo.lock`, `requirements.txt`, `composer.json`, `Gemfile` e `pubspec.yaml` sem sobrecarregar a janela de contexto. CLI: `node .agents/mcp-server.cjs dep "<pacote>"`.
-    - **`view_skeleton` (Esqueleto Estrutural Universal):** Extração de assinaturas, structs, interfaces e tipos com números de linha para TypeScript, JavaScript, Go, Python, Rust, C#, Java, PHP, Ruby, Dart e Elixir. CLI: `node .agents/mcp-server.cjs skeleton "<arquivo>"`.
+    - **`view_skeleton` (Esqueleto Estrutural Universal):** Extração de assinaturas, structs, interfaces, tabelas SQL, estágios Docker, recursos Terraform, chaves YAML/JSON e tipos com números de linha para 20 ecossistemas. CLI: `node .agents/mcp-server.cjs skeleton "<arquivo>"`.
+    - **`impact_analysis` (Análise de Raio de Explosão Pré-Edição):** Combina o grafo de dependências do Graphify, referências cruzadas do `LspEngine` e descoberta automática de testes correlatos para classificar o risco (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) antes de refatorar qualquer símbolo ou arquivo. CLI: `node .agents/mcp-server.cjs impact "<símbolo>" [arquivo]`.
+    - **`env_skeleton` (Inspeção Zero-Leak de `.env` & Secret Shield):** Lista apenas nomes de variáveis e status (`[SET]`, `[EMPTY]`, `[PLACEHOLDER]`) cruzando com `.env.example` sem jamais expor segredos, aliado ao **Secret Shield** no `PreToolUse` que bloqueia leituras brutas de `.env`. CLI: `node .agents/mcp-server.cjs env [.env]`.
 
-11. **Modo Smart-Assist & Auto-Slicing Proativo (`res.overwrite`):**
+11. **Modo Smart-Assist, Auto-Slicing & Auto-Isolamento Proativo de Testes (`res.overwrite`):**
     - Substitui rejeições mecânicas (`deny`) que custavam turnos extras e milhares de tokens de repetição por correções automáticas e transparentes via `overwrite`.
     - Auto-injeta limites cirúrgicos de 100 linhas em arquivos não paginados ou trunca ranges excessivos sem quebrar o fluxo do agente.
+    - **Auto-Isolamento Proativo de Testes:** Reescreve automaticamente suítes globais (`npm test`, `pytest`, `go test ./...`, `cargo test`) para rodar apenas o teste/arquivo que falhou nos últimos 5 minutos via `res.overwrite`.
     - Suporta modos configuráveis: `smart-assist` (padrão), `strict` (hard gates) e `permissive`.
 
 12. **Protocolo Context-Aware (Greenfield Fast-Track vs Brownfield):**
@@ -124,11 +133,23 @@ O kit opera em 4 camadas complementares:
 13. **Blindagem de Grafos e Índices (`.graphifyignore` & `.astgrepignore`):**
     - Instala templates de exclusão que impedem o `graphify` e o `ast-grep` de indexarem os scripts do kit, saídas de grafos (`graphify-out/`) e arquivos internos de controle, eliminando centenas de milhares de nós e arestas inúteis do grafo de conhecimento.
 
+14. **Governança Cognitiva Autônoma (`SessionStart`, `PreInvocation` Anti-Loop, `Stop` Gate & ROI):**
+    - **Briefing Zero-Read (`token-guard-sessionstart.cjs`):** Injeta um resumo executivo efêmero (~150 tokens) no `SessionStart` com fase atual do `.planning/STATE.md`, últimas decisões do `MemPalace`, testes pendentes e último checkpoint, eliminando 3 a 5 chamadas de leitura iniciais.
+    - **Detector de Loop de Alucinação (`token-guard-preinvocation.cjs`):** Detecta 3+ falhas consecutivas na mesma ferramenta/arquivo ou em testes e injeta `ephemeralMessage` corretivo enriquecido com soluções do `MemPalace` (`problems`) e o ID do último checkpoint seguro.
+    - **Gate Anti-Parada Prematura (`token-guard-diagnostics.cjs --summary`):** No evento `Stop` (`NO_TOOL_CALL`), verifica se o último teste falhou ou se arquivos recém-editados possuem erros de sintaxe/LSP e retorna `{"decision": "continue", "reason": "..."}` (com trava anti-loop de 1 retry).
+    - **Telemetria de ROI & Orçamento (`token-report.cjs` v2 + `lib/token-savings.cjs`):** Contabiliza tokens reais poupados por cada motor do kit (`pretool_redirect`, `test_isolation`, `output_sanitizer`, `session_briefing`, `loop_prevention`), exibe o ranking `topTools` da sessão e monitora o orçamento de tokens.
+
+15. **Controle Rigoroso Contra Erros (ErrorGuard, Zero Silent Fallbacks & Visibilidade Tripla):**
+    - **Visibilidade Tripla:** Card visual vermelho no terminal (`process.stderr`), bloqueio imediato do agente (`deny` ou alerta de erro) e persistência atômica em `.agents/.cache/error-log.json`.
+    - **Tolerância Zero a Falhas Ocultas:** Captura real de `stderr` de compiladores, LSPs, `ast-grep`, `graphify`, `node:sqlite` e `git`.
+    - **Central de Erros:** Inspecione e limpe incidentes a qualquer momento com `node .agents/mcp-server.cjs errors` ou `./setup.sh --errors`.
+    - **Permanência Automática:** Atualizações via `/gsd-agy-update` ou `gsd-update.cjs` preservam e forçam `strict_errors: true` em `.planning/config.json`.
+
 ---
 
 ## 🚀 Instalação Rápida com 1 Comando (Direto na Raiz do Projeto)
 
-Durante a instalação, o assistente perguntará interativamente se o projeto possui interface **Front-End** e limpará automaticamente qualquer arquivo temporário ao final:
+Durante a instalação, o assistente perguntará interativamente se o projeto possui interface **Front-End**, permitirá selecionar quais **servidores LSP** deseja instalar na máquina e limpará automaticamente qualquer arquivo temporário ao final:
 - **Sem Front-End (Padrão/Enter):** Desativa fases de UI (`ui_phase: false`, `ui_safety_gate: false`, `ui_review: false`) e ativa o perfil enxuto `backend` (arquivando 43 skills de UI/design).
 - **Com Front-End (2/s/sim):** Habilita governança de UI e restaura o perfil `full` com 100% das skills ativas.
 
@@ -179,10 +200,34 @@ git clone --depth 1 https://github.com/ARILSONLIMA/gsd-agy-kit.git; pwsh gsd-agy
 ## 📦 Onde o Kit Fica Instalado?
 
 O kit instala toda a sua infraestrutura de forma **nativa e permanente** dentro de `.agents/`:
-- **`.agents/kit/`**: Bateria de testes, painel de controle (`setup-ui.cjs`), utilitários e desinstalador.
+- **`.agents/kit/`**: Bateria de testes, painel de controle (`setup-ui.cjs`), motor de atualização (`gsd-update.cjs`), utilitários e desinstalador.
 - **`.agents/hooks/` & `.agents/hooks.json`**: Hard gates (`PreInvocation`, `PreToolUse`, `PostToolUse`, `Stop`).
-- **`.agents/skills/gsd-test/` & `.agents/skills/gsd-tokens/`**: Skills nativas `/gsd-test` e `/gsd-tokens`.
+- **`.agents/skills/gsd-test/`, `gsd-tokens/` & `gsd-agy-update/`**: Skills nativas `/gsd-test`, `/gsd-tokens` e `/gsd-agy-update`.
 - **`scripts/test-kit.sh` & `scripts/test-kit.ps1`**: Atalhos rápidos de validação para terminal.
+
+---
+
+## 🔄 Atualização Inteligente (`/gsd-agy-update`)
+
+Para verificar se você está na última versão do **Antigravity GSD Kit**, conhecer detalhadamente todas as novas melhorias (`CHANGELOG.md` + últimos commits do GitHub) e atualizar preservando suas configurações locais (`.planning/config.json`, `MemPalace` e snapshots):
+
+1. **Direto no Chat do Antigravity CLI:**
+   ```markdown
+   /gsd-agy-update
+   ```
+   O agente verificará a versão atual vs. remota, explicará todas as novidades em Português (pt-BR) e pedirá sua confirmação antes de atualizar (ou atualizará direto caso você digite `/gsd-agy-update --yes`).
+
+2. **Direto no Terminal (CLI ou Menu Interativo):**
+   ```bash
+   # Apenas verificar versão e ver resumo de melhorias
+   node .agents/kit/gsd-update.cjs --check
+
+   # Verificar e atualizar interativamente
+   node .agents/kit/setup-ui.cjs --update
+
+   # Atualizar direto sem confirmação interativa
+   node .agents/kit/gsd-update.cjs --yes
+   ```
 
 ---
 
@@ -191,8 +236,8 @@ O kit instala toda a sua infraestrutura de forma **nativa e permanente** dentro 
 Ao inspecionar ou alterar código, a esteira obrigatória é:
 
 1. **`graphify query "<pergunta>"`** (via `run_command`): Análise de arquitetura macro e dependências de pacotes.
-2. **`gopls` MCP** (via `call_mcp_tool`): Para resolver assinaturas, tipos, structs e referências cruzadas com custo zero de leitura.
-3. **`ast-grep` CLI** (via `run_command: ast-grep run -p '<padrão>' --lang go`): Buscas sintáticas e estruturais na AST.
+2. **Motor Multi-LSP Híbrido (`lsp_*` MCP ou `node .agents/mcp-server.cjs lsp ...`)**: Para resolver definições (`definition`), referências cruzadas (`references`), assinaturas (`hover`/`symbols`), renomeações (`rename`) e diagnósticos (`diagnostics`) com precisão em Go, TS/JS, Python, Rust, PHP, C/C++, Java, C#, Ruby e Dart.
+3. **`ast-grep` CLI** (via `run_command: ast-grep run -p '<padrão>'` ou `mcp-server.cjs ast`): Buscas sintáticas e estruturais na AST.
 4. **`view_file` Cirúrgico:** Máximo de 100 linhas com `StartLine` e `EndLine` estritos.
 5. **`replace_file_content` Cirúrgico:** Modificações de código sempre por substituição pontual de linhas, nunca sobrescrita total.
 

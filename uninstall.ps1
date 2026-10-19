@@ -48,10 +48,16 @@ if (Test-Path $hooksJsonPath) {
 $filesToRemove = @(
     (Join-Path $agentsDir "hooks\token-guard-preinvocation.cjs"),
     (Join-Path $agentsDir "hooks\token-guard-pretool.cjs"),
+    (Join-Path $agentsDir "hooks\token-guard-diagnostics.cjs"),
+    (Join-Path $agentsDir "hooks\token-guard-sessionstart.cjs"),
+    (Join-Path $agentsDir "mcp-server.cjs"),
+    (Join-Path $agentsDir "lib"),
+    (Join-Path $agentsDir "plugins\gsd-economy"),
     (Join-Path $agentsDir "rules\token-protocol.md"),
     (Join-Path $agentsDir "rules\ast-grep.md"),
     (Join-Path $agentsDir "rules\graphify.md"),
     (Join-Path $agentsDir "rules\idioma.md"),
+    (Join-Path $agentsDir "rules\lsp.md"),
     (Join-Path $agentsDir "rules\gopls.md"),
     (Join-Path $agentsDir ".last-heal-check"),
     (Join-Path $agentsDir ".health-cache"),
@@ -61,6 +67,7 @@ $filesToRemove = @(
     (Join-Path $agentsDir "kit"),
     (Join-Path $agentsDir "skills\gsd-tokens"),
     (Join-Path $agentsDir "skills\gsd-test"),
+    (Join-Path $agentsDir "skills\gsd-agy-update"),
     (Join-Path $TargetDir "scripts\test-kit.ps1"),
     (Join-Path $TargetDir "scripts\test-kit.sh")
 )

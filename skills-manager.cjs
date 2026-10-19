@@ -24,7 +24,8 @@ const PROFILES = {
     'gsd-dev-preferences',
     'gsd-graphify',
     'gsd-tokens',
-    'gsd-test'
+    'gsd-test',
+    'gsd-agy-update'
   ],
   backend: [
     // Core loop
@@ -59,7 +60,8 @@ const PROFILES = {
     'gsd-dev-preferences',
     'gsd-graphify',
     'gsd-tokens',
-    'gsd-test'
+    'gsd-test',
+    'gsd-agy-update'
   ]
 };
 
@@ -68,6 +70,7 @@ const GLOBAL_SKILLS = [
   'gsd-help',
   'gsd-tokens',
   'gsd-test',
+  'gsd-agy-update',
   'gsd-dev-preferences',
   'gsd-settings',
   'gsd-health',

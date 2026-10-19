@@ -45,6 +45,22 @@ function sanitizeText(text, maxLines = 50, headCount = 20, tailCount = 20) {
   const tail = lines.slice(-tailCount);
   const truncatedCount = lines.length - headCount - tailCount;
 
+  // Contabilizar economia de tokens gerada pelo truncamento Headroom
+  try {
+    const projectRoot = path.dirname(path.dirname(path.dirname(logFile)));
+    const savingsCandidates = [
+      path.join(__dirname, 'lib', 'token-savings.cjs'),
+      path.join(projectRoot, '.agents', 'lib', 'token-savings.cjs'),
+      path.join(projectRoot, 'lib', 'token-savings.cjs')
+    ];
+    const savingsPath = savingsCandidates.find(p => fs.existsSync(p));
+    if (savingsPath) {
+      const TokenSavingsTracker = require(savingsPath);
+      const tracker = new TokenSavingsTracker(projectRoot);
+      tracker.recordSaving('output_sanitizer', Math.max(100, truncatedCount * 12));
+    }
+  } catch {}
+
   const banner = [
     '',
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,

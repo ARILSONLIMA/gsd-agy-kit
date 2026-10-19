@@ -49,7 +49,7 @@ fi
 HAS_ACTION=0
 for arg in "$@"; do
     case "$arg" in
-        --install|--menu|--test|--uninstall|--report|--profile|--compact|--doctor|--health|--graphify)
+        --install|--menu|--test|--uninstall|--report|--profile|--compact|--doctor|--health|--graphify|--lsp|--update|--check-update)
             HAS_ACTION=1
             ;;
     esac

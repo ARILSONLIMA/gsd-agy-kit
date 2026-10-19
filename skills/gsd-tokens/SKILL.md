@@ -13,7 +13,7 @@ Exibir relatório cirúrgico e detalhado de telemetria de tokens, chamadas ao mo
 
 <context>
 Executa o analisador de telemetria local:
-`scripts/token-report.cjs`
+`.agents/kit/token-report.cjs` (ou `token-report.cjs` na raiz do kit)
 
 Suporta parâmetros opcionais:
 - Sem argumentos: analisa automaticamente a sessão ativa/mais recente
@@ -24,6 +24,6 @@ Suporta parâmetros opcionais:
 
 <process>
 1. Executar no terminal:
-   `node scripts/token-report.cjs $ARGUMENTS`
+   `node .agents/kit/token-report.cjs $ARGUMENTS` (ou `node token-report.cjs $ARGUMENTS` caso esteja no repositório fonte do kit)
 2. Apresentar os resultados formatados em tabela amigável em Português do Brasil (pt-BR).
 </process>

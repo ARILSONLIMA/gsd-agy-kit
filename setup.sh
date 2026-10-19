@@ -46,6 +46,14 @@ while [[ $# -gt 0 ]]; do
             ACTION_ARG="--graphify"
             shift
             ;;
+        --lsp)
+            ACTION_ARG="--lsp"
+            shift
+            ;;
+        --errors)
+            ACTION_ARG="--errors"
+            shift
+            ;;
         --menu)
             ACTION_ARG="--menu"
             shift
@@ -246,6 +254,13 @@ if (fs.existsSync(file)) {
   try { data = JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
 }
 data["token-efficiency-guard"] = {
+  SessionStart: [
+    {
+      type: "command",
+      command: "node hooks/token-guard-sessionstart.cjs",
+      timeout: 15
+    }
+  ],
   PreInvocation: [
     {
       type: "command",
@@ -383,7 +398,7 @@ if [ -d "${KIT_DIR}/lib" ]; then
     cp -rf "${KIT_DIR}/lib/"* "${TARGET_SCRIPTS_DIR}/lib/"
 fi
 
-KIT_SCRIPTS=("test-kit.sh" "test-kit.ps1" "setup-ui.cjs" "setup.sh" "setup.ps1" "install.sh" "install.ps1" "package.json" "uninstall.sh" "uninstall.ps1" "skills-profile.sh" "skills-profile.ps1" "optimize-tokens.sh" "optimize-tokens.ps1" "sanitize-command.ps1" "token-report.cjs" "gsd-state-summary.cjs" "gsd-graphify-update.cjs" "patch-agents.cjs" "optimize-tokens.cjs" "skills-manager.cjs" "compact-state.cjs" "compact-json.cjs" "sanitize-output.cjs" "shrink-prompts.cjs" "gsd-outline.cjs" "gsd-read-strip.cjs" "mcp-server.cjs")
+KIT_SCRIPTS=("test-kit.sh" "test-kit.ps1" "setup-ui.cjs" "setup.sh" "setup.ps1" "install.sh" "install.ps1" "package.json" "CHANGELOG.md" "uninstall.sh" "uninstall.ps1" "skills-profile.sh" "skills-profile.ps1" "optimize-tokens.sh" "optimize-tokens.ps1" "sanitize-command.ps1" "token-report.cjs" "gsd-update.cjs" "gsd-state-summary.cjs" "gsd-graphify-update.cjs" "patch-agents.cjs" "optimize-tokens.cjs" "skills-manager.cjs" "compact-state.cjs" "compact-json.cjs" "sanitize-output.cjs" "shrink-prompts.cjs" "gsd-outline.cjs" "gsd-read-strip.cjs" "mcp-server.cjs")
 for sName in "${KIT_SCRIPTS[@]}"; do
     src="${KIT_DIR}/${sName}"
     if [ -f "${src}" ]; then
@@ -402,9 +417,9 @@ for sName in "test-kit.sh" "test-kit.ps1"; do
 done
 echo -e "   \033[0;32mPacote completo do kit instalado nativamente em: ${TARGET_KIT_DIR}\033[0m"
 
-# 10. Copiar Skills Especializadas (.agents/skills/gsd-tokens e gsd-test)
+# 10. Copiar Skills Especializadas (.agents/skills/gsd-tokens, gsd-test e gsd-agy-update)
 SKILLS_DIR="${AGENTS_DIR}/skills"
-for skName in "gsd-tokens" "gsd-test"; do
+for skName in "gsd-tokens" "gsd-test" "gsd-agy-update"; do
     SK_SRC="${KIT_DIR}/skills/${skName}"
     if [ -d "${SK_SRC}" ]; then
         SK_DEST="${SKILLS_DIR}/${skName}"
@@ -495,7 +510,9 @@ if [ -d "${GIT_HOOKS_DIR}" ]; then
     cat << 'EOF' > "${GIT_HOOKS_DIR}/post-merge"
 #!/bin/sh
 # Antigravity GSD Kit Auto-Heal Hook
-if [ -f "scripts/patch-agents.cjs" ]; then
+if [ -f ".agents/kit/patch-agents.cjs" ]; then
+    node .agents/kit/patch-agents.cjs >/dev/null 2>&1 || true
+elif [ -f "scripts/patch-agents.cjs" ]; then
     node scripts/patch-agents.cjs >/dev/null 2>&1 || true
 elif [ -f "gsd-agy-kit/patch-agents.cjs" ]; then
     node gsd-agy-kit/patch-agents.cjs >/dev/null 2>&1 || true
@@ -508,7 +525,9 @@ EOF
 
     cat << 'EOF' > "${GIT_HOOKS_DIR}/post-commit"
 #!/bin/sh
-if [ -f "scripts/gsd-graphify-update.cjs" ]; then
+if [ -f ".agents/kit/gsd-graphify-update.cjs" ]; then
+    node .agents/kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
+elif [ -f "scripts/gsd-graphify-update.cjs" ]; then
     node scripts/gsd-graphify-update.cjs >/dev/null 2>&1 &
 elif [ -f "gsd-agy-kit/gsd-graphify-update.cjs" ]; then
     node gsd-agy-kit/gsd-graphify-update.cjs >/dev/null 2>&1 &

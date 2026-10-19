@@ -10,10 +10,10 @@
  * - Motor de instalação com stepper e spinners animados (⠋ ⠙ ⠹ ...)
  * - Execução integrada de testes de conformidade (test-kit)
  * - Seletor de perfis de skills (Core / Backend / Fullstack)
- * - Health Check e Diagnóstico de ferramentas (ast-grep, node, graphify, gopls)
+ * - Health Check, Diagnóstico e Auto-Instalador de LSPs Multi-Linguagem
  * - Auto-Cura (Doctor) para reparo rápido de subagentes e regras
  * - Desinstalação segura e reversão 100% garantida
- * - Suporte a execução CLI direta (--install, --test, --report, etc.) para automações/CI
+ * - Suporte a execução CLI direta (--install, --test, --report, --lsp, etc.) para automações/CI
  * - Suporte nativo a 1 comando via npx github:ARILSONLIMA/gsd-agy-kit, curl | bash e irm | iex
  */
 
@@ -21,6 +21,9 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { execSync, spawnSync } = require('child_process');
+const LspEngine = require('./lib/lsp-engine.cjs');
+const ErrorGuard = require('./lib/error-guard.cjs');
+const { LANGUAGE_REGISTRY } = LspEngine;
 
 // Estilos e Cores ANSI
 const C = {
@@ -151,7 +154,7 @@ function renderHubBanner(targetDir) {
   const statusBadge = status.isInstalled ? `${C.bGreen}[🟢 Blindado & Operacional]${C.reset}` : `${C.bYellow}[⚪ Não Configurado]${C.reset}`;
   
   console.log(`\n${C.bCyan}╭────────────────────────────────────────────────────────────────────────╮${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT - PAINEL DE CONTROLE v1.4.0${C.reset}                   ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT - PAINEL DE CONTROLE v1.5.0${C.reset}                   ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.dim}Workspace:${C.reset} ${C.white}${targetDir}${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.dim}Status:${C.reset}    ${statusBadge}  •  ${C.dim}Stack:${C.reset} ${C.bWhite}${status.stack}${C.reset}`);
   if (status.isInstalled) {
@@ -166,7 +169,7 @@ function renderHubBanner(targetDir) {
 
 function renderBanner() {
   console.log(`\n${C.bCyan}╭────────────────────────────────────────────────────────────────────────╮${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT v1.4.0${C.reset}                                        ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT v1.5.0${C.reset}                                        ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.dim}Adaptador de Governança, Compatibilidade e Auto-Cura para Antigravity${C.reset}${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}╰────────────────────────────────────────────────────────────────────────╯${C.reset}\n`);
 }
@@ -281,9 +284,9 @@ function renderDashboard() {
   console.log(`\n${C.bCyan}╭─ 📊 Resumo de Instalação e Governança ─────────────────────────────────╮${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}                                                                        ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.bold}Status dos Componentes:${C.reset}                                              ${C.bCyan}│${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   • Subagentes GSD:    ${C.bGreen}✔ Normalizados${C.reset} (Antigravity Tools + MCP Gopls)  ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • Subagentes GSD:    ${C.bGreen}✔ Normalizados${C.reset} (Antigravity Tools + Multi-LSP)  ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • Dynamic Pools:     ${C.bGreen}✔ Ativos${C.reset} (Agentes & Skills com ativação JIT)     ${C.bCyan}│${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   • Servidor MCP:      ${C.bGreen}✔ Ativo${C.reset} (mempalace, query_docs, lockfile, skeleton)${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • Servidor MCP:      ${C.bGreen}✔ Ativo${C.reset} (mempalace, rag, lockfile, skeleton, lsp)${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • Memória Episódica: ${C.bGreen}✔ Ativa${C.reset} (.agents/memory/palace.db em SQLite)     ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • Hard Gates:        ${C.bGreen}✔ Ativos${C.reset} (.agents/hooks.json - Circuit Breaker)  ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • Auto-Cura (Git):   ${C.bGreen}✔ Instalado${C.reset} (post-merge, post-checkout, commit)   ${C.bCyan}│${C.reset}`);
@@ -293,12 +296,108 @@ function renderDashboard() {
   console.log(`${C.bCyan}│${C.reset}   • Economia por Turno:${C.bGreen}~18.000 tokens${C.reset} poupados no total                 ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}                                                                        ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.bold}Comandos & Ferramentas Úteis:${C.reset}                                       ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}lsp_diagnostics / definition${C.reset} Análise e navegação Multi-LSP Híbrido ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}mempalace_recall${C.reset}             Busca decisões passadas no SQLite     ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}query_docs${C.reset}                  Busca cirúrgica FTS5 em arquivos .md  ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}check_dependency${C.reset}            Verifica lib sem ler lockfiles        ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}/gsd-tokens${C.reset}                  Telemetria de uso e cache de tokens   ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}/gsd-agy-update${C.reset}              Verifica versão, melhorias e atualiza ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}╰────────────────────────────────────────────────────────────────────────╯${C.reset}`);
   console.log(`\n${C.bGreen}✨ Projeto blindado com sucesso e pronto para desenvolvimento!${C.reset}\n`);
+}
+
+async function promptAndInstallLsps(targetDir) {
+  const lsp = new LspEngine(targetDir);
+  const detectedStacks = lsp.detectProjectStacks(targetDir);
+  const detectedIds = new Set(detectedStacks.map(s => s.id));
+
+  const catalogKeys = Object.keys(LANGUAGE_REGISTRY);
+  const items = catalogKeys.map((key, idx) => {
+    const spec = LANGUAGE_REGISTRY[key];
+    const primaryBin = spec.lspBinaries[0];
+    const hasDedicatedLsp = spec.lspBinaries.some(b => lsp.hasBinary(b));
+    const activeChecker = spec.checkerBinaries.find(b => lsp.hasBinary(b)) || null;
+    const isDetected = detectedIds.has(key);
+    const installCmd = spec.install[process.platform] || spec.install.default;
+    return {
+      num: idx + 1,
+      key,
+      name: spec.name,
+      primaryBin,
+      hasDedicatedLsp,
+      activeChecker,
+      isDetected,
+      installLabel: spec.install.label,
+      installCmd,
+      fallbackCmd: spec.install.fallback || null
+    };
+  });
+
+  console.log(`\n   ${C.bCyan}╭─ 🧠 Servidores LSP Multi-Linguagem (Análise Estática & Compiladores) ──╮${C.reset}`);
+  for (const item of items) {
+    const statusStr = item.hasDedicatedLsp
+      ? `${C.bGreen}✔ ${item.primaryBin} instalado${C.reset}`
+      : (item.activeChecker
+          ? `${C.bYellow}⚡ ${item.activeChecker} ativo${C.reset} ${C.dim}(LSP dedicado '${item.primaryBin}' opcional)${C.reset}`
+          : `${C.bRed}✖ Ausente (${item.primaryBin})${C.reset}`);
+    const detTag = item.isDetected ? ` ${C.bMagenta}[Detectado no Projeto]${C.reset}` : '';
+    console.log(`   ${C.bCyan}│${C.reset}  ${C.bWhite}[${item.num}]${C.reset} ${item.name.padEnd(28)} ${statusStr}${detTag}`);
+  }
+  console.log(`   ${C.bCyan}╰─────────────────────────────────────────────────────────────────────────╯${C.reset}`);
+
+  const ans = await askPrompt(
+    `   ${C.bold}Quais LSPs deseja baixar/instalar agora?${C.reset} ${C.dim}(ex: 1,2,3 | 'd' = detectados ausentes | [Enter] = pular)${C.reset}: `
+  );
+
+  if (!ans || ans === 'n' || ans === 'nao' || ans === '0') {
+    return;
+  }
+
+  let selected = [];
+  if (ans === 'd' || ans === 'detectados') {
+    selected = items.filter(i => i.isDetected && !i.hasDedicatedLsp);
+    if (selected.length === 0) {
+      console.log(`   ${C.bGreen}✔ Todas as linguagens detectadas no projeto já possuem LSP instalado!${C.reset}`);
+      return;
+    }
+  } else if (ans === 't' || ans === 'todos' || ans === 'all') {
+    selected = items.filter(i => !i.hasDedicatedLsp);
+  } else {
+    const nums = ans
+      .split(/[\s,;]+/)
+      .map(s => parseInt(s.trim(), 10))
+      .filter(n => !isNaN(n) && n >= 1 && n <= items.length);
+    selected = items.filter(i => nums.includes(i.num));
+  }
+
+  if (selected.length === 0) {
+    return;
+  }
+
+  console.log(`\n   ${C.bCyan}📥 Baixando e instalando servidores LSP selecionados...${C.reset}`);
+  for (const item of selected) {
+    console.log(`\n   ${C.cyan}➜ Instalando ${item.installLabel}...${C.reset}`);
+    console.log(`   ${C.dim}  Comando: ${item.installCmd}${C.reset}`);
+    let installedOk = false;
+    try {
+      execSync(item.installCmd, { stdio: 'inherit', timeout: 180000 });
+      installedOk = true;
+    } catch (err) {
+      if (item.fallbackCmd) {
+        console.log(`   ${C.yellow}⚠ Tentando comando alternativo: ${item.fallbackCmd}${C.reset}`);
+        try {
+          execSync(item.fallbackCmd, { stdio: 'inherit', timeout: 180000 });
+          installedOk = true;
+        } catch {}
+      }
+    }
+
+    if (installedOk) {
+      console.log(`   ${C.bGreen}✔ ${item.name} (${item.primaryBin}) instalado com sucesso!${C.reset}`);
+    } else {
+      console.log(`   ${C.bYellow}⚠ Não foi possível instalar automaticamente '${item.primaryBin}'. Execute manualmente: ${item.installCmd}${C.reset}`);
+    }
+  }
 }
 
 async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
@@ -319,7 +418,6 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
 
   let enableMempalace = true;
   let enableCodeReview = true;
-  let hasGo = fs.existsSync(path.join(targetDir, 'go.mod'));
 
   if (hasFrontendInput === null && canPromptInteractively()) {
     console.log(`\n   ${C.bWhite}Recursos Opcionais:${C.reset}`);
@@ -329,10 +427,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
     const crAns = await askPrompt('   Ativar Code Review Automático? [S/n]: ');
     enableCodeReview = crAns !== 'n' && crAns !== 'nao';
 
-    const goAns = await askPrompt(`   O projeto utiliza linguagem Go? (instala regra gopls) [${hasGo ? 'S/n' : 's/N'}]: `);
-    if (goAns) {
-      hasGo = goAns === 's' || goAns === 'sim' || goAns === 'y';
-    }
+    await promptAndInstallLsps(targetDir);
     console.log();
   }
 
@@ -345,14 +440,27 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
       title: 'Verificação de Ambiente (Node, ast-grep, graphify, GSD)',
       run: async () => {
         let hasAstGrep = false;
-        try { execSync('ast-grep --version', { stdio: 'ignore' }); hasAstGrep = true; } catch (e) {
-          try { execSync('npx -y --package @ast-grep/cli ast-grep --version', { stdio: 'ignore' }); hasAstGrep = true; } catch (e2) {}
+        let astGrepErr = '';
+        try {
+          execSync('ast-grep --version', { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', timeout: 5000 });
+          hasAstGrep = true;
+        } catch (e) {
+          astGrepErr = (e.stderr || e.message || '').toString().trim();
+          try {
+            execSync('npx -y --package @ast-grep/cli ast-grep --version', { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', timeout: 10000 });
+            hasAstGrep = true;
+          } catch (e2) {
+            astGrepErr += '\n' + (e2.stderr || e2.message || '').toString().trim();
+          }
         }
         if (!hasAstGrep) {
-          throw new Error('ast-grep não encontrado no PATH nem via npx. Instale com: npm install -g @ast-grep/cli');
+          throw new Error(`ast-grep não encontrado no PATH nem via npx.\n${astGrepErr}\nInstale com: npm install -g @ast-grep/cli`);
         }
-        try { execSync('graphify --version', { stdio: 'ignore' }); } catch (e) {
-          throw new Error('graphify não encontrado no PATH. Instale com: pip install graphify-cli');
+        try {
+          execSync('graphify --version', { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', timeout: 5000 });
+        } catch (e) {
+          const gErr = (e.stderr || e.message || '').toString().trim();
+          throw new Error(`graphify não encontrado no PATH.\n${gErr}\nInstale com: pip install graphify-cli`);
         }
         const gsdCore = path.join(targetDir, '.agents', 'gsd-core');
         const gsdAgents = path.join(targetDir, '.agents', 'agents');
@@ -367,7 +475,9 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
       title: 'Regras de Comportamento e Tools (.agents/rules/)',
       run: async () => {
         if (!fs.existsSync(rulesDir)) fs.mkdirSync(rulesDir, { recursive: true });
-        const coreRules = ['token-protocol.md', 'ast-grep.md', 'graphify.md', 'idioma.md', 'gopls.md'];
+        // Remove regra legada gopls.md caso exista para evitar duplicidade com lsp.md
+        try { fs.rmSync(path.join(rulesDir, 'gopls.md'), { force: true }); } catch {}
+        const coreRules = ['token-protocol.md', 'ast-grep.md', 'graphify.md', 'idioma.md', 'lsp.md'];
         for (const r of coreRules) {
           const src = path.join(kitDir, 'rules', r);
           const dest = path.join(rulesDir, r);
@@ -388,6 +498,13 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         const hooksJsonPath = path.join(agentsDir, 'hooks.json');
         let hooksConfig = {
           "token-efficiency-guard": {
+            "SessionStart": [
+              {
+                "type": "command",
+                "command": "node hooks/token-guard-sessionstart.cjs",
+                "timeout": 15
+              }
+            ],
             "PreInvocation": [
               {
                 "type": "command",
@@ -481,15 +598,12 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
       title: 'Dynamic Skill Pool & Carregamento JIT (.agents/skills-pool/)',
       run: async () => {
         const skillsDir = path.join(agentsDir, 'skills');
-        const tokenSkillSrc = path.join(kitDir, 'skills', 'gsd-tokens');
-        if (fs.existsSync(tokenSkillSrc)) {
-          const tokenSkillDest = path.join(skillsDir, 'gsd-tokens');
-          copyFolderRecursive(tokenSkillSrc, tokenSkillDest);
-        }
-        const testSkillSrc = path.join(kitDir, 'skills', 'gsd-test');
-        if (fs.existsSync(testSkillSrc)) {
-          const testSkillDest = path.join(skillsDir, 'gsd-test');
-          copyFolderRecursive(testSkillSrc, testSkillDest);
+        for (const skName of ['gsd-tokens', 'gsd-test', 'gsd-agy-update']) {
+          const skSrc = path.join(kitDir, 'skills', skName);
+          if (fs.existsSync(skSrc)) {
+            const skDest = path.join(skillsDir, skName);
+            copyFolderRecursive(skSrc, skDest);
+          }
         }
 
         const skillsMgr = path.join(kitDir, 'skills-manager.cjs');
@@ -511,12 +625,12 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         const kitScripts = [
           "test-kit.sh", "test-kit.ps1",
           "setup-ui.cjs", "setup.sh", "setup.ps1",
-          "install.sh", "install.ps1", "package.json",
+          "install.sh", "install.ps1", "package.json", "CHANGELOG.md",
           "uninstall.sh", "uninstall.ps1",
           "skills-profile.sh", "skills-profile.ps1",
           "optimize-tokens.sh", "optimize-tokens.ps1",
           "sanitize-command.ps1",
-          "token-report.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs",
+          "token-report.cjs", "gsd-update.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs",
           "patch-agents.cjs", "optimize-tokens.cjs", "skills-manager.cjs",
           "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs",
           "gsd-outline.cjs", "gsd-read-strip.cjs", "shrink-prompts.cjs", "mcp-server.cjs"
@@ -531,6 +645,24 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             }
           }
         }
+        // Registrar metadados da versão instalada em .agents/kit/.installed-version.json
+        try {
+          const pkgSrc = path.join(kitDir, 'package.json');
+          if (fs.existsSync(pkgSrc)) {
+            const pkgData = JSON.parse(fs.readFileSync(pkgSrc, 'utf8'));
+            let headSha = null;
+            try {
+              const gitSha = spawnSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: kitDir, encoding: 'utf8', timeout: 2500 });
+              if (gitSha.status === 0 && gitSha.stdout) headSha = gitSha.stdout.trim();
+            } catch {}
+            const metaPath = path.join(targetKitDir, '.installed-version.json');
+            fs.writeFileSync(metaPath, JSON.stringify({
+              version: pkgData.version || '1.5.0',
+              commit: headSha,
+              updatedAt: new Date().toISOString()
+            }, null, 2) + '\n', 'utf8');
+          }
+        } catch {}
         // Copiar lib/ com os motores de MemPalace, RAG, Lockfile, Skeleton e Checkpoint
         const kitLibDir = path.join(kitDir, 'lib');
         if (fs.existsSync(kitLibDir)) {
@@ -641,6 +773,8 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             const rawConfig = JSON.parse(fs.readFileSync(configJsonPath, 'utf8'));
             rawConfig.response_language = 'pt-BR';
             rawConfig.kit_mode = rawConfig.kit_mode || 'smart-assist';
+            rawConfig.strict_errors = true;
+            rawConfig.error_guard = { enabled: true, version: 1 };
             if (!rawConfig.workflow) rawConfig.workflow = {};
             rawConfig.workflow.ui_phase = hasFrontend;
             rawConfig.workflow.ui_safety_gate = hasFrontend;
@@ -723,11 +857,52 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
       title: 'Inicialização do Grafo de Conhecimento (graphify update .)',
       run: async () => {
         try {
-          execSync('graphify update .', { cwd: targetDir, stdio: 'ignore' });
+          execSync('graphify update .', { cwd: targetDir, stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000, encoding: 'utf8' });
         } catch (e) {
-          // Ignora se o projeto for vazio ou não possuir arquivos de código ainda
+          const gOut = (e.stderr || e.stdout || e.message || '').toString();
+          if (!gOut.toLowerCase().includes('no files') && !gOut.toLowerCase().includes('empty')) {
+            ErrorGuard.recordError(targetDir, {
+              category: 'TOOL',
+              component: 'graphify-init',
+              title: 'Aviso na inicialização do grafo Graphify',
+              stderr: gOut,
+              severity: 'warning'
+            });
+          }
         }
         await sleep(60);
+      }
+    },
+    {
+      title: 'Auto-Teste Rigoroso pós-instalação (Smoke Test dos Motores)',
+      run: async () => {
+        // 1. Validar ErrorGuard
+        const testRec = ErrorGuard.recordError(targetDir, {
+          category: 'INSTALL',
+          component: 'smoke-test',
+          title: 'Sondagem de auto-teste pós-instalação',
+          stderr: 'Smoke test probe',
+          severity: 'warning'
+        });
+        if (!testRec || !testRec.entry) {
+          throw new Error('Falha ao inicializar subsistema ErrorGuard.');
+        }
+        ErrorGuard.clearErrors(targetDir);
+
+        // 2. Validar integridade do LspEngine
+        const lsp = new LspEngine(targetDir);
+        const stackHealth = lsp.checkStackHealth(targetDir);
+        if (!stackHealth.ok) {
+          throw new Error(`Circuit Breaker LSP reportou falha em stack obrigatória: ${stackHealth.error}`);
+        }
+
+        // 3. Validar mcp-server CLI
+        const mcpTest = ErrorGuard.spawnStrict(process.execPath, [path.join(agentsDir, 'mcp-server.cjs'), 'tools', '--json'], { cwd: targetDir, timeout: 10000 });
+        if (!mcpTest.ok) {
+          throw new Error(`Servidor MCP falhou no auto-teste: ${mcpTest.stderr || mcpTest.errorMessage}`);
+        }
+
+        await sleep(50);
       }
     }
   ];
@@ -741,6 +916,14 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
       await steps[i].run();
       stepper.finishStep(i, true);
     } catch (err) {
+      ErrorGuard.emitError(targetDir, {
+        category: 'INSTALL',
+        component: `setup-step:${steps[i].title}`,
+        title: `Falha na etapa de instalação: ${steps[i].title}`,
+        stderr: err.stack || err.message,
+        hint: 'Verifique as dependências necessárias e execute novamente a instalação.',
+        severity: 'error'
+      });
       stepper.finishStep(i, false, err.message);
       stepper.cleanup();
       process.exit(1);
@@ -752,9 +935,10 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
 
   console.log(`${C.bCyan}📦 Instalação Nativa Concluída com Sucesso!${C.reset}`);
   console.log(`   ${C.dim}O Antigravity GSD Kit agora reside de forma nativa e permanente no projeto:${C.reset}`);
-  console.log(`   ${C.bGreen}• .agents/kit/${C.reset} ${C.dim}(bateria de testes, painel de controle, utilitários e desinstalador)${C.reset}`);
+  console.log(`   ${C.bGreen}• .agents/kit/${C.reset} ${C.dim}(bateria de testes, painel de controle, atualizador, utilitários e desinstalador)${C.reset}`);
   console.log(`   ${C.bGreen}• .agents/skills/gsd-test/${C.reset} ${C.dim}(skill nativa /gsd-test no Antigravity CLI)${C.reset}`);
   console.log(`   ${C.bGreen}• .agents/skills/gsd-tokens/${C.reset} ${C.dim}(skill nativa /gsd-tokens no Antigravity CLI)${C.reset}`);
+  console.log(`   ${C.bGreen}• .agents/skills/gsd-agy-update/${C.reset} ${C.dim}(skill nativa /gsd-agy-update no Antigravity CLI)${C.reset}`);
   console.log(`   ${C.bGreen}• scripts/test-kit.sh${C.reset} ${C.dim}(atalho para execução direta no terminal)${C.reset}\n`);
 
   if (options.interactivePromptTest && canPromptInteractively()) {
@@ -852,7 +1036,7 @@ function runGraphify(targetDir) {
 }
 
 function runHealth(targetDir) {
-  console.log(`\n${C.bCyan}╭─ 🩺 Diagnóstico do Ambiente & Ferramentas ──────────────────────────────╮${C.reset}`);
+  console.log(`\n${C.bCyan}╭─ 🩺 Diagnóstico do Ambiente & Ferramentas (Multi-LSP) ─────────────────╮${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}                                                                        ${C.bCyan}│${C.reset}`);
   
   const checks = [
@@ -861,16 +1045,24 @@ function runHealth(targetDir) {
     { name: 'graphify CLI', cmd: 'graphify --version' }
   ];
 
-  if (fs.existsSync(path.join(targetDir, 'go.mod'))) {
-    checks.push({ name: 'gopls (Go LSP)', cmd: 'gopls version' });
-  }
-
   for (const c of checks) {
     try {
       const out = execSync(c.cmd, { encoding: 'utf8', timeout: 5000 }).trim().split('\n')[0];
-      console.log(`${C.bCyan}│${C.reset}   ${C.bGreen}✔ ${c.name.padEnd(18)}:${C.reset} ${C.white}${out}${C.reset}`);
+      console.log(`${C.bCyan}│${C.reset}   ${C.bGreen}✔ ${c.name.padEnd(22)}:${C.reset} ${C.white}${out}${C.reset}`);
     } catch {
-      console.log(`${C.bCyan}│${C.reset}   ${C.bRed}✖ ${c.name.padEnd(18)}:${C.reset} ${C.bRed}Não encontrado no PATH${C.reset}`);
+      console.log(`${C.bCyan}│${C.reset}   ${C.bRed}✖ ${c.name.padEnd(22)}:${C.reset} ${C.bRed}Não encontrado no PATH${C.reset}`);
+    }
+  }
+
+  const lsp = new LspEngine(targetDir);
+  const detectedStacks = lsp.detectProjectStacks(targetDir);
+  for (const st of detectedStacks) {
+    const label = `LSP ${st.id.toUpperCase()}`;
+    if (st.activeBinary) {
+      const ver = lsp.getBinaryVersion(st.activeBinary) || 'Ativo';
+      console.log(`${C.bCyan}│${C.reset}   ${C.bGreen}✔ ${label.padEnd(22)}:${C.reset} ${C.white}${st.activeBinary} (${ver.slice(0, 36)})${C.reset}`);
+    } else {
+      console.log(`${C.bCyan}│${C.reset}   ${C.bRed}✖ ${label.padEnd(22)}:${C.reset} ${C.bRed}Ausente (instale: ${st.installCmd})${C.reset}`);
     }
   }
 
@@ -882,8 +1074,8 @@ function runHealth(targetDir) {
   const hooksOk = fs.existsSync(hooksJson) && fs.existsSync(hookPretool);
   const gitOk = fs.existsSync(gitHooks);
 
-  console.log(`${C.bCyan}│${C.reset}   ${hooksOk ? C.bGreen + '✔' : C.bYellow + '⚠'} ${'Hard Gates Hook'.padEnd(18)}: ${hooksOk ? C.bGreen + 'Ativo (.agents/hooks.json)' : C.bYellow + 'Não configurado'}${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   ${gitOk ? C.bGreen + '✔' : C.bYellow + '⚠'} ${'Git Auto-Heal'.padEnd(18)}: ${gitOk ? C.bGreen + 'Instalado (.git/hooks/)' : C.bYellow + 'Ausente'}${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   ${hooksOk ? C.bGreen + '✔' : C.bYellow + '⚠'} ${'Hard Gates Hook'.padEnd(22)}: ${hooksOk ? C.bGreen + 'Ativo (.agents/hooks.json)' : C.bYellow + 'Não configurado'}${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   ${gitOk ? C.bGreen + '✔' : C.bYellow + '⚠'} ${'Git Auto-Heal'.padEnd(22)}: ${gitOk ? C.bGreen + 'Instalado (.git/hooks/)' : C.bYellow + 'Ausente'}${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}                                                                        ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}╰────────────────────────────────────────────────────────────────────────╯${C.reset}\n`);
 }
@@ -927,6 +1119,26 @@ async function runUninstall(targetDir) {
   }
 }
 
+function runUpdate(targetDir, extraFlags = []) {
+  const kitDir = path.resolve(__dirname);
+  const candidates = [
+    path.join(kitDir, 'gsd-update.cjs'),
+    path.join(targetDir, '.agents', 'kit', 'gsd-update.cjs'),
+    path.join(targetDir, 'gsd-update.cjs')
+  ];
+  const updaterPath = candidates.find(p => fs.existsSync(p));
+  if (!updaterPath) {
+    console.error(`\n${C.bRed}❌ Script gsd-update.cjs não encontrado.${C.reset}\n`);
+    return;
+  }
+  spawnSync(process.execPath, [updaterPath, targetDir, ...extraFlags], { stdio: 'inherit' });
+}
+
+function runErrors(targetDir) {
+  const list = ErrorGuard.listErrors(targetDir);
+  console.log('\n' + ErrorGuard.formatErrorList(list) + '\n');
+}
+
 async function interactiveMenuLoop(targetDir) {
   let running = true;
   while (running) {
@@ -934,17 +1146,20 @@ async function interactiveMenuLoop(targetDir) {
     renderHubBanner(targetDir);
 
     console.log(`   ${C.bCyan}[1]${C.reset} 📦 ${C.bold}Instalar / Reconfigurar Kit${C.reset} ${C.dim}(Backend ou Fullstack)${C.reset}`);
-    console.log(`   ${C.bCyan}[2]${C.reset} 🧪 ${C.bold}Executar Bateria de Testes${C.reset} ${C.dim}(58 testes do test-kit)${C.reset}`);
+    console.log(`   ${C.bCyan}[2]${C.reset} 🧪 ${C.bold}Executar Bateria de Testes${C.reset} ${C.dim}(Suíte completa test-kit)${C.reset}`);
     console.log(`   ${C.bCyan}[3]${C.reset} ⚡ ${C.bold}Alternar Perfil de Skills${C.reset} ${C.dim}(Core • Backend • Fullstack)${C.reset}`);
     console.log(`   ${C.bCyan}[4]${C.reset} 📊 ${C.bold}Relatório de Economia de Tokens${C.reset} ${C.dim}(Telemetria token-report)${C.reset}`);
     console.log(`   ${C.bCyan}[5]${C.reset} 🧹 ${C.bold}Compactar Estado & Histórico${C.reset} ${C.dim}(STATE.md)${C.reset}`);
     console.log(`   ${C.bCyan}[6]${C.reset} 🕸️  ${C.bold}Atualizar Grafo de Código${C.reset} ${C.dim}(Graphify sync manual)${C.reset}`);
-    console.log(`   ${C.bCyan}[7]${C.reset} 🩺 ${C.bold}Diagnóstico & Health Check${C.reset} ${C.dim}(ast-grep, node, graphify, gopls)${C.reset}`);
+    console.log(`   ${C.bCyan}[7]${C.reset} 🩺 ${C.bold}Diagnóstico & Health Check${C.reset} ${C.dim}(ast-grep, node, graphify, Multi-LSP)${C.reset}`);
     console.log(`   ${C.bCyan}[8]${C.reset} 🩹 ${C.bold}Auto-Cura & Reparo Rápido${C.reset} ${C.dim}(Reaplicar patches e regras)${C.reset}`);
     console.log(`   ${C.bCyan}[9]${C.reset} 🗑️  ${C.bold}Desinstalar / Reverter Workspace${C.reset}`);
+    console.log(`   ${C.bCyan}[10]${C.reset} 🧠 ${C.bold}Instalar Servidores LSP por Linguagem${C.reset} ${C.dim}(20 ecossistemas)${C.reset}`);
+    console.log(`   ${C.bCyan}[11]${C.reset} 🔄 ${C.bold}Verificar / Atualizar GSD Kit${C.reset} ${C.dim}(/gsd-agy-update + Changelog)${C.reset}`);
+    console.log(`   ${C.bCyan}[12]${C.reset} 🛑 ${C.bold}Visualizar Log de Erros${C.reset} ${C.dim}(Central ErrorGuard .agents/.cache/error-log.json)${C.reset}`);
     console.log(`   ${C.bCyan}[0]${C.reset} 🚪 ${C.dim}Sair${C.reset}\n`);
 
-    const choice = await askPrompt(`   ${C.bold}Escolha uma opção [0-9]: ${C.reset}`);
+    const choice = await askPrompt(`   ${C.bold}Escolha uma opção [0-12]: ${C.reset}`);
 
     switch (choice) {
       case '1':
@@ -974,6 +1189,15 @@ async function interactiveMenuLoop(targetDir) {
       case '9':
         await runUninstall(targetDir);
         break;
+      case '10':
+        await promptAndInstallLsps(targetDir);
+        break;
+      case '11':
+        runUpdate(targetDir);
+        break;
+      case '12':
+        runErrors(targetDir);
+        break;
       case '0':
       case 'q':
       case 'sair':
@@ -1000,16 +1224,16 @@ async function main() {
   let command = '';
   let extraArg = '';
 
-  const flagOnlyArgs = new Set(['--cleanup', '--no-cleanup', '--frontend', '--no-frontend']);
+  const flagOnlyArgs = new Set(['--cleanup', '--no-cleanup', '--frontend', '--no-frontend', '--yes', '-y', '--check', '--json', '--force']);
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a.startsWith('--')) {
+    if (a.startsWith('-')) {
       if (flagOnlyArgs.has(a)) continue;
       if (a.startsWith('--has-frontend=')) continue;
       if (!command) {
         command = a;
-        if (args[i + 1] && !args[i + 1].startsWith('--')) {
+        if (args[i + 1] && !args[i + 1].startsWith('-')) {
           extraArg = args[i + 1];
           i++;
         }
@@ -1038,6 +1262,10 @@ async function main() {
   const noCleanup = args.includes('--no-cleanup');
 
   // Despacho de Comandos Diretos (CLI / Não-Interativo)
+  if (command === '--errors' || command === '--error-log') {
+    runErrors(targetDir);
+    return;
+  }
   if (command === '--test') {
     runTest(targetDir);
     return;
@@ -1064,6 +1292,19 @@ async function main() {
   }
   if (command === '--doctor') {
     runDoctor(targetDir);
+    return;
+  }
+  if (command === '--lsp') {
+    await promptAndInstallLsps(targetDir);
+    return;
+  }
+  if (command === '--update' || command === '--check-update') {
+    const updateFlags = [];
+    if (command === '--check-update' || args.includes('--check')) updateFlags.push('--check');
+    if (args.includes('--yes') || args.includes('-y')) updateFlags.push('--yes');
+    if (args.includes('--json')) updateFlags.push('--json');
+    if (args.includes('--force')) updateFlags.push('--force');
+    runUpdate(targetDir, updateFlags);
     return;
   }
   if (command === '--uninstall') {

@@ -47,6 +47,16 @@ function writeJsonAtomic(filePath, data) {
   } catch {}
 }
 
+function findLibModule(name) {
+  const candidates = [
+    path.resolve(__dirname, '..', 'lib', name),
+    path.resolve(__dirname, '..', 'kit', 'lib', name),
+    path.join(PROJECT_ROOT, '.agents', 'lib', name),
+    path.join(PROJECT_ROOT, 'lib', name)
+  ];
+  return candidates.find(p => fs.existsSync(p)) || null;
+}
+
 function verifyToolsHealth() {
   const now = Date.now();
   try {
@@ -62,17 +72,27 @@ function verifyToolsHealth() {
   let health;
   try {
     try {
-      execSync('ast-grep --version', { stdio: 'ignore', timeout: 5000 });
+      execSync('ast-grep --version', { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000, encoding: 'utf8' });
     } catch {
-      execSync('npx -y --package @ast-grep/cli ast-grep --version', { stdio: 'ignore', timeout: 10000 });
+      execSync('npx -y --package @ast-grep/cli ast-grep --version', { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10000, encoding: 'utf8' });
     }
-    execSync('graphify --version', { stdio: 'ignore', timeout: 10000 });
-    if (fs.existsSync(path.join(PROJECT_ROOT, 'go.mod'))) {
-      execSync('gopls version', { stdio: 'ignore', timeout: 10000 });
+    execSync('graphify --version', { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10000, encoding: 'utf8' });
+
+    const lspPath = findLibModule('lsp-engine.cjs');
+    if (lspPath) {
+      const LspEngine = require(lspPath);
+      const lsp = new LspEngine(PROJECT_ROOT);
+      const stackHealth = lsp.checkStackHealth(PROJECT_ROOT);
+      if (!stackHealth.ok) {
+        throw new Error(stackHealth.error);
+      }
+    } else if (fs.existsSync(path.join(PROJECT_ROOT, 'go.mod'))) {
+      execSync('gopls version', { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10000, encoding: 'utf8' });
     }
     health = { ok: true };
   } catch (err) {
-    health = { ok: false, error: err.message };
+    const errDetail = (err.stderr ? err.stderr.toString().trim() : '') || err.message;
+    health = { ok: false, error: errDetail };
   }
 
   writeJsonAtomic(HEALTH_CACHE_FILE, { timestamp: now, health });
@@ -218,11 +238,25 @@ async function main() {
   // 0. Circuit Breaker check
   const health = verifyToolsHealth();
   if (!health.ok) {
+    const egMod = findLibModule('error-guard.cjs');
+    if (egMod) {
+      try {
+        const ErrorGuard = require(egMod);
+        ErrorGuard.emitError(PROJECT_ROOT, {
+          category: 'LSP',
+          component: 'circuit-breaker',
+          title: 'Circuit Breaker Acionado: Ferramenta essencial ou LSP inoperante',
+          stderr: health.error || '',
+          hint: 'Instale ast-grep/graphify ou o compilador/LSP correspondente à stack do projeto.',
+          severity: 'error'
+        });
+      } catch {}
+    }
     return respond(
       'deny',
       '🛑 CIRCUIT BREAKER ACIONADO (HARD STOP):\n' +
-      'Uma das ferramentas obrigatórias (ast-grep ou graphify) não respondeu ou falhou no teste de execução.\n' +
-      'Conforme a Regra 5 do Projeto, todas as ações estão INTERROMPIDAS imediatamente até que as ferramentas estejam operacionais.\n' +
+      'Uma das ferramentas obrigatórias (ast-grep, graphify ou LSP da stack do projeto) não respondeu ou falhou no teste de execução.\n' +
+      'Conforme a Regra 5 do Projeto e o Modo Rigoroso de Erros, todas as ações estão INTERROMPIDAS imediatamente até que as ferramentas estejam operacionais.\n' +
       `Detalhes do erro: ${health.error}`
     );
   }
@@ -245,6 +279,23 @@ async function main() {
   currentToolName = toolName;
   currentArgs = args;
 
+function recordTokenSaving(category, estimatedTokens = 500) {
+  try {
+    const candidates = [
+      path.resolve(__dirname, '..', 'lib', 'token-savings.cjs'),
+      path.resolve(__dirname, '..', 'kit', 'lib', 'token-savings.cjs'),
+      path.join(PROJECT_ROOT, '.agents', 'lib', 'token-savings.cjs'),
+      path.join(PROJECT_ROOT, 'lib', 'token-savings.cjs')
+    ];
+    const modPath = candidates.find(p => fs.existsSync(p));
+    if (modPath) {
+      const TokenSavingsTracker = require(modPath);
+      const tracker = new TokenSavingsTracker(PROJECT_ROOT);
+      tracker.recordSaving(category, estimatedTokens);
+    }
+  } catch {}
+}
+
   // 1. Gate for view_file
   if (toolName === 'view_file') {
     const rawTarget = sanitizePath(args.AbsolutePath || args.TargetFile || args.path || '');
@@ -256,6 +307,17 @@ async function main() {
         'deny',
         '🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: A leitura bruta do STATE.md gasta milhares de tokens inúteis em formatação de tabelas Markdown.\n' +
         'Utilize o script de sumário rodando o comando: node .agents/kit/gsd-state-summary.cjs (ou node gsd-state-summary.cjs ou cat .planning/state_summary.json)'
+      );
+    }
+
+    // Secret Shield Gate (.env* reais bloqueados; .env.example/.sample/.template permitidos)
+    const baseTargetName = path.basename(target);
+    if (/^\.env(?:\.(?!example$|sample$|template$)[a-zA-Z0-9_-]+)?$/i.test(baseTargetName)) {
+      recordTokenSaving('secret_shield', 400);
+      return respond(
+        'deny',
+        '🛑 SECRET SHIELD (PROTEÇÃO DE SEGREDOS E TOKENS): É proibido ler arquivos .env diretamente com view_file para evitar exposição de credenciais no contexto!\n' +
+        'Utilize a lente segura que mascara valores sensíveis: node .agents/mcp-server.cjs env (ou tool MCP env_skeleton).'
       );
     }
 
@@ -286,7 +348,7 @@ async function main() {
       }
     }
 
-    const isCodeFile = /\.(go|ts|tsx|js|jsx|py|java|c|cpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|sql|dart)$/i.test(target);
+    const isCodeFile = /\.(go|ts|tsx|js|jsx|cjs|mjs|py|java|c|cpp|cc|cxx|h|hpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|sql|dart|lua|sh|bash|ex|exs|tf)$/i.test(target);
 
     // If it's a documentation/config file or planning artifact, allow directly
     if (!isCodeFile) {
@@ -313,17 +375,30 @@ async function main() {
 
     // Dicas específicas por stack de linguagem
     const ext = path.extname(target).toLowerCase();
-    let langToolHint = "Use busca cirúrgica ou ast-grep run -p '<padrão>'";
+    const lspCmd = "node .agents/mcp-server.cjs lsp <definition|references|hover|diagnostics>";
+    let langToolHint = `Use ${lspCmd} ou ast-grep run -p '<padrão>'`;
     if (ext === '.go') {
-      langToolHint = "Use gopls (CLI/MCP) ou ast-grep run -p '<padrão>' --lang go";
+      langToolHint = `Use gopls / ${lspCmd} ou ast-grep run -p '<padrão>' --lang go`;
     } else if (['.js', '.jsx', '.cjs', '.mjs'].includes(ext)) {
-      langToolHint = "Use ast-grep run -p '<padrão>' --lang js ou busca textual cirúrgica";
+      langToolHint = `Use ${lspCmd} ou ast-grep run -p '<padrão>' --lang js`;
     } else if (['.ts', '.tsx'].includes(ext)) {
-      langToolHint = "Use ast-grep run -p '<padrão>' --lang ts ou busca textual cirúrgica";
+      langToolHint = `Use ${lspCmd} ou ast-grep run -p '<padrão>' --lang ts`;
     } else if (ext === '.py') {
-      langToolHint = "Use ast-grep run -p '<padrão>' --lang py ou busca textual cirúrgica";
+      langToolHint = `Use ${lspCmd} ou ast-grep run -p '<padrão>' --lang py`;
     } else if (ext === '.rs') {
-      langToolHint = "Use ast-grep run -p '<padrão>' --lang rust ou busca textual cirúrgica";
+      langToolHint = `Use ${lspCmd} ou ast-grep run -p '<padrão>' --lang rust`;
+    } else if (ext === '.php') {
+      langToolHint = `Use ${lspCmd} ou ast-grep run -p '<padrão>' --lang php`;
+    } else if (['.c', '.cpp', '.cc', '.cxx', '.h', '.hpp'].includes(ext)) {
+      langToolHint = `Use ${lspCmd} ou ast-grep run -p '<padrão>' --lang cpp`;
+    } else if (ext === '.java') {
+      langToolHint = `Use ${lspCmd} ou ast-grep run -p '<padrão>' --lang java`;
+    } else if (ext === '.cs') {
+      langToolHint = `Use ${lspCmd} ou ast-grep run -p '<padrão>' --lang cs`;
+    } else if (ext === '.rb') {
+      langToolHint = `Use ${lspCmd} ou ast-grep run -p '<padrão>' --lang rb`;
+    } else if (ext === '.dart') {
+      langToolHint = `Use ${lspCmd} ou ast-grep run -p '<padrão>' --lang dart`;
     }
 
     const outlineScriptPath = fs.existsSync(path.join(PROJECT_ROOT, '.agents', 'kit', 'gsd-outline.cjs'))
@@ -358,6 +433,7 @@ async function main() {
           StartLine: startLine,
           EndLine: endLine
         });
+        recordTokenSaving('auto_slice', Math.max(200, (fileTotalLines - (endLine - startLine + 1)) * 10));
       } else {
         return respond(
           'deny',
@@ -385,6 +461,7 @@ async function main() {
           StartLine: startLine,
           EndLine: endLine
         });
+        recordTokenSaving('auto_slice', Math.max(200, (range - 100) * 10));
       } else {
         return respond(
           'deny',
@@ -418,6 +495,7 @@ async function main() {
           lastRead.endLine === endLine &&
           lastRead.mtime === fileMtime &&
           (now - lastRead.timestamp) < 60000) {
+        recordTokenSaving('dedup_block', Math.max(150, (endLine - startLine + 1) * 10));
         return respond(
           'deny',
           `ℹ️ DEDUPLICAÇÃO DE LEITURAS (ECONOMIA DE TOKENS):\n` +
@@ -443,7 +521,19 @@ async function main() {
   // 2. Gate for run_command dumping code or verbose logs or mass rewrites
   if (toolName === 'run_command' || toolName === 'bash' || toolName === 'shell') {
     const cmd = typeof args.CommandLine === 'string' ? args.CommandLine : (typeof args.command === 'string' ? args.command : '');
-    const isRawCodeDump = /(?:^|[;&|(]\s*|&&\s*)(cat|type|Get-Content|gc|head|tail|less|more|bat|nl)\s+[^\n|><]+\.(go|ts|tsx|js|jsx|py|java|c|cpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|sql|dart)\b/i.test(cmd);
+
+    // 2.0 Secret Shield Gate para despejo de .env no terminal
+    const isEnvDump = /(?:^|[;&|(]\s*|&&\s*)(cat|type|Get-Content|gc|head|tail|less|more|bat|nl)\s+[^\n|><]*?(?:^|[\\/\s"'])\.env(?:\.(?!example\b|sample\b|template\b)[a-zA-Z0-9_-]+)?(?:\s|$|["'|><;&])/i.test(cmd);
+    if (isEnvDump) {
+      recordTokenSaving('secret_shield', 400);
+      return respond(
+        'deny',
+        '🛑 SECRET SHIELD (PROTEÇÃO DE SEGREDOS): Não despeje arquivos .env no console com cat/type/Get-Content/head!\n' +
+        'Utilize a lente segura que mascara valores sensíveis: node .agents/mcp-server.cjs env (ou tool MCP env_skeleton).'
+      );
+    }
+
+    const isRawCodeDump = /(?:^|[;&|(]\s*|&&\s*)(cat|type|Get-Content|gc|head|tail|less|more|bat|nl)\s+[^\n|><]+\.(go|ts|tsx|js|jsx|cjs|mjs|py|java|c|cpp|cc|cxx|h|hpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|sql|dart|lua|sh|bash|ex|exs|tf)\b/i.test(cmd);
 
     if (isRawCodeDump) {
       return respond(
@@ -451,8 +541,8 @@ async function main() {
         '🛑 BLOQUEIO DE TOKENS: Não despeje código bruto no console com cat/type/Get-Content/head!\n' +
         'Utilize:\n' +
         '- graphify query "<pergunta>" para arquitetura e relações.\n' +
-        '- gopls MCP (go_search, go_package_api) para assinaturas e tipos.\n' +
-        '- ast-grep run -p \'<padrão>\' --lang go para busca sintática.'
+        '- Multi-LSP Híbrido: node .agents/mcp-server.cjs lsp <definition|references|hover|symbols|diagnostics> (ou tools MCP lsp_*).\n' +
+        '- ast-grep run -p \'<padrão>\' para busca sintática.'
       );
     }
 
@@ -502,29 +592,62 @@ async function main() {
     let sanitizedCmd = cmd;
     let sanitizedCwd = args.Cwd;
     let cmdChanged = false;
+    let limiterApplied = false;
 
     if (/(?:^|[;&|(]\s*|&&\s*)git\s+log\b/i.test(sanitizedCmd) && !/(-n\b|--max-count\b|-\d)/i.test(sanitizedCmd)) {
       sanitizedCmd = sanitizedCmd.replace(/(^|[;&|(]\s*|&&\s*)git\s+log\b/i, '$1git log -n 20');
       cmdChanged = true;
+      limiterApplied = true;
     }
     if (/(?:^|[;&|(]\s*|&&\s*)docker(?:\s+compose)?\s+logs\b/i.test(sanitizedCmd) && !/(--tail\b|-n\b)/i.test(sanitizedCmd)) {
       sanitizedCmd = sanitizedCmd.replace(/((?:^|[;&|(]\s*|&&\s*)docker(?:\s+compose)?\s+logs\b)/i, '$1 --tail 100');
       cmdChanged = true;
+      limiterApplied = true;
     }
     // Auto-limitar varreduras recursivas em PowerShell sem profundidade (Get-ChildItem -Recurse sem -Depth)
     if (/(\b(?:Get-ChildItem|gci)\b[^|;\r\n]*?-Recurse\b)(?![^|;\r\n]*?-Depth\b)/i.test(sanitizedCmd)) {
       sanitizedCmd = sanitizedCmd.replace(/(\b(?:Get-ChildItem|gci)\b[^|;\r\n]*?-Recurse\b)(?![^|;\r\n]*?-Depth\b)/i, '$1 -Depth 3');
       cmdChanged = true;
+      limiterApplied = true;
     }
     // Auto-limitar find . sem -maxdepth
     if (/\bfind\s+(?:\.|\.\/)\s+/i.test(sanitizedCmd) && !/-maxdepth\b/i.test(sanitizedCmd)) {
       sanitizedCmd = sanitizedCmd.replace(/(\bfind\s+(?:\.|\.\/)\s+)/i, '$1-maxdepth 3 ');
       cmdChanged = true;
+      limiterApplied = true;
     }
     // Auto-limitar listagem prolixa de npm / pnpm
     if (/\b(?:npm|pnpm)\s+list\b/i.test(sanitizedCmd) && !/--depth\b/i.test(sanitizedCmd)) {
       sanitizedCmd = sanitizedCmd.replace(/(\b(?:npm|pnpm)\s+list\b)/i, '$1 --depth=0');
       cmdChanged = true;
+      limiterApplied = true;
+    }
+
+    if (limiterApplied) {
+      recordTokenSaving('command_limiter', 600);
+    }
+
+    // 2.4.1 Auto-Isolamento Proativo de Testes (TestIsolate via res.overwrite em modo smart-assist)
+    if (!cmdChanged && getKitMode() === 'smart-assist') {
+      try {
+        const tiCandidates = [
+          path.resolve(__dirname, '..', 'lib', 'test-isolate.cjs'),
+          path.resolve(__dirname, '..', 'kit', 'lib', 'test-isolate.cjs'),
+          path.join(PROJECT_ROOT, '.agents', 'lib', 'test-isolate.cjs'),
+          path.join(PROJECT_ROOT, 'lib', 'test-isolate.cjs')
+        ];
+        const tiPath = tiCandidates.find(p => fs.existsSync(p));
+        if (tiPath) {
+          const TestIsolate = require(tiPath);
+          const ti = new TestIsolate(PROJECT_ROOT);
+          const isolatedCmd = ti.getProactiveOverwrite(sanitizedCmd);
+          if (isolatedCmd) {
+            sanitizedCmd = isolatedCmd;
+            cmdChanged = true;
+            recordTokenSaving('test_isolate', 1500);
+          }
+        }
+      } catch {}
     }
 
     // 2.5 Normalização de caminhos Windows com barras invertidas (PowerShell / Windows)
@@ -575,7 +698,7 @@ async function main() {
   if (toolName === 'write_to_file' || toolName === 'write') {
     const rawTarget = sanitizePath(args.TargetFile || args.path || args.file_path || args.filePath || '');
     const target = path.resolve(rawTarget);
-    const isCodeFile = /\.(go|ts|tsx|js|jsx|py|java|c|cpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|sql|dart)$/i.test(target);
+    const isCodeFile = /\.(go|ts|tsx|js|jsx|cjs|mjs|py|java|c|cpp|cc|cxx|h|hpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|sql|dart|lua|sh|bash|ex|exs|tf)$/i.test(target);
     const isScratchOrTemp = /[\\/](\.cache|\.agents[\\/](scratch|temp|tmp)|brain[\\/][^\\/]+[\\/]scratch)[\\/]/i.test(target) || /[\\/]scratch[\\/]/i.test(target);
     const overwrite = args.Overwrite === true || args.overwrite === true;
 
