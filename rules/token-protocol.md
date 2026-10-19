@@ -1,6 +1,6 @@
 ---
 trigger: always_on
-description: Protocolo JIT de economia de tokens, diagnóstico test-driven, criação atômica e diffs cirúrgicos.
+description: Protocolo JIT de economia de tokens, diagnóstico test-driven, criação atômica, diffs cirúrgicos e verificação enxuta.
 ---
 
 # Protocolo de Economia de Tokens e Diagnóstico JIT
@@ -28,3 +28,9 @@ description: Protocolo JIT de economia de tokens, diagnóstico test-driven, cria
 ## 4. Memória Contínua e Circuit Breaker
 - Ao validar uma solução de bug ou decisão arquitetural: `node .agents/mcp-server.cjs capture <decisions|problems> "<tópico>" "<conteúdo>"`.
 - Circuit Breaker: `ast-grep`, `graphify` e o verificador da linguagem devem estar operacionais para garantir a blindagem do repositório.
+
+## 5. Fase de Verificação Enxuta (Frugal Verification Protocol)
+- Em fases ou instruções de verificação (`Verification`, `npm test`, validação final de testes):
+  - Execute estritamente o comando de teste.
+  - Se todos os testes passarem (100% verde), encerre o turno de forma concisa e direta, SEM convocar leituras adicionais, queries no banco ou ferramentas auxiliares redundantes.
+  - Invoque inspeção de código ou ferramentas MCP apenas se houver falhas ativas remanescentes a serem corrigidas.

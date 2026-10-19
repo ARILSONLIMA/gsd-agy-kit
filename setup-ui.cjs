@@ -149,12 +149,22 @@ function getWorkspaceStatus(targetDir) {
   };
 }
 
+function getKitVersion() {
+  try {
+    const pkgData = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+    return pkgData.version || '1.7.0';
+  } catch (_) {
+    return '1.7.0';
+  }
+}
+
 function renderHubBanner(targetDir) {
   const status = getWorkspaceStatus(targetDir);
   const statusBadge = status.isInstalled ? `${C.bGreen}[🟢 Blindado & Operacional]${C.reset}` : `${C.bYellow}[⚪ Não Configurado]${C.reset}`;
+  const ver = getKitVersion();
   
   console.log(`\n${C.bCyan}╭────────────────────────────────────────────────────────────────────────╮${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT - PAINEL DE CONTROLE v1.5.0${C.reset}                   ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT - PAINEL DE CONTROLE v${ver}${C.reset}                   ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.dim}Workspace:${C.reset} ${C.white}${targetDir}${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.dim}Status:${C.reset}    ${statusBadge}  •  ${C.dim}Stack:${C.reset} ${C.bWhite}${status.stack}${C.reset}`);
   if (status.isInstalled) {
@@ -168,8 +178,9 @@ function renderHubBanner(targetDir) {
 }
 
 function renderBanner() {
+  const ver = getKitVersion();
   console.log(`\n${C.bCyan}╭────────────────────────────────────────────────────────────────────────╮${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT v1.5.0${C.reset}                                        ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   ${C.bold}${C.bWhite}🚀 ANTIGRAVITY GSD KIT v${ver}${C.reset}                                        ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.dim}Adaptador de Governança, Compatibilidade e Auto-Cura para Antigravity${C.reset}${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}╰────────────────────────────────────────────────────────────────────────╯${C.reset}\n`);
 }

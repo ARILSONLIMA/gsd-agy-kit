@@ -2,6 +2,18 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [1.7.0] - 2026-10-19
+- **Guardrails Avançados de Arquitetura & Paridade de Rotas (`rules/quality-guardrails.md`):**
+  - **Padrões Anti-N+1 Mandatórios com Código:** Exemplos práticos exigindo subconsultas correlacionadas `(SELECT ...)` ou pré-carregamento em batch com `Map<id, data>` em $O(1)$ para eliminar queries em laços.
+  - **Simetria de Estado Bidirecional (`State Symmetry Guardrail`):** Obrigatória implementação do caminho reverso (`else`) para desbloquear entidades (`blocked = 0`, `active = 1`) quando as condições de suspensão deixarem de ser atendidas (ex: expiração de pontos, deferimento de recurso ou quitação).
+  - **Paridade de Segurança em Rotas HTTP (`Route Security Parity`):** Travas de integridade e regras de imutabilidade (ex: não alterar ocorrências concluídas) devem ser aplicadas simetricamente em todas as rotas mutatórias (`PUT`, `PATCH`, `PATCH /status`, `DELETE`).
+  - **Filtro Mandatório de Registros Ativos (`active = 1`):** Verificação compulsória de colunas de exclusão lógica/status em tabelas de domínio (`lines`, `drivers`, `vehicles`) em agregações e relatórios analíticos.
+  - **Normalização Temporal e Fuso Horário UTC:** Normalização mandatória de carimbos SQLite/SQL para formato ISO 8601 UTC (`'T'` e `'Z'`) antes de instanciar `new Date()`, eliminando desvios de fuso horário local.
+- **Protocolo de Verificação Enxuta (`rules/token-protocol.md`):**
+  - Fim do consumo excessivo de tokens na Fase 4 (Verification): instrução estrita para encerramento conciso e imediato quando os testes passarem com 100%, sem invocar ferramentas redundantes.
+- **Painel de Controle e Versão Dinâmica (`setup-ui.cjs`):**
+  - Cabeçalhos e banners sincronizados dinamicamente com o `package.json`.
+
 ## [1.6.0] - 2026-10-19
 - **Guardrails Universais de Robustez & Código de Alta Performance (`rules/quality-guardrails.md`):**
   - **Zero N+1 em Banco de Dados:** Proibição mandatória de leituras e queries ORM dentro de loops (`for`, `map`, `forEach`). Exigência de pré-carregamento em `Map` $O(1)$ ou resolução via `SQL JOIN` / cláusula `IN (...)`.
