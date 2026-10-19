@@ -8,6 +8,12 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="${1:-}"
 
+if [ "$TARGET_DIR" = "--help" ] || [ "$TARGET_DIR" = "-h" ]; then
+    echo -e "Uso: ./test-kit.sh [DIRETÓRIO_ALVO]"
+    echo -e "Executa a suíte de validação e autoteste da infraestrutura gsd-agy-kit."
+    exit 0
+fi
+
 if [ -z "$TARGET_DIR" ]; then
     if [[ "$SCRIPT_DIR" == *"/.agents/kit" ]]; then
         TARGET_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -32,6 +38,10 @@ if [ -z "$TARGET_DIR" ]; then
         KIT_DIR="${SCRIPT_DIR}"
     fi
 else
+    if [ ! -d "$TARGET_DIR" ]; then
+        echo -e "\n\033[0;31m🛑 [Erro] Diretório alvo não encontrado: ${TARGET_DIR}\033[0m\n"
+        exit 1
+    fi
     TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
     if [[ "$SCRIPT_DIR" == *"/.agents/kit" ]]; then
         KIT_DIR="${SCRIPT_DIR}"

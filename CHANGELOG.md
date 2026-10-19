@@ -2,6 +2,22 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [1.6.0] - 2026-10-19
+- **Guardrails Universais de Robustez & Código de Alta Performance (`rules/quality-guardrails.md`):**
+  - **Zero N+1 em Banco de Dados:** Proibição mandatória de leituras e queries ORM dentro de loops (`for`, `map`, `forEach`). Exigência de pré-carregamento em `Map` $O(1)$ ou resolução via `SQL JOIN` / cláusula `IN (...)`.
+  - **Tipagem Defensiva em Requisições HTTP:** Coerção numérica explícita (`Number(val)` / `parseInt(val, 10)`) em identificadores e status antes de comparações estritas (`===`, `!==`) ou operações matemáticas.
+  - **Transações Atômicas:** Envolvimento de escritas multi-tabelas ou registros de histórico em transações (`BEGIN` / `COMMIT`).
+  - **Prepared Statements (Anti-SQLi):** Proibição estrita de interpolação de strings em consultas SQL.
+  - **Auditoria de Estado Inicial:** Fallback em `created_at` para entidades criadas diretamente em status de pausa/bloqueio sem histórico de transição.
+  - **Status HTTP Semânticos & Tratamento de Erros:** Proibição de swallowing silencioso de exceções e padronização semântica (`201`, `200`, `204`, `400`, `404`, `409`).
+  - **Documentação Equilibrada:** JSDoc conciso (2-4 linhas) e atualização estrita de especificações quando houver mudança de contrato público.
+- **Protocolo de Diagnóstico JIT & Fim do Tool-Chaining Rígido (`rules/token-protocol.md` e `patch-agents.cjs`):**
+  - Substituição da esteira burocrática fixa por protocolo *Test-Driven JIT* (executar testes primeiro para guiar a correção pelo erro real).
+  - Autorização e instrução explícitas para criação atômica de arquivos 100% NOVOS via `write_to_file` em uma única chamada.
+  - Manutenção de diffs cirúrgicos estritos (`replace_file_content`) para arquivos existentes.
+- **Compactação de Cold Start das Regras (`rules/*.md`):**
+  - Redução maciça no cold start das regras em `.agents/rules/` (economia de ~1.100 tokens por turno).
+
 ## [1.5.0] - 2026-10-19
 - **Controle Rigoroso Contra Erros (ErrorGuard, Zero Silent Fallbacks & Visibilidade Tripla):**
   - Eliminação de fallbacks silenciosos e `catch {}` mudos em toda a suíte.

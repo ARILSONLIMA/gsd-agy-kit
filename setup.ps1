@@ -402,6 +402,13 @@ if (Test-Path $kitLibDir) {
     Copy-Item -Path "$kitLibDir\*" -Destination $targetScriptsLibDir -Recurse -Force
 }
 
+$kitRulesSrc = Join-Path $kitDir "rules"
+if (Test-Path $kitRulesSrc) {
+    $targetKitRules = Join-Path $targetKitDir "rules"
+    New-Item -ItemType Directory -Path $targetKitRules -Force | Out-Null
+    Copy-Item -Path "$kitRulesSrc\*" -Destination $targetKitRules -Recurse -Force
+}
+
 $kitScripts = @("test-kit.ps1", "test-kit.sh", "setup-ui.cjs", "setup.ps1", "setup.sh", "install.ps1", "install.sh", "package.json", "CHANGELOG.md", "uninstall.ps1", "uninstall.sh", "skills-profile.ps1", "skills-profile.sh", "optimize-tokens.ps1", "optimize-tokens.sh", "sanitize-command.ps1", "token-report.cjs", "gsd-update.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs", "patch-agents.cjs", "optimize-tokens.cjs", "skills-manager.cjs", "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs", "shrink-prompts.cjs", "gsd-outline.cjs", "gsd-read-strip.cjs", "mcp-server.cjs")
 foreach ($sName in $kitScripts) {
     $src = Join-Path $kitDir $sName
