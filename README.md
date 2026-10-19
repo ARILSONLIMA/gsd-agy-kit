@@ -137,11 +137,11 @@ Execute diretamente na pasta raiz do seu projeto GSD (não deixa nenhuma pasta r
 
 ```bash
 # Interativo (pergunta Backend vs Fullstack)
-npx github:ARILSONLIMA/gsd-agy-kit
+npx --yes --allow-git=all github:ARILSONLIMA/gsd-agy-kit
 
 # Não-interativo (direto para Backend ou Fullstack)
-npx github:ARILSONLIMA/gsd-agy-kit --no-frontend
-npx github:ARILSONLIMA/gsd-agy-kit --frontend
+npx --yes --allow-git=all github:ARILSONLIMA/gsd-agy-kit --no-frontend
+npx --yes --allow-git=all github:ARILSONLIMA/gsd-agy-kit --frontend
 ```
 
 ### 🐧 Opção 2: One-Liner via `curl` (Linux / macOS / WSL)
