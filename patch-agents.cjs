@@ -32,7 +32,7 @@ function detectStack(targetDir) {
   const hasPy = hasFile('pyproject.toml') || hasFile('requirements.txt');
 
   const detected = [];
-  if (hasGo) detected.push({ name: 'Go', lsp: 'gopls MCP (via call_mcp_tool)', lang: 'go', testCmd: 'go test -v' });
+  if (hasGo) detected.push({ name: 'Go', lsp: 'gopls CLI / MCP (ou view_skeleton via mcp-server.cjs)', lang: 'go', testCmd: 'go test -v' });
   if (hasTs) detected.push({ name: 'TypeScript/JavaScript', lsp: 'LSP / TypeScript MCP', lang: 'ts', testCmd: 'npm test -- --verbose' });
   if (hasPy) detected.push({ name: 'Python', lsp: 'Pyright / LSP MCP', lang: 'py', testCmd: 'pytest -vv' });
 

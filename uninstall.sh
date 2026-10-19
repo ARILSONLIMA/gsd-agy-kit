@@ -8,7 +8,9 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="${1:-}"
 if [ -z "$TARGET_DIR" ]; then
-    if [ "$(pwd)" = "$SCRIPT_DIR" ] || [[ "$(pwd)" == "$SCRIPT_DIR/"* ]]; then
+    if [[ "$SCRIPT_DIR" == *"/.agents/kit" ]]; then
+        TARGET_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+    elif [ "$(pwd)" = "$SCRIPT_DIR" ] || [[ "$(pwd)" == "$SCRIPT_DIR/"* ]]; then
         TARGET_DIR="$(dirname "$SCRIPT_DIR")"
     else
         TARGET_DIR="$(pwd)"
@@ -43,6 +45,7 @@ rm -f "${AGENTS_DIR}/rules/token-protocol.md"
 rm -f "${AGENTS_DIR}/rules/ast-grep.md"
 rm -f "${AGENTS_DIR}/rules/graphify.md"
 rm -f "${AGENTS_DIR}/rules/idioma.md"
+rm -f "${AGENTS_DIR}/rules/gopls.md"
 rm -f "${AGENTS_DIR}/.last-heal-check"
 rm -f "${AGENTS_DIR}/.health-cache"
 rm -f "${AGENTS_DIR}/.jit-promotions.json"
@@ -50,8 +53,11 @@ rm -f "${AGENTS_DIR}/.last-synced-phase"
 rm -rf "${AGENTS_DIR}/.cache"
 rm -rf "${AGENTS_DIR}/kit"
 rm -rf "${AGENTS_DIR}/skills/gsd-tokens"
+rm -rf "${AGENTS_DIR}/skills/gsd-test"
 rm -rf "${AGENTS_DIR}/tools/gsd-agy-kit"
 rm -rf "${AGENTS_DIR}/gsd-agy-kit"
+rm -f "${TARGET_DIR}/scripts/test-kit.sh"
+rm -f "${TARGET_DIR}/scripts/test-kit.ps1"
 echo -e "   \033[0;32m✅ Arquivos de hook, regras e caches removidos.\033[0m"
 
 # 3. Remover Git Hooks

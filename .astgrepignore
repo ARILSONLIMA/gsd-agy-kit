@@ -1,8 +1,8 @@
 # AST-Grep Ignore File
 gsd-agy-kit/
+graphify-out/
 .agents/
 .planning/
-.project/
 .cache/
 .gemini/
 node_modules/

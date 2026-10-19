@@ -1,14 +1,10 @@
 # Local caches and logs
-.agents/.cache/
-.agents/.recent-reads.json
-.agents/recent-reads.json
-.agents/tool-health.json
-.agents/.health-cache
-.agents/memory/*.db
-.agents/memory/*.db-journal
+.agents/
+
 
 # Temporary files
 *.tmp
 *.log
 .DS_Store
 node_modules/
+graphify-out/

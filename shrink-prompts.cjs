@@ -17,12 +17,14 @@ function minifyMarkdown(content) {
 }
 
 function processDirectory(dir) {
-  if (!fs.existsSync(dir)) return;
-  const files = fs.readdirSync(dir);
+  if (!fs.existsSync(dir)) return 0;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
   let saved = 0;
-  for (const file of files) {
-    if (file.endsWith('.md')) {
-      const fullPath = path.join(dir, file);
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      saved += processDirectory(fullPath);
+    } else if (entry.isFile() && entry.name.endsWith('.md')) {
       const content = fs.readFileSync(fullPath, 'utf8');
       const minified = minifyMarkdown(content);
       if (content.length !== minified.length) {
@@ -45,8 +47,8 @@ function processRulesDirectory(dir) {
       
       // Inject JIT progressive disclosure if missing and not already a bridge
       if (!content.startsWith('---') && !content.includes('trigger: model_decision')) {
-        const desc = \`Regra sobre \${file.replace('.md', '')}\`;
-        const frontmatter = \`---\\ntrigger: model_decision\\ndescription: \${desc}\\n---\\n\`;
+        const desc = `Regra sobre ${file.replace('.md', '')}`;
+        const frontmatter = `---\ntrigger: model_decision\ndescription: ${desc}\n---\n`;
         content = frontmatter + content;
       }
       

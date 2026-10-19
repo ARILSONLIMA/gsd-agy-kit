@@ -11,10 +11,6 @@ function findPlanningDir(startDir) {
     if (fs.existsSync(candidatePlanning) && fs.statSync(candidatePlanning).isDirectory()) {
       return candidatePlanning;
     }
-    const candidateProject = path.join(curr, '.project');
-    if (fs.existsSync(candidateProject) && fs.statSync(candidateProject).isDirectory()) {
-      return candidateProject;
-    }
     const parent = path.dirname(curr);
     if (parent === curr) break;
     curr = parent;
@@ -140,7 +136,7 @@ function main() {
   const startDir = process.argv[2] ? path.resolve(process.argv[2]) : process.cwd();
   const planningDir = findPlanningDir(startDir);
   if (!planningDir) {
-    process.stderr.write('Error: .planning or .project directory not found\n');
+    process.stderr.write('Error: .planning directory not found\n');
     process.exit(1);
   }
 

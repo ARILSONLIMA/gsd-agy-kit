@@ -7,11 +7,38 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="${1:-}"
+
 if [ -z "$TARGET_DIR" ]; then
-    if [ "$(pwd)" = "$SCRIPT_DIR" ] || [[ "$(pwd)" == "$SCRIPT_DIR/"* ]]; then
+    if [[ "$SCRIPT_DIR" == *"/.agents/kit" ]]; then
+        TARGET_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+        KIT_DIR="${SCRIPT_DIR}"
+    elif [[ "$SCRIPT_DIR" == *"/scripts" ]] && [ -d "$(cd "${SCRIPT_DIR}/.." && pwd)/.agents/kit" ]; then
+        TARGET_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+        KIT_DIR="${TARGET_DIR}/.agents/kit"
+    elif [ -f "$(pwd)/.agents/hooks/token-guard-pretool.cjs" ]; then
+        TARGET_DIR="$(pwd)"
+        KIT_DIR="${SCRIPT_DIR}"
+    elif [ -f "$(dirname "$SCRIPT_DIR")/.agents/hooks/token-guard-pretool.cjs" ]; then
         TARGET_DIR="$(dirname "$SCRIPT_DIR")"
+        KIT_DIR="${SCRIPT_DIR}"
+    elif [ -f "${SCRIPT_DIR}/.agents/hooks/token-guard-pretool.cjs" ]; then
+        TARGET_DIR="${SCRIPT_DIR}"
+        KIT_DIR="${SCRIPT_DIR}"
+    elif [ "$(pwd)" = "$SCRIPT_DIR" ] || [[ "$(pwd)" == "$SCRIPT_DIR/"* ]]; then
+        TARGET_DIR="$(dirname "$SCRIPT_DIR")"
+        KIT_DIR="${SCRIPT_DIR}"
     else
         TARGET_DIR="$(pwd)"
+        KIT_DIR="${SCRIPT_DIR}"
+    fi
+else
+    TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
+    if [[ "$SCRIPT_DIR" == *"/.agents/kit" ]]; then
+        KIT_DIR="${SCRIPT_DIR}"
+    elif [ -d "${TARGET_DIR}/.agents/kit" ]; then
+        KIT_DIR="${TARGET_DIR}/.agents/kit"
+    else
+        KIT_DIR="${SCRIPT_DIR}"
     fi
 fi
 
@@ -21,9 +48,24 @@ if [ ! -f "$HOOK_CHECK" ]; then
     echo -e "\n\033[0;31m🛑 [Pre-flight Check] Workspace não configurado!\033[0m"
     echo -e "\033[0;33m   O diretório '${TARGET_DIR}' não contém a infraestrutura do kit instalada (.agents/hooks/token-guard-pretool.cjs).\033[0m"
     echo -e "\n\033[0;36m💡 Para instalar e blindar este projeto, execute:\033[0m"
-    echo -e "   bash \"${SCRIPT_DIR}/setup.sh\" \"${TARGET_DIR}\"\n"
+    if [ -f "${KIT_DIR}/setup-ui.cjs" ]; then
+        echo -e "   node \"${KIT_DIR}/setup-ui.cjs\" \"${TARGET_DIR}\" --install\n"
+    else
+        echo -e "   bash \"${SCRIPT_DIR}/setup.sh\" \"${TARGET_DIR}\"\n"
+    fi
     exit 1
 fi
+
+find_kit_script() {
+    local name="$1"
+    if [ -f "${KIT_DIR}/${name}" ]; then
+        echo "${KIT_DIR}/${name}"
+    elif [ -f "${TARGET_DIR}/.agents/kit/${name}" ]; then
+        echo "${TARGET_DIR}/.agents/kit/${name}"
+    else
+        echo "${SCRIPT_DIR}/${name}"
+    fi
+}
 
 echo -e "\n\033[0;36m🧪 [Antigravity GSD Kit] Executando bateria de testes automatizados...\033[0m"
 
@@ -249,7 +291,7 @@ fi
 assert_test "Git hooks de auto-cura presentes em .git/hooks/" "$GIT_HOOKS_OK"
 
 # 9. Telemetria de Tokens
-TOKEN_REPORT_PATH="${SCRIPT_DIR}/token-report.cjs"
+TOKEN_REPORT_PATH=$(find_kit_script "token-report.cjs")
 REPORT_OK=0
 if node "$TOKEN_REPORT_PATH" --json 2>/dev/null | grep -q '"session"'; then
     REPORT_OK=1
@@ -314,7 +356,7 @@ assert_test "Hook PreToolUse promove instantaneamente (JIT) skill do pool sob de
 # ------------------------------------------------------------------------------
 # Teste 13: Motor de UI do Instalador (setup-ui.cjs)
 # ------------------------------------------------------------------------------
-SETUP_UI_PATH="${SCRIPT_DIR}/setup-ui.cjs"
+SETUP_UI_PATH=$(find_kit_script "setup-ui.cjs")
 node --check "${SETUP_UI_PATH}" >/dev/null 2>&1 && UI_SYNTAX_OK=1 || UI_SYNTAX_OK=0
 assert_test "Motor de UI do instalador (setup-ui.cjs) presente e sintaticamente válido" "$UI_SYNTAX_OK"
 
@@ -434,7 +476,7 @@ assert_test "Hook PreToolUse auto-limita comandos prolixos via alias de ferramen
 # ------------------------------------------------------------------------------
 # Teste 16: State Compactor (compact-state.cjs)
 # ------------------------------------------------------------------------------
-COMPACT_STATE_PATH="${SCRIPT_DIR}/compact-state.cjs"
+COMPACT_STATE_PATH=$(find_kit_script "compact-state.cjs")
 node --check "${COMPACT_STATE_PATH}" >/dev/null 2>&1 && COMPACT_STATE_OK=1 || COMPACT_STATE_OK=0
 assert_test "State Compactor (compact-state.cjs) presente e sintaticamente válido" "$COMPACT_STATE_OK"
 
@@ -467,7 +509,7 @@ assert_test "State Compactor (compact-state.cjs) arquiva metricas historicas (>8
 # ------------------------------------------------------------------------------
 # Teste 17: JSON Stream Compact (compact-json.cjs)
 # ------------------------------------------------------------------------------
-COMPACT_JSON_PATH="${SCRIPT_DIR}/compact-json.cjs"
+COMPACT_JSON_PATH=$(find_kit_script "compact-json.cjs")
 JSON_TEST_RES=$(echo '{"a":1,"b":null}' | node "${COMPACT_JSON_PATH}" 2>/dev/null || echo "{}")
 COMPACT_JSON_OK=0
 if echo "${JSON_TEST_RES}" | grep -q '"a": 1' && ! echo "${JSON_TEST_RES}" | grep -q '"b":'; then
@@ -478,7 +520,7 @@ assert_test "JSON Stream Compact (compact-json.cjs) operacional e filtrando nulo
 # ------------------------------------------------------------------------------
 # Teste 18: Output Sanitizer (sanitize-output.cjs)
 # ------------------------------------------------------------------------------
-SANITIZER_PATH="${SCRIPT_DIR}/sanitize-output.cjs"
+SANITIZER_PATH=$(find_kit_script "sanitize-output.cjs")
 TEST_LINES=""
 for i in $(seq 1 80); do TEST_LINES="${TEST_LINES}Linha $i\n"; done
 SANITIZED_RES=$(printf "${TEST_LINES}" | node "${SANITIZER_PATH}" 2>/dev/null || echo "")
@@ -558,7 +600,7 @@ assert_test "Hook PreToolUse permite sobrescrita de write_to_file em pastas efê
 # ------------------------------------------------------------------------------
 # Teste 24: Operacao do Skill Surface Manager (skills-manager.cjs)
 # ------------------------------------------------------------------------------
-SKILLS_MGR_PATH="${SCRIPT_DIR}/skills-manager.cjs"
+SKILLS_MGR_PATH=$(find_kit_script "skills-manager.cjs")
 MGR_OUTPUT=$(node "${SKILLS_MGR_PATH}" status "${TARGET_DIR}" 2>/dev/null || echo "")
 SKILLS_STATUS_OK=0
 if echo "${MGR_OUTPUT}" | grep -q "Status do Catálogo de Skills" && echo "${MGR_OUTPUT}" | grep -q "Skills Ativas"; then
@@ -569,7 +611,7 @@ assert_test "Skill Surface Manager (skills-manager.cjs) operacional exibindo sta
 # ------------------------------------------------------------------------------
 # Teste 25: Extrator de Estado do GSD (gsd-state-summary.cjs)
 # ------------------------------------------------------------------------------
-STATE_SUM_PATH="${SCRIPT_DIR}/gsd-state-summary.cjs"
+STATE_SUM_PATH=$(find_kit_script "gsd-state-summary.cjs")
 SUM_OUTPUT=$(node "${STATE_SUM_PATH}" "${TARGET_DIR}" 2>/dev/null || echo "{}")
 if ! echo "${SUM_OUTPUT}" | grep -q '"phase_number":'; then
     TEMP_PLAN_DIR="${TARGET_DIR}/.temp-state-test/.planning"
@@ -594,8 +636,8 @@ assert_test "Extrator de Estado GSD (gsd-state-summary.cjs) operacional gerando 
 # ------------------------------------------------------------------------------
 # Teste 26: Integridade Sintatica dos Utilitarios do Kit (patch-agents & graphify-update)
 # ------------------------------------------------------------------------------
-PATCH_PATH="${SCRIPT_DIR}/patch-agents.cjs"
-GFY_UPDATE_PATH="${SCRIPT_DIR}/gsd-graphify-update.cjs"
+PATCH_PATH=$(find_kit_script "patch-agents.cjs")
+GFY_UPDATE_PATH=$(find_kit_script "gsd-graphify-update.cjs")
 node --check "${PATCH_PATH}" >/dev/null 2>&1 && P_OK=1 || P_OK=0
 node --check "${GFY_UPDATE_PATH}" >/dev/null 2>&1 && G_OK=1 || G_OK=0
 SYNTAX_ALL_OK=$(( P_OK && G_OK ))
@@ -649,24 +691,26 @@ assert_test "Hook Graphify Update (gsd-graphify-update.cjs) ignora comandos que 
 # ------------------------------------------------------------------------------
 # Teste 27: Validacao Sintatica Integral de Scripts Shell (.sh) e PowerShell (.ps1)
 # ------------------------------------------------------------------------------
-PS1_FILES=("setup.ps1" "uninstall.ps1" "skills-profile.ps1" "sanitize-command.ps1" "optimize-tokens.ps1" "test-kit.ps1")
+PS1_FILES=("setup.ps1" "install.ps1" "uninstall.ps1" "skills-profile.ps1" "sanitize-command.ps1" "optimize-tokens.ps1" "test-kit.ps1")
 PS1_ALL_PRESENT=1
 for ps in "${PS1_FILES[@]}"; do
-    if [ ! -s "${SCRIPT_DIR}/${ps}" ]; then
+    ps_file=$(find_kit_script "${ps}")
+    if [ ! -s "${ps_file}" ]; then
         PS1_ALL_PRESENT=0
         break
     fi
 done
 assert_test "Todos os scripts PowerShell do kit (${#PS1_FILES[@]} scripts .ps1) presentes e íntegros" "$PS1_ALL_PRESENT"
 
-SH_FILES=("setup.sh" "uninstall.sh" "skills-profile.sh" "optimize-tokens.sh" "test-kit.sh")
+SH_FILES=("setup.sh" "install.sh" "uninstall.sh" "skills-profile.sh" "optimize-tokens.sh" "test-kit.sh")
 SH_ALL_VALID=1
 for shf in "${SH_FILES[@]}"; do
-    if [ ! -s "${SCRIPT_DIR}/${shf}" ]; then
+    sh_file=$(find_kit_script "${shf}")
+    if [ ! -s "${sh_file}" ]; then
         SH_ALL_VALID=0
         break
     fi
-    if ! bash -n "${SCRIPT_DIR}/${shf}" 2>/dev/null; then
+    if ! bash -n "${sh_file}" 2>/dev/null; then
         SH_ALL_VALID=0
         break
     fi
@@ -676,29 +720,74 @@ assert_test "Todos os scripts Shell do kit (${#SH_FILES[@]} scripts .sh) com sin
 # ------------------------------------------------------------------------------
 # Teste 28: Integridade das Regras e Skills Canonicas Empacotadas
 # ------------------------------------------------------------------------------
-RULES_DIR="${SCRIPT_DIR}/rules"
+if [ -d "${KIT_DIR}/rules" ]; then
+    RESOLVED_RULES_DIR="${KIT_DIR}/rules"
+elif [ -d "${TARGET_DIR}/.agents/rules" ]; then
+    RESOLVED_RULES_DIR="${TARGET_DIR}/.agents/rules"
+else
+    RESOLVED_RULES_DIR="${SCRIPT_DIR}/rules"
+fi
+
 RULES_FILES=("ast-grep.md" "gopls.md" "graphify.md" "idioma.md" "token-protocol.md")
 RULES_ALL_OK=1
 for rf in "${RULES_FILES[@]}"; do
-    if [ ! -f "${RULES_DIR}/${rf}" ] || [ $(wc -c < "${RULES_DIR}/${rf}" 2>/dev/null || echo 0) -lt 50 ]; then
+    if [ ! -f "${RESOLVED_RULES_DIR}/${rf}" ] || [ $(wc -c < "${RESOLVED_RULES_DIR}/${rf}" 2>/dev/null || echo 0) -lt 50 ]; then
         RULES_ALL_OK=0
         break
     fi
 done
 assert_test "Regras canonicas em rules/ (${#RULES_FILES[@]} regras) presentes e validas" "$RULES_ALL_OK"
 
-GSD_TOKENS_SKILL="${SCRIPT_DIR}/skills/gsd-tokens/SKILL.md"
+if [ -f "${KIT_DIR}/skills/gsd-tokens/SKILL.md" ]; then
+    GSD_TOKENS_SKILL="${KIT_DIR}/skills/gsd-tokens/SKILL.md"
+elif [ -f "${TARGET_DIR}/.agents/skills/gsd-tokens/SKILL.md" ]; then
+    GSD_TOKENS_SKILL="${TARGET_DIR}/.agents/skills/gsd-tokens/SKILL.md"
+else
+    GSD_TOKENS_SKILL="${SCRIPT_DIR}/skills/gsd-tokens/SKILL.md"
+fi
+
+if [ -f "${KIT_DIR}/skills/gsd-test/SKILL.md" ]; then
+    GSD_TEST_SKILL="${KIT_DIR}/skills/gsd-test/SKILL.md"
+elif [ -f "${TARGET_DIR}/.agents/skills/gsd-test/SKILL.md" ]; then
+    GSD_TEST_SKILL="${TARGET_DIR}/.agents/skills/gsd-test/SKILL.md"
+else
+    GSD_TEST_SKILL="${SCRIPT_DIR}/skills/gsd-test/SKILL.md"
+fi
+
 SKILL_OK=0
-if [ -f "${GSD_TOKENS_SKILL}" ] && grep -q "name:\s*gsd-tokens" "${GSD_TOKENS_SKILL}" 2>/dev/null; then
+if [ -f "${GSD_TOKENS_SKILL}" ] && grep -q "name:\s*gsd-tokens" "${GSD_TOKENS_SKILL}" 2>/dev/null && \
+   [ -f "${GSD_TEST_SKILL}" ] && grep -q "name:\s*gsd-test" "${GSD_TEST_SKILL}" 2>/dev/null; then
     SKILL_OK=1
 fi
+assert_test "Skills canonicas (/gsd-tokens e /gsd-test) presentes com frontmatter valido" "$SKILL_OK"
 # ------------------------------------------------------------------------------
 # Teste 29: MemPalace Engine (lib/mempalace-engine.cjs)
 # ------------------------------------------------------------------------------
+if [ -d "${KIT_DIR}/lib" ]; then
+    MCP_LIB_DIR="${KIT_DIR}/lib"
+elif [ -d "${TARGET_DIR}/.agents/kit/lib" ]; then
+    MCP_LIB_DIR="${TARGET_DIR}/.agents/kit/lib"
+elif [ -d "${TARGET_DIR}/.agents/lib" ]; then
+    MCP_LIB_DIR="${TARGET_DIR}/.agents/lib"
+else
+    MCP_LIB_DIR="${SCRIPT_DIR}/lib"
+fi
+
+if [ -f "${KIT_DIR}/mcp-server.cjs" ]; then
+    MCP_BIN="${KIT_DIR}/mcp-server.cjs"
+elif [ -f "${TARGET_DIR}/.agents/kit/mcp-server.cjs" ]; then
+    MCP_BIN="${TARGET_DIR}/.agents/kit/mcp-server.cjs"
+elif [ -f "${TARGET_DIR}/.agents/mcp-server.cjs" ]; then
+    MCP_BIN="${TARGET_DIR}/.agents/mcp-server.cjs"
+else
+    MCP_BIN="${SCRIPT_DIR}/mcp-server.cjs"
+fi
+
 MEMPALACE_TEST_RES=$(node -e '
-const MemPalace = require("./lib/mempalace-engine.cjs");
 const path = require("path");
 const fs = require("fs");
+const libDir = process.argv[1];
+const MemPalace = require(path.join(libDir, "mempalace-engine.cjs"));
 const testDir = path.join(process.cwd(), ".agents", "temp-mp-test");
 const mp = new MemPalace(testDir);
 mp.capture({ room: "decisions", topic: "TestTopic", content: "TestContent", rationale: "TestRationale" });
@@ -707,7 +796,7 @@ fs.rmSync(testDir, { recursive: true, force: true });
 if (recall && recall.results && recall.results.length > 0) {
   process.stdout.write("OK");
 }
-' 2>/dev/null || echo "")
+' "${MCP_LIB_DIR}" 2>/dev/null || echo "")
 MEMPALACE_OK=0
 if [ "$MEMPALACE_TEST_RES" = "OK" ]; then
     MEMPALACE_OK=1
@@ -718,9 +807,10 @@ assert_test "MemPalace Engine (lib/mempalace-engine.cjs) grava e recupera fatos 
 # Teste 30: Mini-RAG Docs Engine (lib/rag-docs-engine.cjs)
 # ------------------------------------------------------------------------------
 RAG_TEST_RES=$(node -e '
-const RagDocs = require("./lib/rag-docs-engine.cjs");
 const path = require("path");
 const fs = require("fs");
+const libDir = process.argv[1];
+const RagDocs = require(path.join(libDir, "rag-docs-engine.cjs"));
 const testDir = path.join(process.cwd(), ".agents", "temp-rag-test");
 fs.mkdirSync(testDir, { recursive: true });
 fs.writeFileSync(path.join(testDir, "test.md"), "# Regras do Pix\nO Pix deve ter estorno automatico.", "utf8");
@@ -731,7 +821,7 @@ fs.rmSync(testDir, { recursive: true, force: true });
 if (res && res.results && res.results.length > 0) {
   process.stdout.write("OK");
 }
-' 2>/dev/null || echo "")
+' "${MCP_LIB_DIR}" 2>/dev/null || echo "")
 RAG_OK=0
 if [ "$RAG_TEST_RES" = "OK" ]; then
     RAG_OK=1
@@ -742,9 +832,10 @@ assert_test "Mini-RAG Docs Engine (lib/rag-docs-engine.cjs) indexa e busca trech
 # Teste 31: Lockfile Lens (lib/lockfile-lens.cjs)
 # ------------------------------------------------------------------------------
 LENS_TEST_RES=$(node -e '
-const Lens = require("./lib/lockfile-lens.cjs");
 const path = require("path");
 const fs = require("fs");
+const libDir = process.argv[1];
+const Lens = require(path.join(libDir, "lockfile-lens.cjs"));
 const testDir = path.join(process.cwd(), ".agents", "temp-lens-test");
 fs.mkdirSync(testDir, { recursive: true });
 fs.writeFileSync(path.join(testDir, "package.json"), JSON.stringify({ dependencies: { "express": "^4.18.2" } }), "utf8");
@@ -754,7 +845,7 @@ fs.rmSync(testDir, { recursive: true, force: true });
 if (res && res.found && res.details[0].package === "express") {
   process.stdout.write("OK");
 }
-' 2>/dev/null || echo "")
+' "${MCP_LIB_DIR}" 2>/dev/null || echo "")
 LENS_OK=0
 if [ "$LENS_TEST_RES" = "OK" ]; then
     LENS_OK=1
@@ -765,9 +856,10 @@ assert_test "Lockfile Lens (lib/lockfile-lens.cjs) detecta dependencias sem abri
 # Teste 32: Skeleton Engine (lib/skeleton-engine.cjs)
 # ------------------------------------------------------------------------------
 SKELETON_TEST_RES=$(node -e '
-const Skeleton = require("./lib/skeleton-engine.cjs");
 const path = require("path");
 const fs = require("fs");
+const libDir = process.argv[1];
+const Skeleton = require(path.join(libDir, "skeleton-engine.cjs"));
 const testDir = path.join(process.cwd(), ".agents", "temp-skel-test");
 fs.mkdirSync(testDir, { recursive: true });
 const dummyFile = path.join(testDir, "dummy.ts");
@@ -778,7 +870,7 @@ fs.rmSync(testDir, { recursive: true, force: true });
 if (outline && outline.includes("export interface User") && outline.includes("export function getUser")) {
   process.stdout.write("OK");
 }
-' 2>/dev/null || echo "")
+' "${MCP_LIB_DIR}" 2>/dev/null || echo "")
 SKELETON_OK=0
 if [ "$SKELETON_TEST_RES" = "OK" ]; then
     SKELETON_OK=1
@@ -788,7 +880,6 @@ assert_test "Skeleton Engine (lib/skeleton-engine.cjs) extrai assinaturas com pr
 # ------------------------------------------------------------------------------
 # Teste 33: MCP Server JSON-RPC Stdio (mcp-server.cjs)
 # ------------------------------------------------------------------------------
-MCP_BIN="${SCRIPT_DIR}/mcp-server.cjs"
 
 MCP_TEST_RES=$(node -e '
 const { spawn } = require("child_process");
@@ -824,7 +915,7 @@ assert_test "Servidor MCP Dual-Mode atende chamadas diretas de CLI (tools e skel
 # ------------------------------------------------------------------------------
 # Teste 35: MCP Server CLI ast_query
 # ------------------------------------------------------------------------------
-AST_QUERY_OUT=$(timeout 5s node "${MCP_BIN}" ast "class \$NAME" js "${SCRIPT_DIR}/lib" 2>/dev/null || echo "")
+AST_QUERY_OUT=$(timeout 5s node "${MCP_BIN}" ast "class \$NAME" js "${MCP_LIB_DIR}" 2>/dev/null || echo "")
 AST_QUERY_OK=0
 if [[ "$AST_QUERY_OUT" == *"AST Query"* ]] && [[ "$AST_QUERY_OUT" == *"correspondência"* ]]; then
     AST_QUERY_OK=1
@@ -835,14 +926,16 @@ assert_test "Tool ast_query nativa no MCP Server localiza padrões estruturais s
 # Teste 36: Test Isolate Engine (lib/test-isolate.cjs e CLI)
 # ------------------------------------------------------------------------------
 TEST_ISO_RES=$(node -e '
-const TestIsolate = require("./lib/test-isolate.cjs");
+const path = require("path");
+const libDir = process.argv[1];
+const TestIsolate = require(path.join(libDir, "test-isolate.cjs"));
 const t = new TestIsolate();
 const out = "✖ Scenario 10 - Circuit Breaker (50ms)\nnot ok 2 - should retry";
 const f = t.parseFailures(out);
 if (f.length === 2 && f.includes("Scenario 10 - Circuit Breaker")) {
   process.stdout.write("OK");
 }
-' 2>/dev/null || echo "")
+' "${MCP_LIB_DIR}" 2>/dev/null || echo "")
 TEST_ISO_OK=0
 if [ "$TEST_ISO_RES" = "OK" ]; then
     TEST_ISO_OK=1
@@ -853,13 +946,15 @@ assert_test "Test Isolate Engine (lib/test-isolate.cjs) extrai falhas pontuais p
 # Teste 37: Checkpoint Engine (lib/checkpoint-engine.cjs)
 # ------------------------------------------------------------------------------
 CHK_RES=$(node -e '
-const Checkpoint = require("./lib/checkpoint-engine.cjs");
+const path = require("path");
+const libDir = process.argv[1];
+const Checkpoint = require(path.join(libDir, "checkpoint-engine.cjs"));
 const c = new Checkpoint();
 const list = c.listCheckpoints();
 if (Array.isArray(list)) {
   process.stdout.write("OK");
 }
-' 2>/dev/null || echo "")
+' "${MCP_LIB_DIR}" 2>/dev/null || echo "")
 CHK_OK=0
 if [ "$CHK_RES" = "OK" ]; then
     CHK_OK=1
@@ -870,11 +965,13 @@ assert_test "Checkpoint Engine (lib/checkpoint-engine.cjs) gerencia micro-checkp
 # Teste 38: Skeleton Engine Multi-Stack (PHP, Ruby, Dart, Elixir)
 # ------------------------------------------------------------------------------
 SKEL_MULTI_RES=$(node -e '
-const Skeleton = require("./lib/skeleton-engine.cjs");
-const fs = require("fs");
 const path = require("path");
-const skel = new Skeleton(process.cwd());
-const testDir = path.join(process.cwd(), ".agents", "temp-multi-test");
+const fs = require("fs");
+const libDir = process.argv[1];
+const Skeleton = require(path.join(libDir, "skeleton-engine.cjs"));
+const targetDir = process.argv[2];
+const skel = new Skeleton(targetDir);
+const testDir = path.join(targetDir, ".agents", "temp-multi-test");
 fs.mkdirSync(testDir, { recursive: true });
 fs.writeFileSync(path.join(testDir, "test.php"), "<?php\nclass UserService { public function find() {} }", "utf8");
 fs.writeFileSync(path.join(testDir, "test.rb"), "class OrderController\n  def create\n  end\nend", "utf8");
@@ -888,7 +985,7 @@ fs.rmSync(testDir, { recursive: true, force: true });
 if (oPhp.includes("class UserService") && oRb.includes("class OrderController") && oDart.includes("class ProductBloc") && oEx.includes("defmodule PaymentGateway")) {
   process.stdout.write("OK");
 }
-' 2>/dev/null || echo "")
+' "${MCP_LIB_DIR}" "${TARGET_DIR}" 2>/dev/null || echo "")
 SKEL_MULTI_OK=0
 if [ "$SKEL_MULTI_RES" = "OK" ]; then
     SKEL_MULTI_OK=1
@@ -899,10 +996,12 @@ assert_test "Skeleton Engine suporta extração estrutural em PHP, Ruby, Dart e 
 # Teste 39: Lockfile Lens Multi-Stack (PHP, Ruby, Dart)
 # ------------------------------------------------------------------------------
 LENS_MULTI_RES=$(node -e '
-const Lens = require("./lib/lockfile-lens.cjs");
-const fs = require("fs");
 const path = require("path");
-const testDir = path.join(process.cwd(), ".agents", "temp-lens-multi");
+const fs = require("fs");
+const libDir = process.argv[1];
+const Lens = require(path.join(libDir, "lockfile-lens.cjs"));
+const targetDir = process.argv[2];
+const testDir = path.join(targetDir, ".agents", "temp-lens-multi");
 fs.mkdirSync(testDir, { recursive: true });
 fs.writeFileSync(path.join(testDir, "composer.json"), JSON.stringify({ require: { "laravel/framework": "^10.0" } }), "utf8");
 fs.writeFileSync(path.join(testDir, "Gemfile"), "source \"https://rubygems.org\"\ngem \"rails\", \"~> 7.0\"\n", "utf8");
@@ -915,7 +1014,7 @@ fs.rmSync(testDir, { recursive: true, force: true });
 if (resPhp.found && resRb.found && resDart.found) {
   process.stdout.write("OK");
 }
-' 2>/dev/null || echo "")
+' "${MCP_LIB_DIR}" "${TARGET_DIR}" 2>/dev/null || echo "")
 LENS_MULTI_OK=0
 if [ "$LENS_MULTI_RES" = "OK" ]; then
     LENS_MULTI_OK=1
@@ -929,16 +1028,18 @@ PROTO_TEST_RES=$(node -e '
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
-const testDir = path.join(process.cwd(), ".agents", "temp-proto-test");
+const patchPath = process.argv[1];
+const targetDir = process.argv[2];
+const testDir = path.join(targetDir, ".agents", "temp-proto-test");
 fs.mkdirSync(path.join(testDir, ".agents", "agents"), { recursive: true });
 fs.writeFileSync(path.join(testDir, ".agents", "agents", "gsd-executor.md"), "---\nname: gsd-executor\ntools:\n  - view_file\n---\nExecutor", "utf8");
-execSync(`node "${path.join(process.cwd(), "patch-agents.cjs")}" "${testDir}"`, { stdio: "ignore" });
+execSync(`node "${patchPath}" "${testDir}"`, { stdio: "ignore" });
 const content = fs.readFileSync(path.join(testDir, ".agents", "agents", "gsd-executor.md"), "utf8");
 fs.rmSync(testDir, { recursive: true, force: true });
 if (content.includes("GREENFIELD FAST-TRACK") && content.includes("mode=\"greenfield\"")) {
   process.stdout.write("OK");
 }
-' 2>/dev/null || echo "")
+' "${PATCH_PATH}" "${TARGET_DIR}" 2>/dev/null || echo "")
 PROTO_OK=0
 if [ "$PROTO_TEST_RES" = "OK" ]; then
     PROTO_OK=1
@@ -951,11 +1052,13 @@ assert_test "Normalizador detecta maturidade de projeto e injeta protocolo Green
 AUTO_SLICE_RES=$(node -e '
 const fs = require("fs");
 const path = require("path");
-const dummyFile = path.join(process.cwd(), ".agents", "temp-slice-test.js");
+const hookPath = process.argv[1];
+const targetDir = process.argv[2];
+const dummyFile = path.join(targetDir, ".agents", "temp-slice-test.js");
 fs.writeFileSync(dummyFile, Array(150).fill("console.log(1);").join("\n"), "utf8");
 const { execSync } = require("child_process");
 const payload = JSON.stringify({ toolCall: { name: "view_file", args: { AbsolutePath: dummyFile, StartLine: 1, EndLine: 150 } } });
-const res = execSync(`node "${path.join(process.cwd(), "hooks", "token-guard-pretool.cjs")}"`, {
+const res = execSync(`node "${hookPath}"`, {
   input: payload,
   env: { ...process.env, GSD_KIT_MODE: "smart-assist" },
   encoding: "utf8"
@@ -965,7 +1068,7 @@ const parsed = JSON.parse(res.trim());
 if (parsed.decision === "allow" && parsed.overwrite && parsed.overwrite.EndLine === 100) {
   process.stdout.write("OK");
 }
-' 2>/dev/null || echo "")
+' "${HOOK_PATH}" "${TARGET_DIR}" 2>/dev/null || echo "")
 AUTO_SLICE_OK=0
 if [ "$AUTO_SLICE_RES" = "OK" ]; then
     AUTO_SLICE_OK=1
@@ -976,10 +1079,16 @@ assert_test "Hook PreToolUse auto-corrige range excessivo via overwrite em modo 
 # Teste 42: Blindagem de Índices (.graphifyignore e .astgrepignore)
 # ------------------------------------------------------------------------------
 IGNORE_TEMPLATES_OK=0
-if [ -f "${SCRIPT_DIR}/.graphifyignore" ] && [ -f "${SCRIPT_DIR}/.astgrepignore" ] && grep -q "gsd-agy-kit/" "${SCRIPT_DIR}/.graphifyignore"; then
+if [ -f "${TARGET_DIR}/.graphifyignore" ] && [ -f "${TARGET_DIR}/.astgrepignore" ] && \
+   grep -q "graphify-out/" "${TARGET_DIR}/.graphifyignore" && \
+   grep -q "graphify-out/" "${TARGET_DIR}/.astgrepignore"; then
+    IGNORE_TEMPLATES_OK=1
+elif [ -f "${SCRIPT_DIR}/.graphifyignore" ] && [ -f "${SCRIPT_DIR}/.astgrepignore" ] && \
+   grep -q "graphify-out/" "${SCRIPT_DIR}/.graphifyignore" && \
+   grep -q "graphify-out/" "${SCRIPT_DIR}/.astgrepignore"; then
     IGNORE_TEMPLATES_OK=1
 fi
-assert_test "Arquivos de blindagem de índices (.graphifyignore e .astgrepignore) presentes no kit" "$IGNORE_TEMPLATES_OK"
+assert_test "Arquivos de blindagem de índices (.graphifyignore e .astgrepignore) presentes e com graphify-out/" "$IGNORE_TEMPLATES_OK"
 
 
 echo -e "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

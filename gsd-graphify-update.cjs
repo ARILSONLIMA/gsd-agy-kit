@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { execSync, spawnSync } = require('child_process');
+const { execSync, execFileSync, spawnSync } = require('child_process');
 
 function readStdin(timeoutMs = 50) {
   if (process.stdin.isTTY) return Promise.resolve('');
@@ -101,7 +101,7 @@ async function main() {
   if (!defaultBranch) {
     for (const cand of ['main', 'master', 'trunk']) {
       try {
-        execSync(`git rev-parse --verify ${cand}`, { cwd: projectRoot, stdio: 'ignore' });
+        execFileSync('git', ['rev-parse', '--verify', cand], { cwd: projectRoot, stdio: 'ignore' });
         defaultBranch = cand;
         break;
       } catch {}
@@ -110,7 +110,7 @@ async function main() {
 
   let currentBranch = '';
   try {
-    currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: projectRoot, encoding: 'utf8' }).trim();
+    currentBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: projectRoot, encoding: 'utf8' }).trim();
   } catch {}
 
   const allowAllBranches = config?.graphify?.all_branches !== false;
@@ -133,12 +133,21 @@ async function main() {
     }
   }
 
-  // Gate 6: Lock check
+  // Gate 6: Lock check (Atomic acquisition via wx)
   const graphsDir = path.join(planningDir, 'graphs');
   fs.mkdirSync(graphsDir, { recursive: true });
   const lockFile = path.join(graphsDir, '.rebuild.lock');
 
-  if (fs.existsSync(lockFile)) {
+  const tryAcquireLock = () => {
+    try {
+      fs.writeFileSync(lockFile, String(process.pid), { flag: 'wx' });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  if (!tryAcquireLock()) {
     try {
       const pidStr = fs.readFileSync(lockFile, 'utf8').trim();
       const pid = parseInt(pidStr, 10);
@@ -147,14 +156,14 @@ async function main() {
           process.kill(pid, 0);
           process.exit(0);
         } catch {
-          fs.unlinkSync(lockFile);
+          try { fs.unlinkSync(lockFile); } catch {}
         }
       }
     } catch {}
+    if (!tryAcquireLock()) {
+      process.exit(0);
+    }
   }
-
-  // Acquire lock
-  fs.writeFileSync(lockFile, String(process.pid));
 
   let headSha = '';
   try {

@@ -9,6 +9,7 @@ TARGET_DIR=""
 HAS_FRONTEND=""
 ACTION_ARG=""
 EXTRA_ARG=""
+CLEANUP_FLAG=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -68,6 +69,14 @@ while [[ $# -gt 0 ]]; do
             ACTION_ARG="--install"
             shift
             ;;
+        --cleanup)
+            CLEANUP_FLAG="--cleanup"
+            shift
+            ;;
+        --no-cleanup)
+            CLEANUP_FLAG="--no-cleanup"
+            shift
+            ;;
         --target-dir)
             TARGET_DIR="$2"
             shift 2
@@ -89,8 +98,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KIT_DIR="${SCRIPT_DIR}"
 
 if [ -z "${TARGET_DIR}" ]; then
-    if [ "$(pwd)" = "${SCRIPT_DIR}" ] || [[ "$(pwd)" == "${SCRIPT_DIR}/"* ]]; then
-        TARGET_DIR="$(dirname "${SCRIPT_DIR}")"
+    if [[ "${SCRIPT_DIR}" == *"/.agents/kit" ]]; then
+        TARGET_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+    elif [ "$(pwd)" = "${SCRIPT_DIR}" ] || [[ "$(pwd)" == "${SCRIPT_DIR}/"* ]]; then
+        if [ -d "$(dirname "${SCRIPT_DIR}")/.agents" ] || [ -d "$(dirname "${SCRIPT_DIR}")/.planning" ]; then
+            TARGET_DIR="$(dirname "${SCRIPT_DIR}")"
+        else
+            TARGET_DIR="${SCRIPT_DIR}"
+        fi
     else
         TARGET_DIR="$(pwd)"
     fi
@@ -107,14 +122,14 @@ if [ -f "${UI_SCRIPT}" ]; then
     fi
     if [ -n "${ACTION_ARG}" ]; then
         if [ -n "${EXTRA_ARG}" ]; then
-            node "${UI_SCRIPT}" "${TARGET_DIR}" "${ACTION_ARG}" "${EXTRA_ARG}"
+            node "${UI_SCRIPT}" "${TARGET_DIR}" "${ACTION_ARG}" "${EXTRA_ARG}" ${CLEANUP_FLAG}
         elif [ "${ACTION_ARG}" = "--install" ] && [ -n "${HAS_FRONTEND}" ]; then
-            node "${UI_SCRIPT}" "${TARGET_DIR}" "${ACTION_ARG}" "${HAS_FRONTEND}"
+            node "${UI_SCRIPT}" "${TARGET_DIR}" "${ACTION_ARG}" "${HAS_FRONTEND}" ${CLEANUP_FLAG}
         else
-            node "${UI_SCRIPT}" "${TARGET_DIR}" "${ACTION_ARG}"
+            node "${UI_SCRIPT}" "${TARGET_DIR}" "${ACTION_ARG}" ${CLEANUP_FLAG}
         fi
     else
-        node "${UI_SCRIPT}" "${TARGET_DIR}" "--menu"
+        node "${UI_SCRIPT}" "${TARGET_DIR}" "--install" ${CLEANUP_FLAG}
     fi
     exit $?
 fi
@@ -185,18 +200,15 @@ else
     exit 1
 fi
 
-# 2.3: GSD Core / GSD Path no Projeto (Hard Stop)
+# 2.3: GSD Core no Projeto (Hard Stop)
 GSD_CORE_PATH="${TARGET_DIR}/.agents/gsd-core"
 GSD_AGENTS_PATH="${TARGET_DIR}/.agents/agents"
-GSD_PATH_DIR="${TARGET_DIR}/.gsd-path"
-GSD_PROJECT_DIR="${TARGET_DIR}/.project"
-GSD_PATH_SKILLS="${TARGET_DIR}/.agents/skills/gsd-path"
 
-if [ ! -d "${GSD_CORE_PATH}" ] && [ ! -d "${GSD_AGENTS_PATH}" ] && [ ! -d "${GSD_PATH_DIR}" ] && [ ! -d "${GSD_PROJECT_DIR}" ] && [ ! -d "${GSD_PATH_SKILLS}" ]; then
-    echo -e "\n\033[0;31m🛑 [HARD STOP] Ecossistema GSD (Core ou Path) não detectado neste projeto!\033[0m"
-    echo -e "\033[0;33m   Não foram encontrados .project, .gsd-path, .agents/gsd-core ou .agents/agents em: ${TARGET_DIR}\033[0m"
+if [ ! -d "${GSD_CORE_PATH}" ] && [ ! -d "${GSD_AGENTS_PATH}" ]; then
+    echo -e "\n\033[0;31m🛑 [HARD STOP] Ecossistema GSD não detectado neste projeto!\033[0m"
+    echo -e "\033[0;33m   Não foram encontrados .agents/gsd-core ou .agents/agents em: ${TARGET_DIR}\033[0m"
     echo -e "\033[0;33m   Este kit foi desenhado para blindar e normalizar um projeto GSD existente.\033[0m"
-    echo -e "\033[0;36m   Inicialize o projeto com o GSD primeiro (ex: rodando /gsd-new-project, /gsd-path ou instalando o GSD)\033[0m"
+    echo -e "\033[0;36m   Inicialize o projeto com o GSD primeiro (ex: rodando /gsd-new-project ou instalando o GSD)\033[0m"
     echo -e "\033[0;33m   e então execute este setup para ativar a governança.\n\033[0m"
     exit 1
 fi
@@ -211,10 +223,10 @@ KIT_DIR="${SCRIPT_DIR}"
 mkdir -p "${RULES_DIR}"
 mkdir -p "${HOOKS_DIR}"
 
-# 4. Copiar Regra Canônica e Hooks
-if [ -f "${KIT_DIR}/rules/token-protocol.md" ]; then
-    cp -f "${KIT_DIR}/rules/token-protocol.md" "${RULES_DIR}/token-protocol.md"
-    echo -e "   \033[0;32mRegra de tokens copiada para: ${RULES_DIR}/token-protocol.md\033[0m"
+# 4. Copiar Regras Canônicas e Hooks
+if [ -d "${KIT_DIR}/rules" ]; then
+    cp -f "${KIT_DIR}/rules/"* "${RULES_DIR}/"
+    echo -e "   \033[0;32mRegras de comportamento e tools copiadas para: ${RULES_DIR}\033[0m"
 fi
 
 if [ -d "${KIT_DIR}/hooks" ]; then
@@ -358,34 +370,51 @@ echo -e "   \033[0;32mServidor MCP registrado em: ${MCP_JSON}\033[0m"
 echo -e "   \033[0;32mPlugin local registrado em: ${AGENTS_DIR}/plugins.json\033[0m"
 echo -e "   \033[0;32mMemória episódica (MemPalace) pronta em: ${MEMORY_DIR}\033[0m"
 
-# 9. Instalar Scripts Utilitários do Kit (scripts/)
+# 9. Instalar Pacote Completo e Utilitários Nativos (.agents/kit/ e scripts/)
+TARGET_KIT_DIR="${AGENTS_DIR}/kit"
+mkdir -p "${TARGET_KIT_DIR}"
 TARGET_SCRIPTS_DIR="${TARGET_DIR}/scripts"
 mkdir -p "${TARGET_SCRIPTS_DIR}"
+
 if [ -d "${KIT_DIR}/lib" ]; then
+    mkdir -p "${TARGET_KIT_DIR}/lib"
+    cp -rf "${KIT_DIR}/lib/"* "${TARGET_KIT_DIR}/lib/"
     mkdir -p "${TARGET_SCRIPTS_DIR}/lib"
     cp -rf "${KIT_DIR}/lib/"* "${TARGET_SCRIPTS_DIR}/lib/"
 fi
-KIT_SCRIPTS=("token-report.cjs" "gsd-state-summary.cjs" "gsd-graphify-update.cjs" "test-kit.sh" "skills-profile.sh" "patch-agents.cjs" "compact-state.cjs" "compact-json.cjs" "sanitize-output.cjs" "shrink-prompts.cjs" "gsd-outline.cjs" "gsd-read-strip.cjs" "mcp-server.cjs")
+
+KIT_SCRIPTS=("test-kit.sh" "test-kit.ps1" "setup-ui.cjs" "setup.sh" "setup.ps1" "install.sh" "install.ps1" "package.json" "uninstall.sh" "uninstall.ps1" "skills-profile.sh" "skills-profile.ps1" "optimize-tokens.sh" "optimize-tokens.ps1" "sanitize-command.ps1" "token-report.cjs" "gsd-state-summary.cjs" "gsd-graphify-update.cjs" "patch-agents.cjs" "optimize-tokens.cjs" "skills-manager.cjs" "compact-state.cjs" "compact-json.cjs" "sanitize-output.cjs" "shrink-prompts.cjs" "gsd-outline.cjs" "gsd-read-strip.cjs" "mcp-server.cjs")
 for sName in "${KIT_SCRIPTS[@]}"; do
     src="${KIT_DIR}/${sName}"
+    if [ -f "${src}" ]; then
+        cp -f "${src}" "${TARGET_KIT_DIR}/${sName}"
+        chmod +x "${TARGET_KIT_DIR}/${sName}" 2>/dev/null || true
+    fi
+done
+
+# Atalhos em scripts/ para conveniência
+for sName in "test-kit.sh" "test-kit.ps1"; do
+    src="${TARGET_KIT_DIR}/${sName}"
     if [ -f "${src}" ]; then
         cp -f "${src}" "${TARGET_SCRIPTS_DIR}/${sName}"
         chmod +x "${TARGET_SCRIPTS_DIR}/${sName}" 2>/dev/null || true
     fi
 done
-echo -e "   \033[0;32mUtilitários de telemetria e testes instalados em: ${TARGET_SCRIPTS_DIR}\033[0m"
+echo -e "   \033[0;32mPacote completo do kit instalado nativamente em: ${TARGET_KIT_DIR}\033[0m"
 
-# 10. Copiar Skills Especializadas (.agents/skills/gsd-tokens)
+# 10. Copiar Skills Especializadas (.agents/skills/gsd-tokens e gsd-test)
 SKILLS_DIR="${AGENTS_DIR}/skills"
-TOKEN_SKILL_SRC="${KIT_DIR}/skills/gsd-tokens"
-if [ -d "${TOKEN_SKILL_SRC}" ]; then
-    TOKEN_SKILL_DEST="${SKILLS_DIR}/gsd-tokens"
-    if [ "${TOKEN_SKILL_SRC}" != "${TOKEN_SKILL_DEST}" ]; then
-        mkdir -p "${TOKEN_SKILL_DEST}"
-        cp -rf "${TOKEN_SKILL_SRC}/"* "${TOKEN_SKILL_DEST}/"
-        echo -e "   \033[0;32mSkill /gsd-tokens instalada em: ${TOKEN_SKILL_DEST}\033[0m"
+for skName in "gsd-tokens" "gsd-test"; do
+    SK_SRC="${KIT_DIR}/skills/${skName}"
+    if [ -d "${SK_SRC}" ]; then
+        SK_DEST="${SKILLS_DIR}/${skName}"
+        if [ "${SK_SRC}" != "${SK_DEST}" ]; then
+            mkdir -p "${SK_DEST}"
+            cp -rf "${SK_SRC}/"* "${SK_DEST}/"
+            echo -e "   \033[0;32mSkill /${skName} instalada em: ${SK_DEST}\033[0m"
+        fi
     fi
-fi
+done
 
 # 10.1 Sincronizar Perfil de Skills conforme Front-End
 SKILLS_MGR="${KIT_DIR}/skills-manager.cjs"
@@ -492,19 +521,19 @@ EOF
     echo -e "   \033[0;32mGit hooks (post-merge, post-checkout, post-commit) instalados em .git/hooks\033[0m"
 fi
 
-# 12.1 Garantir kits e .cache no .gitignore
+# 12.1 Garantir kits, caches e graphify-out no .gitignore
 GITIGNORE_FILE="${TARGET_DIR}/.gitignore"
 if [ -f "${GITIGNORE_FILE}" ]; then
     if ! grep -q "^gsd-agy-kit/\?" "${GITIGNORE_FILE}"; then
         echo -e "\ngsd-agy-kit/" >> "${GITIGNORE_FILE}"
     fi
-    if ! grep -q "^gsd-agy-kit/\?" "${GITIGNORE_FILE}"; then
-        echo -e "gsd-agy-kit/" >> "${GITIGNORE_FILE}"
-    fi
     if ! grep -q "^\.agents/\.cache/\?" "${GITIGNORE_FILE}"; then
         echo -e ".agents/.cache/" >> "${GITIGNORE_FILE}"
     fi
-    echo -e "   \033[0;32mEntradas de proteção (.agents/.cache/ e kits) garantidas no .gitignore\033[0m"
+    if ! grep -q "^graphify-out/\?" "${GITIGNORE_FILE}"; then
+        echo -e "graphify-out/" >> "${GITIGNORE_FILE}"
+    fi
+    echo -e "   \033[0;32mEntradas de proteção (.agents/.cache/, graphify-out/ e kits) garantidas no .gitignore\033[0m"
 fi
 
 # 12.1 Blindagem de Índices (.graphifyignore e .astgrepignore)

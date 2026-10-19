@@ -56,20 +56,39 @@ function detectPhaseFromState(targetDir) {
   if (!fs.existsSync(stateFile)) return 'core';
   try {
     const content = fs.readFileSync(stateFile, 'utf8').toLowerCase();
-    if (/status:\s*(planning|specifying|discussing|plan)/i.test(content) || /phase:\s*.*plan/i.test(content)) {
+    if (/status:\s*(planning|specifying|discussing|plan)/i.test(content) || /phase:\s*.*(plan|define|roadmap)/i.test(content)) {
       return 'planning';
     }
-    if (/status:\s*(executing|in_progress|running|exec)/i.test(content) || /current plan:\s*.*plan/i.test(content)) {
+    if (/status:\s*(executing|in[-_]progress|running|exec|build)/i.test(content) || /(phase|current plan):\s*.*(exec|build|plan)/i.test(content)) {
       return 'execution';
     }
-    if (/status:\s*(verifying|verification|review|uat|ship)/i.test(content)) {
+    if (/status:\s*(verifying|verification|testing|uat|review|ship)/i.test(content) || /phase:\s*.*(verif|review|ship)/i.test(content)) {
       return 'verification';
     }
-    if (/status:\s*(research|spike|explore)/i.test(content)) {
+    if (/status:\s*(research|researching|spike|explore)/i.test(content) || /phase:\s*.*research/i.test(content)) {
       return 'research';
     }
   } catch {}
   return 'core';
+}
+
+function getActiveJitAgents(targetDir) {
+  const jitFile = path.join(targetDir, '.agents', '.cache', 'jit-promotions.json');
+  const jitLegacy = path.join(targetDir, '.agents', '.jit-promotions.json');
+  const file = fs.existsSync(jitFile) ? jitFile : (fs.existsSync(jitLegacy) ? jitLegacy : null);
+  const set = new Set();
+  if (!file) return set;
+  try {
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (data && data.agents && typeof data.agents === 'object') {
+      for (const [agentFile, meta] of Object.entries(data.agents)) {
+        if (meta && meta.turnsRemaining > 0) {
+          set.add(agentFile.endsWith('.md') ? agentFile : `${agentFile}.md`);
+        }
+      }
+    }
+  } catch {}
+  return set;
 }
 
 function syncDynamicAgentPool(targetDir = process.cwd(), requestedProfile = 'auto') {
@@ -116,7 +135,12 @@ function syncDynamicAgentPool(targetDir = process.cwd(), requestedProfile = 'aut
     targetAgentFiles = allPoolFiles;
   } else {
     const agentNames = PHASE_PROFILES[activeProfile] || PHASE_PROFILES.core;
-    targetAgentFiles = agentNames.map(n => n.endsWith('.md') ? n : `${n}.md`).sort();
+    const jitSet = getActiveJitAgents(targetDir);
+    const merged = new Set([
+      ...agentNames.map(n => n.endsWith('.md') ? n : `${n}.md`),
+      ...jitSet
+    ]);
+    targetAgentFiles = Array.from(merged).sort();
   }
 
   // 3. Promover agentes do perfil alvo para .agents/agents/

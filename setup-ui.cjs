@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 'use strict';
 
 /**
@@ -13,6 +14,7 @@
  * - Auto-Cura (Doctor) para reparo rápido de subagentes e regras
  * - Desinstalação segura e reversão 100% garantida
  * - Suporte a execução CLI direta (--install, --test, --report, etc.) para automações/CI
+ * - Suporte nativo a 1 comando via npx github:ARILSONLIMA/gsd-agy-kit, curl | bash e irm | iex
  */
 
 const fs = require('fs');
@@ -45,21 +47,49 @@ const C = {
 };
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const IS_TTY = process.stdout.isTTY && !process.env.CI;
+const IS_TTY = Boolean(process.stdout.isTTY && !process.env.CI);
+
+function canPromptInteractively() {
+  if (process.env.CI) return false;
+  if (process.stdin.isTTY) return true;
+  if (IS_TTY && process.platform !== 'win32') {
+    try {
+      const fd = fs.openSync('/dev/tty', 'r');
+      fs.closeSync(fd);
+      return true;
+    } catch {}
+  }
+  return false;
+}
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function askPrompt(question) {
-  if (!process.stdin.isTTY) return Promise.resolve('');
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise(resolve => {
-    rl.question(question, ans => {
-      rl.close();
-      resolve((ans || '').trim().toLowerCase());
+  if (process.stdin.isTTY) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    return new Promise(resolve => {
+      rl.question(question, ans => {
+        rl.close();
+        resolve((ans || '').trim().toLowerCase());
+      });
     });
-  });
+  }
+  if (IS_TTY && process.platform !== 'win32') {
+    try {
+      const ttyStream = fs.createReadStream('/dev/tty');
+      const rl = readline.createInterface({ input: ttyStream, output: process.stdout });
+      return new Promise(resolve => {
+        rl.question(question, ans => {
+          rl.close();
+          ttyStream.destroy();
+          resolve((ans || '').trim().toLowerCase());
+        });
+      });
+    } catch {}
+  }
+  return Promise.resolve('');
 }
 
 function copyFolderRecursive(src, dest) {
@@ -156,7 +186,7 @@ async function promptArchitectureChoice() {
   console.log(`${C.cyan}│${C.reset}                                                                        ${C.cyan}│${C.reset}`);
   console.log(`${C.cyan}╰────────────────────────────────────────────────────────────────────────╯${C.reset}`);
 
-  if (!IS_TTY) {
+  if (!canPromptInteractively()) {
     return false; // Default: Backend
   }
 
@@ -291,7 +321,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
   let enableCodeReview = true;
   let hasGo = fs.existsSync(path.join(targetDir, 'go.mod'));
 
-  if (hasFrontendInput === null && process.stdin.isTTY) {
+  if (hasFrontendInput === null && canPromptInteractively()) {
     console.log(`\n   ${C.bWhite}Recursos Opcionais:${C.reset}`);
     const memAns = await askPrompt('   Ativar Mempalace (memória de longo prazo)? [S/n]: ');
     enableMempalace = memAns !== 'n' && memAns !== 'nao';
@@ -326,13 +356,9 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         }
         const gsdCore = path.join(targetDir, '.agents', 'gsd-core');
         const gsdAgents = path.join(targetDir, '.agents', 'agents');
-        const gsdPath = path.join(targetDir, '.gsd-path');
-        const gsdProject = path.join(targetDir, '.project');
-        const gsdPathSkills = path.join(targetDir, '.agents', 'skills', 'gsd-path');
         const isGsdCore = fs.existsSync(gsdCore) || fs.existsSync(gsdAgents);
-        const isGsdPath = fs.existsSync(gsdPath) || fs.existsSync(gsdProject) || fs.existsSync(gsdPathSkills);
-        if (!isGsdCore && !isGsdPath) {
-          throw new Error('Ecossistema GSD não detectado (.project, .gsd-path ou .agents/gsd-core). Execute primeiro a inicialização do GSD.');
+        if (!isGsdCore) {
+          throw new Error('Ecossistema GSD não detectado (.agents/gsd-core ou .agents/agents). Execute primeiro a inicialização do GSD.');
         }
         await sleep(80);
       }
@@ -341,16 +367,11 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
       title: 'Regras de Comportamento e Tools (.agents/rules/)',
       run: async () => {
         if (!fs.existsSync(rulesDir)) fs.mkdirSync(rulesDir, { recursive: true });
-        const coreRules = ['token-protocol.md', 'ast-grep.md', 'graphify.md', 'idioma.md'];
+        const coreRules = ['token-protocol.md', 'ast-grep.md', 'graphify.md', 'idioma.md', 'gopls.md'];
         for (const r of coreRules) {
           const src = path.join(kitDir, 'rules', r);
           const dest = path.join(rulesDir, r);
           if (fs.existsSync(src)) fs.copyFileSync(src, dest);
-        }
-        if (hasGo) {
-          const srcGo = path.join(kitDir, 'rules', 'gopls.md');
-          const destGo = path.join(rulesDir, 'gopls.md');
-          if (fs.existsSync(srcGo)) fs.copyFileSync(srcGo, destGo);
         }
         await sleep(50);
       }
@@ -465,6 +486,11 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           const tokenSkillDest = path.join(skillsDir, 'gsd-tokens');
           copyFolderRecursive(tokenSkillSrc, tokenSkillDest);
         }
+        const testSkillSrc = path.join(kitDir, 'skills', 'gsd-test');
+        if (fs.existsSync(testSkillSrc)) {
+          const testSkillDest = path.join(skillsDir, 'gsd-test');
+          copyFolderRecursive(testSkillSrc, testSkillDest);
+        }
 
         const skillsMgr = path.join(kitDir, 'skills-manager.cjs');
         if (fs.existsSync(skillsMgr)) {
@@ -478,23 +504,34 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
       }
     },
     {
-      title: 'Instalando Scripts Utilitários (.agents/kit/)',
+      title: 'Instalando Pacote Completo e Utilitários Nativos (.agents/kit/)',
       run: async () => {
         const targetKitDir = path.join(agentsDir, 'kit');
         if (!fs.existsSync(targetKitDir)) fs.mkdirSync(targetKitDir, { recursive: true });
         const kitScripts = [
+          "test-kit.sh", "test-kit.ps1",
+          "setup-ui.cjs", "setup.sh", "setup.ps1",
+          "install.sh", "install.ps1", "package.json",
+          "uninstall.sh", "uninstall.ps1",
+          "skills-profile.sh", "skills-profile.ps1",
+          "optimize-tokens.sh", "optimize-tokens.ps1",
+          "sanitize-command.ps1",
           "token-report.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs",
           "patch-agents.cjs", "optimize-tokens.cjs", "skills-manager.cjs",
           "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs",
-          "gsd-outline.cjs", "mcp-server.cjs"
+          "gsd-outline.cjs", "gsd-read-strip.cjs", "shrink-prompts.cjs", "mcp-server.cjs"
         ];
         for (const sName of kitScripts) {
           const src = path.join(kitDir, sName);
           if (fs.existsSync(src)) {
-            fs.copyFileSync(src, path.join(targetKitDir, sName));
+            const dest = path.join(targetKitDir, sName);
+            fs.copyFileSync(src, dest);
+            if (sName.endsWith('.sh') || sName.endsWith('.cjs')) {
+              try { fs.chmodSync(dest, 0o755); } catch {}
+            }
           }
         }
-        // Copiar lib/ com os motores de MemPalace, RAG, Lockfile e Skeleton
+        // Copiar lib/ com os motores de MemPalace, RAG, Lockfile, Skeleton e Checkpoint
         const kitLibDir = path.join(kitDir, 'lib');
         if (fs.existsSync(kitLibDir)) {
           copyFolderRecursive(kitLibDir, path.join(targetKitDir, 'lib'));
@@ -503,7 +540,39 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         // Copiar mcp-server.cjs para a raiz de .agents também para execução direta
         const mcpServerSrc = path.join(kitDir, 'mcp-server.cjs');
         if (fs.existsSync(mcpServerSrc)) {
-          fs.copyFileSync(mcpServerSrc, path.join(agentsDir, 'mcp-server.cjs'));
+          const destMcp = path.join(agentsDir, 'mcp-server.cjs');
+          fs.copyFileSync(mcpServerSrc, destMcp);
+          try { fs.chmodSync(destMcp, 0o755); } catch {}
+        }
+        // Copiar blindagem de índices (.graphifyignore e .astgrepignore)
+        for (const ign of ['.graphifyignore', '.astgrepignore']) {
+          const ignSrc = path.join(kitDir, ign);
+          if (fs.existsSync(ignSrc)) {
+            fs.copyFileSync(ignSrc, path.join(targetKitDir, ign));
+            fs.copyFileSync(ignSrc, path.join(targetDir, ign));
+          }
+        }
+        // Copiar rules/ e skills/ para dentro de .agents/kit/ para hermeticidade total
+        const kitRulesDir = path.join(kitDir, 'rules');
+        if (fs.existsSync(kitRulesDir)) {
+          copyFolderRecursive(kitRulesDir, path.join(targetKitDir, 'rules'));
+        }
+        const kitSkillsDir = path.join(kitDir, 'skills');
+        if (fs.existsSync(kitSkillsDir)) {
+          copyFolderRecursive(kitSkillsDir, path.join(targetKitDir, 'skills'));
+        }
+        // Instalar atalhos diretos em scripts/ para conveniência
+        const targetScriptsDir = path.join(targetDir, 'scripts');
+        if (!fs.existsSync(targetScriptsDir)) fs.mkdirSync(targetScriptsDir, { recursive: true });
+        for (const sName of ["test-kit.sh", "test-kit.ps1"]) {
+          const src = path.join(targetKitDir, sName);
+          if (fs.existsSync(src)) {
+            const dest = path.join(targetScriptsDir, sName);
+            fs.copyFileSync(src, dest);
+            if (sName.endsWith('.sh')) {
+              try { fs.chmodSync(dest, 0o755); } catch {}
+            }
+          }
         }
         await sleep(60);
       }
@@ -571,6 +640,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           try {
             const rawConfig = JSON.parse(fs.readFileSync(configJsonPath, 'utf8'));
             rawConfig.response_language = 'pt-BR';
+            rawConfig.kit_mode = rawConfig.kit_mode || 'smart-assist';
             if (!rawConfig.workflow) rawConfig.workflow = {};
             rawConfig.workflow.ui_phase = hasFrontend;
             rawConfig.workflow.ui_safety_gate = hasFrontend;
@@ -607,8 +677,10 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         const gitHooksDir = path.join(targetDir, '.git', 'hooks');
         if (fs.existsSync(gitHooksDir)) {
           const autoHealContent = '#!/bin/sh\n# Antigravity GSD Kit Auto-Heal Hook\nif [ -f ".agents/kit/patch-agents.cjs" ]; then\n    node .agents/kit/patch-agents.cjs >/dev/null 2>&1 || true\nfi\n';
-          fs.writeFileSync(path.join(gitHooksDir, 'post-merge'), autoHealContent, 'utf8');
-          fs.writeFileSync(path.join(gitHooksDir, 'post-checkout'), autoHealContent, 'utf8');
+          const postMergePath = path.join(gitHooksDir, 'post-merge');
+          const postCheckoutPath = path.join(gitHooksDir, 'post-checkout');
+          fs.writeFileSync(postMergePath, autoHealContent, 'utf8');
+          fs.writeFileSync(postCheckoutPath, autoHealContent, 'utf8');
 
           const postCommitCmd = path.join(gitHooksDir, 'post-commit.cmd');
           const postCommitCmdContent = '@echo off\r\nif exist .agents\\kit\\gsd-graphify-update.cjs (\r\n    node .agents\\kit\\gsd-graphify-update.cjs\r\n)\r\n';
@@ -617,10 +689,19 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           const postCommitSh = path.join(gitHooksDir, 'post-commit');
           const postCommitShContent = '#!/bin/sh\nif [ -f .agents/kit/gsd-graphify-update.cjs ]; then\n    node .agents/kit/gsd-graphify-update.cjs\nfi\n';
           fs.writeFileSync(postCommitSh, postCommitShContent, 'utf8');
+
+          try {
+            fs.chmodSync(postMergePath, 0o755);
+            fs.chmodSync(postCheckoutPath, 0o755);
+            fs.chmodSync(postCommitSh, 0o755);
+          } catch {}
         }
 
         const gitignorePath = path.join(targetDir, '.gitignore');
         const runtimeIgnores = [
+          'gsd-agy-kit/',
+          '.gsd-agy-kit-tmp/',
+          'graphify-out/',
           '.agents/.cache/',
           '.agents/.cache',
           '.agents/.health-cache',
@@ -669,10 +750,38 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
   stepper.cleanup();
   renderDashboard();
 
-  if (options.interactivePromptTest && process.stdin.isTTY) {
+  console.log(`${C.bCyan}📦 Instalação Nativa Concluída com Sucesso!${C.reset}`);
+  console.log(`   ${C.dim}O Antigravity GSD Kit agora reside de forma nativa e permanente no projeto:${C.reset}`);
+  console.log(`   ${C.bGreen}• .agents/kit/${C.reset} ${C.dim}(bateria de testes, painel de controle, utilitários e desinstalador)${C.reset}`);
+  console.log(`   ${C.bGreen}• .agents/skills/gsd-test/${C.reset} ${C.dim}(skill nativa /gsd-test no Antigravity CLI)${C.reset}`);
+  console.log(`   ${C.bGreen}• .agents/skills/gsd-tokens/${C.reset} ${C.dim}(skill nativa /gsd-tokens no Antigravity CLI)${C.reset}`);
+  console.log(`   ${C.bGreen}• scripts/test-kit.sh${C.reset} ${C.dim}(atalho para execução direta no terminal)${C.reset}\n`);
+
+  if (options.interactivePromptTest && canPromptInteractively()) {
     const runTestAns = await askPrompt(`   ${C.bold}Deseja executar a bateria de testes de validação agora? [S/n]: ${C.reset}`);
     if (runTestAns !== 'n' && runTestAns !== 'nao') {
       runTest(targetDir);
+    }
+  }
+
+  // Limpeza automática da pasta temporária do instalador (padrão ativo exceto se --no-cleanup)
+  const isSubdirOfTarget = kitDir !== targetDir && kitDir.startsWith(targetDir + path.sep) && !kitDir.includes('.agents');
+  if (isSubdirOfTarget && options.cleanup !== false) {
+    const folderName = path.basename(kitDir);
+    console.log(`   ${C.dim}Removendo pasta temporária do instalador ('${folderName}') com segurança...${C.reset}`);
+    try {
+      if (process.platform === 'win32') {
+        const { spawn } = require('child_process');
+        const cleanCmd = `timeout /t 1 /nobreak >nul & rmdir /s /q "${kitDir}"`;
+        spawn('cmd.exe', ['/c', cleanCmd], { detached: true, stdio: 'ignore', cwd: targetDir }).unref();
+        console.log(`   ${C.bGreen}✔ Agendada remoção da pasta temporária '${folderName}' ao encerrar o processo.${C.reset}\n`);
+      } else {
+        process.chdir(targetDir);
+        fs.rmSync(kitDir, { recursive: true, force: true });
+        console.log(`   ${C.bGreen}✔ Pasta temporária '${folderName}' removida com sucesso!${C.reset}\n`);
+      }
+    } catch (err) {
+      console.log(`   ${C.bYellow}⚠ Não foi possível remover automaticamente: ${err.message}. Você pode removê-la manualmente.${C.reset}\n`);
     }
   }
 }
@@ -680,11 +789,19 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
 function runTest(targetDir) {
   const kitDir = path.resolve(__dirname);
   console.log(`\n${C.bCyan}🧪 Executando Bateria de Testes Automatizados no Workspace...${C.reset}\n`);
+
+  let psScript = path.join(kitDir, 'test-kit.ps1');
+  let shScript = path.join(kitDir, 'test-kit.sh');
+  if (!fs.existsSync(shScript) && fs.existsSync(path.join(targetDir, '.agents', 'kit', 'test-kit.sh'))) {
+    shScript = path.join(targetDir, '.agents', 'kit', 'test-kit.sh');
+  }
+  if (!fs.existsSync(psScript) && fs.existsSync(path.join(targetDir, '.agents', 'kit', 'test-kit.ps1'))) {
+    psScript = path.join(targetDir, '.agents', 'kit', 'test-kit.ps1');
+  }
+
   if (process.platform === 'win32') {
-    const psScript = path.join(kitDir, 'test-kit.ps1');
     spawnSync('pwsh', ['-NoProfile', '-File', psScript, '-TargetDir', targetDir], { stdio: 'inherit' });
   } else {
-    const shScript = path.join(kitDir, 'test-kit.sh');
     spawnSync('bash', [shScript, targetDir], { stdio: 'inherit' });
   }
 }
@@ -883,9 +1000,13 @@ async function main() {
   let command = '';
   let extraArg = '';
 
+  const flagOnlyArgs = new Set(['--cleanup', '--no-cleanup', '--frontend', '--no-frontend']);
+
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a.startsWith('--')) {
+      if (flagOnlyArgs.has(a)) continue;
+      if (a.startsWith('--has-frontend=')) continue;
       if (!command) {
         command = a;
         if (args[i + 1] && !args[i + 1].startsWith('--')) {
@@ -898,16 +1019,23 @@ async function main() {
     }
   }
 
+  const isInstalledInAgents = kitDir.endsWith(path.join('.agents', 'kit')) || kitDir.endsWith('/.agents/kit') || kitDir.endsWith('\\.agents\\kit');
+  const parentOfKit = path.dirname(kitDir);
+  const parentLooksLikeProject = fs.existsSync(path.join(parentOfKit, '.agents')) || fs.existsSync(path.join(parentOfKit, '.planning'));
+  const projectRootOfKit = isInstalledInAgents ? path.dirname(path.dirname(kitDir)) : (parentLooksLikeProject ? parentOfKit : kitDir);
+
   if (!targetDir) {
     const cwd = process.cwd();
-    if (cwd === kitDir || cwd.startsWith(kitDir)) {
-      targetDir = path.dirname(kitDir);
+    if (cwd === kitDir || cwd.startsWith(kitDir + path.sep)) {
+      targetDir = projectRootOfKit;
     } else {
       targetDir = cwd;
     }
-  } else if (targetDir === kitDir || targetDir.startsWith(kitDir)) {
-    targetDir = path.dirname(kitDir);
+  } else if (targetDir === kitDir || targetDir.startsWith(kitDir + path.sep)) {
+    targetDir = projectRootOfKit;
   }
+
+  const noCleanup = args.includes('--no-cleanup');
 
   // Despacho de Comandos Diretos (CLI / Não-Interativo)
   if (command === '--test') {
@@ -942,20 +1070,29 @@ async function main() {
     await runUninstall(targetDir);
     return;
   }
-  if (command === '--install') {
-    let hasFrontend = null;
-    if (extraArg === 'true' || extraArg === '1') hasFrontend = true;
-    if (extraArg === 'false' || extraArg === '0') hasFrontend = false;
-    await runInstaller(targetDir, hasFrontend, { interactivePromptTest: false });
-    return;
-  }
-  if (command === '--menu' || (!command && process.stdin.isTTY)) {
+  if (command === '--menu') {
     await interactiveMenuLoop(targetDir);
     return;
   }
 
-  // Fallback padrão para ambientes não-interativos (CI / background)
-  await runInstaller(targetDir, false, { interactivePromptTest: false });
+  // Se executado de dentro de .agents/kit sem argumentos, abre o Painel de Controle
+  if (!command && isInstalledInAgents && !args.includes('--frontend') && !args.includes('--no-frontend') && canPromptInteractively()) {
+    await interactiveMenuLoop(targetDir);
+    return;
+  }
+
+  // Padrão para comando único (npx, install.sh, install.ps1, setup.sh, setup.ps1 ou --install):
+  // Inicia direto o instalador interativo (perguntando Backend vs Fullstack se não especificado) e limpa temporários ao final
+  let hasFrontend = null;
+  const hasFrontendEq = args.find(a => a.startsWith('--has-frontend='));
+  if (hasFrontendEq) {
+    const val = hasFrontendEq.split('=')[1];
+    hasFrontend = (val === 'true' || val === '1');
+  }
+  if (args.includes('--frontend') || extraArg === 'true' || extraArg === '1') hasFrontend = true;
+  if (args.includes('--no-frontend') || extraArg === 'false' || extraArg === '0') hasFrontend = false;
+
+  await runInstaller(targetDir, hasFrontend, { interactivePromptTest: false, cleanup: !noCleanup });
 }
 
 main().catch(err => {

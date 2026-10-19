@@ -47,10 +47,24 @@ const CACHE_DIR = path.join(PROJECT_ROOT, '.agents', '.cache');
 const INCIDENTS_FILE = path.join(CACHE_DIR, 'session-incidents.json');
 const REPORT_FILE = path.join(CACHE_DIR, 'latest-session-report.json');
 
-function readStdin() {
+function writeJsonAtomic(filePath, data) {
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const tmpFile = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2), 'utf8');
+    fs.renameSync(tmpFile, filePath);
+  } catch {}
+}
+
+function readStdin(timeoutMs = 400) {
+  if (process.stdin.isTTY) return Promise.resolve('');
   return new Promise((resolve) => {
     let data = '';
-    const timer = setTimeout(() => resolve(''), 2000);
+    const timer = setTimeout(() => {
+      try { process.stdin.pause(); } catch {}
+      resolve(data);
+    }, timeoutMs);
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', chunk => { data += chunk; });
     process.stdin.on('end', () => {
@@ -78,10 +92,7 @@ function loadIncidents() {
 }
 
 function saveIncidents(incidents) {
-  if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
-  try {
-    fs.writeFileSync(INCIDENTS_FILE, JSON.stringify(incidents, null, 2), 'utf8');
-  } catch {}
+  writeJsonAtomic(INCIDENTS_FILE, incidents);
 }
 
 function recordIncident(incident) {

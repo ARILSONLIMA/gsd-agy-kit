@@ -12,12 +12,45 @@ $ErrorActionPreference = "Continue"
 $kitDir = $PSScriptRoot
 
 if (-not $TargetDir) {
-    $currentLoc = (Get-Location).Path
-    if ($currentLoc -eq $kitDir -or $currentLoc.StartsWith($kitDir)) {
+    if ($kitDir.EndsWith("\.agents\kit") -or $kitDir.EndsWith("/.agents/kit")) {
+        $TargetDir = Split-Path (Split-Path $kitDir -Parent) -Parent
+    } elseif ($kitDir.EndsWith("\scripts") -or $kitDir.EndsWith("/scripts")) {
         $TargetDir = Split-Path $kitDir -Parent
+        if (Test-Path (Join-Path $TargetDir ".agents\kit")) {
+            $kitDir = Join-Path $TargetDir ".agents\kit"
+        }
     } else {
-        $TargetDir = $currentLoc
+        $currentLoc = (Get-Location).Path
+        if (Test-Path (Join-Path $currentLoc ".agents\hooks\token-guard-pretool.cjs")) {
+            $TargetDir = $currentLoc
+        } elseif (Test-Path (Join-Path (Split-Path $kitDir -Parent) ".agents\hooks\token-guard-pretool.cjs")) {
+            $TargetDir = Split-Path $kitDir -Parent
+        } elseif (Test-Path (Join-Path $kitDir ".agents\hooks\token-guard-pretool.cjs")) {
+            $TargetDir = $kitDir
+        } elseif ($currentLoc -eq $kitDir -or $currentLoc.StartsWith($kitDir)) {
+            $TargetDir = Split-Path $kitDir -Parent
+        } else {
+            $TargetDir = $currentLoc
+        }
     }
+} else {
+    if (Test-Path $TargetDir) {
+        $TargetDir = (Resolve-Path $TargetDir).Path
+    }
+    if ($kitDir.EndsWith("\.agents\kit") -or $kitDir.EndsWith("/.agents/kit")) {
+        # Executando instalado
+    } elseif (Test-Path (Join-Path $TargetDir ".agents\kit")) {
+        $kitDir = Join-Path $TargetDir ".agents\kit"
+    }
+}
+
+function Find-KitScript {
+    param ([string]$Name)
+    $p = Join-Path $kitDir $Name
+    if (Test-Path $p) { return $p }
+    $p2 = Join-Path $TargetDir ".agents\kit\$Name"
+    if (Test-Path $p2) { return $p2 }
+    return Join-Path $PSScriptRoot $Name
 }
 
 # Pre-flight Check: verificar se o kit está instalado no TargetDir
@@ -27,7 +60,12 @@ if (-not (Test-Path $agentsDirCheck) -or -not (Test-Path $hookPathCheck)) {
     Write-Host "`n🛑 [Pre-flight Check] Workspace nao configurado!" -ForegroundColor Red
     Write-Host "   O diretorio '$TargetDir' nao contem a infraestrutura do kit instalada (.agents/hooks/token-guard-pretool.cjs)." -ForegroundColor Yellow
     Write-Host "`n💡 Para instalar e blindar este projeto, execute:" -ForegroundColor Cyan
-    Write-Host "   pwsh $(Join-Path $kitDir 'setup.ps1') -TargetDir '$TargetDir'`n" -ForegroundColor White
+    $setupScript = Find-KitScript "setup-ui.cjs"
+    if (Test-Path $setupScript) {
+        Write-Host "   node '$setupScript' '$TargetDir' --install`n" -ForegroundColor White
+    } else {
+        Write-Host "   pwsh $(Join-Path $kitDir 'setup.ps1') -TargetDir '$TargetDir'`n" -ForegroundColor White
+    }
     exit 1
 }
 
@@ -345,7 +383,7 @@ Assert-Test -Name "Git hooks de auto-cura presentes em .git/hooks/" `
 # ------------------------------------------------------------------------------
 # Teste 9: Telemetria de Tokens (token-report.cjs / /gsd-tokens)
 # ------------------------------------------------------------------------------
-$tokenReportPath = Join-Path $kitDir "token-report.cjs"
+$tokenReportPath = Find-KitScript "token-report.cjs"
 $tokenReportOk = $false
 try {
     $reportOutput = node $tokenReportPath --json 2>$null | ConvertFrom-Json
@@ -421,7 +459,7 @@ Assert-Test -Name "Hook PreToolUse promove instantaneamente (JIT) skill do pool 
 # ------------------------------------------------------------------------------
 # Teste 13: Motor de UI do Instalador (setup-ui.cjs)
 # ------------------------------------------------------------------------------
-$setupUiPath = Join-Path $kitDir "setup-ui.cjs"
+$setupUiPath = Find-KitScript "setup-ui.cjs"
 $uiSyntaxOk = $false
 try {
     node --check $setupUiPath 2>$null
@@ -549,7 +587,7 @@ Assert-Test -Name "Hook PreToolUse auto-limita comandos prolixos via alias de fe
 # ------------------------------------------------------------------------------
 # Teste 16: State Compactor (compact-state.cjs)
 # ------------------------------------------------------------------------------
-$compactStatePath = Join-Path $kitDir "compact-state.cjs"
+$compactStatePath = Find-KitScript "compact-state.cjs"
 $compactStateOk = $false
 try {
     node --check $compactStatePath 2>$null
@@ -582,7 +620,7 @@ Assert-Test -Name "State Compactor (compact-state.cjs) arquiva metricas historic
 # ------------------------------------------------------------------------------
 # Teste 17: JSON Stream Compact (compact-json.cjs)
 # ------------------------------------------------------------------------------
-$compactJsonPath = Join-Path $kitDir "compact-json.cjs"
+$compactJsonPath = Find-KitScript "compact-json.cjs"
 $compactJsonResult = '{"a":1,"b":null}' | node $compactJsonPath | ConvertFrom-Json
 $compactJsonOk = ($compactJsonResult.a -eq 1) -and ($compactJsonResult.b -eq $null)
 
@@ -593,7 +631,7 @@ Assert-Test -Name "JSON Stream Compact (compact-json.cjs) operacional e filtrand
 # ------------------------------------------------------------------------------
 # Teste 18: Output Sanitizer (sanitize-output.cjs)
 # ------------------------------------------------------------------------------
-$sanitizerPath = Join-Path $kitDir "sanitize-output.cjs"
+$sanitizerPath = Find-KitScript "sanitize-output.cjs"
 $testOutput = (1..80 | ForEach-Object { "Linha de teste $_" }) -join "`n"
 $sanitizedOut = $testOutput | node $sanitizerPath
 $sanitizedOk = ($sanitizedOut -match "TOKEN GUARD") -and ($sanitizedOut -match "Linha de teste 1")
@@ -603,7 +641,7 @@ Assert-Test -Name "Output Sanitizer (sanitize-output.cjs) trunca saidas extensas
             -ErrorDetails "sanitize-output.cjs nao truncou saida de 80 linhas adequadamente"
 
 # 18.2: Teste Funcional do Sanitize Command (sanitize-command.ps1 / sanitize-output.cjs --exec)
-$sanitizeCmdPath = Join-Path $kitDir "sanitize-command.ps1"
+$sanitizeCmdPath = Find-KitScript "sanitize-command.ps1"
 $sanitizeCmdOk = $false
 try {
     $sanOutput = & $sanitizeCmdPath "node -e `"for(let i=1;i<=80;i++)console.log('Linha '+i)`""
@@ -688,7 +726,7 @@ Assert-Test -Name "Hook PreToolUse permite sobrescrita de write_to_file em pasta
 # ------------------------------------------------------------------------------
 # Teste 24: Operacao do Skill Surface Manager (skills-manager.cjs)
 # ------------------------------------------------------------------------------
-$skillsMgrPath = Join-Path $kitDir "skills-manager.cjs"
+$skillsMgrPath = Find-KitScript "skills-manager.cjs"
 $skillsStatusOk = $false
 try {
     $mgrOutput = node $skillsMgrPath status "$TargetDir" 2>$null
@@ -704,7 +742,7 @@ Assert-Test -Name "Skill Surface Manager (skills-manager.cjs) operacional exibin
 # ------------------------------------------------------------------------------
 # Teste 25: Extrator de Estado do GSD (gsd-state-summary.cjs)
 # ------------------------------------------------------------------------------
-$stateSummaryPath = Join-Path $kitDir "gsd-state-summary.cjs"
+$stateSummaryPath = Find-KitScript "gsd-state-summary.cjs"
 $stateSummaryOk = $false
 try {
     $sumJson = node $stateSummaryPath $TargetDir 2>$null | ConvertFrom-Json
@@ -741,8 +779,8 @@ Assert-Test -Name "Extrator de Estado GSD (gsd-state-summary.cjs) operacional ge
 # ------------------------------------------------------------------------------
 # Teste 26: Integridade Sintatica dos Utilitarios do Kit (patch-agents & graphify-update)
 # ------------------------------------------------------------------------------
-$patchAgentsPath = Join-Path $kitDir "patch-agents.cjs"
-$graphifyUpdatePath = Join-Path $kitDir "gsd-graphify-update.cjs"
+$patchAgentsPath = Find-KitScript "patch-agents.cjs"
+$graphifyUpdatePath = Find-KitScript "gsd-graphify-update.cjs"
 $syntaxOk = $false
 try {
     node --check $patchAgentsPath 2>$null
@@ -814,10 +852,10 @@ Assert-Test -Name "Hook Graphify Update (gsd-graphify-update.cjs) ignora comando
 # ------------------------------------------------------------------------------
 # Teste 27: Validacao Sintatica Integral de Scripts PowerShell (.ps1) e Shell (.sh)
 # ------------------------------------------------------------------------------
-$ps1Files = @("setup.ps1", "uninstall.ps1", "skills-profile.ps1", "sanitize-command.ps1", "optimize-tokens.ps1", "test-kit.ps1")
+$ps1Files = @("setup.ps1", "install.ps1", "uninstall.ps1", "skills-profile.ps1", "sanitize-command.ps1", "optimize-tokens.ps1", "test-kit.ps1")
 $ps1AllValid = $true
 foreach ($ps1 in $ps1Files) {
-    $fullPs1 = Join-Path $kitDir $ps1
+    $fullPs1 = Find-KitScript $ps1
     if (Test-Path $fullPs1) {
         $parseErrors = $null
         [System.Management.Automation.Language.Parser]::ParseFile($fullPs1, [ref]$null, [ref]$parseErrors) | Out-Null
@@ -831,10 +869,10 @@ Assert-Test -Name "Todos os scripts PowerShell do kit ($($ps1Files.Count) script
             -Condition $ps1AllValid `
             -ErrorDetails "Um ou mais scripts .ps1 possuem erro de sintaxe PowerShell"
 
-$shFiles = @("setup.sh", "uninstall.sh", "skills-profile.sh", "optimize-tokens.sh", "test-kit.sh")
+$shFiles = @("setup.sh", "install.sh", "uninstall.sh", "skills-profile.sh", "optimize-tokens.sh", "test-kit.sh")
 $shAllPresent = $true
 foreach ($sh in $shFiles) {
-    $fullSh = Join-Path $kitDir $sh
+    $fullSh = Find-KitScript $sh
     if (-not (Test-Path $fullSh) -or (Get-Item $fullSh).Length -eq 0) {
         $shAllPresent = $false; break
     }
@@ -847,7 +885,14 @@ Assert-Test -Name "Todos os scripts Shell do kit ($($shFiles.Count) scripts .sh)
 # ------------------------------------------------------------------------------
 # Teste 28: Integridade das Regras e Skills Canonicas Empacotadas
 # ------------------------------------------------------------------------------
-$rulesDir = Join-Path $kitDir "rules"
+$rulesDir = if (Test-Path (Join-Path $kitDir "rules")) {
+    Join-Path $kitDir "rules"
+} elseif (Test-Path (Join-Path $TargetDir ".agents\rules")) {
+    Join-Path $TargetDir ".agents\rules"
+} else {
+    Join-Path $PSScriptRoot "rules"
+}
+
 $expectedRules = @("ast-grep.md", "gopls.md", "graphify.md", "idioma.md", "token-protocol.md")
 $rulesAllOk = $true
 foreach ($rule in $expectedRules) {
@@ -861,12 +906,28 @@ Assert-Test -Name "Regras canonicas em rules/ ($($expectedRules.Count) regras) p
             -Condition $rulesAllOk `
             -ErrorDetails "Regras canonicas ausentes ou corrompidas em $rulesDir"
 
-$gsdTokensSkill = Join-Path $kitDir "skills\gsd-tokens\SKILL.md"
-$skillOk = (Test-Path $gsdTokensSkill) -and ((Get-Content $gsdTokensSkill -Raw) -match "name:\s*gsd-tokens")
+$gsdTokensSkill = if (Test-Path (Join-Path $kitDir "skills\gsd-tokens\SKILL.md")) {
+    Join-Path $kitDir "skills\gsd-tokens\SKILL.md"
+} elseif (Test-Path (Join-Path $TargetDir ".agents\skills\gsd-tokens\SKILL.md")) {
+    Join-Path $TargetDir ".agents\skills\gsd-tokens\SKILL.md"
+} else {
+    Join-Path $PSScriptRoot "skills\gsd-tokens\SKILL.md"
+}
 
-Assert-Test -Name "Skill canônica de tokens (skills/gsd-tokens/SKILL.md) presente com frontmatter valido" `
+$gsdTestSkill = if (Test-Path (Join-Path $kitDir "skills\gsd-test\SKILL.md")) {
+    Join-Path $kitDir "skills\gsd-test\SKILL.md"
+} elseif (Test-Path (Join-Path $TargetDir ".agents\skills\gsd-test\SKILL.md")) {
+    Join-Path $TargetDir ".agents\skills\gsd-test\SKILL.md"
+} else {
+    Join-Path $PSScriptRoot "skills\gsd-test\SKILL.md"
+}
+
+$skillOk = (Test-Path $gsdTokensSkill) -and ((Get-Content $gsdTokensSkill -Raw) -match "name:\s*gsd-tokens") -and `
+           (Test-Path $gsdTestSkill) -and ((Get-Content $gsdTestSkill -Raw) -match "name:\s*gsd-test")
+
+Assert-Test -Name "Skills canônicas (/gsd-tokens e /gsd-test) presentes com frontmatter valido" `
             -Condition $skillOk `
-            -ErrorDetails "skills/gsd-tokens/SKILL.md ausente ou sem frontmatter valido"
+            -ErrorDetails "skills/gsd-tokens ou skills/gsd-test ausente ou sem frontmatter valido"
 
 
 
@@ -874,23 +935,27 @@ Assert-Test -Name "Skill canônica de tokens (skills/gsd-tokens/SKILL.md) presen
 # Testes das Novas Funcionalidades (Otimização de Tokens Avançada)
 # ------------------------------------------------------------------------------
 
-$shrinkScript = Join-Path $kitDir "shrink-prompts.cjs"
+$shrinkScript = Find-KitScript "shrink-prompts.cjs"
 Assert-Test -Name "Script de minificação (shrink-prompts.cjs) presente" `
             -Condition (Test-Path $shrinkScript) `
             -ErrorDetails "shrink-prompts.cjs não encontrado na raiz do kit"
 
-$outlineScript = Join-Path $kitDir "gsd-outline.cjs"
+$outlineScript = Find-KitScript "gsd-outline.cjs"
 Assert-Test -Name "Script de skeleton (gsd-outline.cjs) presente" `
             -Condition (Test-Path $outlineScript) `
             -ErrorDetails "gsd-outline.cjs não encontrado na raiz do kit"
 
-$stripScript = Join-Path $kitDir "gsd-read-strip.cjs"
+$stripScript = Find-KitScript "gsd-read-strip.cjs"
 Assert-Test -Name "Script de read-strip (gsd-read-strip.cjs) presente" `
             -Condition (Test-Path $stripScript) `
             -ErrorDetails "gsd-read-strip.cjs não encontrado na raiz do kit"
 
 # Testa se o hook token-guard-pretool.cjs tem os novos gates
-$pretoolHook = Join-Path $kitDir "hooks\token-guard-pretool.cjs"
+$pretoolHook = if (Test-Path (Join-Path $kitDir "hooks\token-guard-pretool.cjs")) {
+    Join-Path $kitDir "hooks\token-guard-pretool.cjs"
+} else {
+    Join-Path $agentsDir "hooks\token-guard-pretool.cjs"
+}
 $pretoolContent = Get-Content $pretoolHook -Raw -Encoding utf8
 $hasStateGate = $pretoolContent -match "STATE.md Blocker"
 $hasOutlineHint = $pretoolContent -match "gsd-outline"
@@ -906,10 +971,17 @@ Assert-Test -Name "Hook PreToolUse sugere gsd-outline.cjs ao rejeitar view_file 
 # ------------------------------------------------------------------------------
 # Teste MCP Server Dual-Mode CLI (mcp-server.cjs)
 # ------------------------------------------------------------------------------
-$mcpBinPath = Join-Path $kitDir "mcp-server.cjs"
-if (Test-Path (Join-Path $agentsDir "mcp-server.cjs")) {
-    $mcpBinPath = Join-Path $agentsDir "mcp-server.cjs"
+$mcpBinPath = Find-KitScript "mcp-server.cjs"
+$mcpLibDir = if (Test-Path (Join-Path $kitDir "lib")) {
+    Join-Path $kitDir "lib"
+} elseif (Test-Path (Join-Path $TargetDir ".agents\kit\lib")) {
+    Join-Path $TargetDir ".agents\kit\lib"
+} elseif (Test-Path (Join-Path $TargetDir ".agents\lib")) {
+    Join-Path $TargetDir ".agents\lib"
+} else {
+    Join-Path $PSScriptRoot "lib"
 }
+
 $mcpCliOk = $false
 try {
     $toolsOut = node $mcpBinPath tools 2>$null
@@ -928,7 +1000,7 @@ Assert-Test -Name "Servidor MCP Dual-Mode atende chamadas diretas de CLI (tools 
 # ------------------------------------------------------------------------------
 $astQueryOk = $false
 try {
-    $astOut = node $mcpBinPath ast "class `$NAME" js (Join-Path $kitDir "lib") 2>$null
+    $astOut = node $mcpBinPath ast "class `$NAME" js "$mcpLibDir" 2>$null
     if ($astOut -match "AST Query" -and $astOut -match "correspondência") {
         $astQueryOk = $true
     }
@@ -944,14 +1016,16 @@ Assert-Test -Name "Tool ast_query nativa no MCP Server localiza padrões estrutu
 $testIsoOk = $false
 try {
     $isoRes = node -e '
-    const TestIsolate = require("./lib/test-isolate.cjs");
+    const path = require("path");
+    const libDir = process.argv[1];
+    const TestIsolate = require(path.join(libDir, "test-isolate.cjs"));
     const t = new TestIsolate();
     const out = "✖ Scenario 10 - Circuit Breaker (50ms)\nnot ok 2 - should retry";
     const f = t.parseFailures(out);
     if (f.length === 2 && f.includes("Scenario 10 - Circuit Breaker")) {
       process.stdout.write("OK");
     }
-    ' 2>$null
+    ' "$mcpLibDir" 2>$null
     if ($isoRes -eq "OK") { $testIsoOk = $true }
 } catch {}
 
@@ -965,13 +1039,15 @@ Assert-Test -Name "Test Isolate Engine (lib/test-isolate.cjs) extrai falhas pont
 $chkOk = $false
 try {
     $chkRes = node -e '
-    const Checkpoint = require("./lib/checkpoint-engine.cjs");
+    const path = require("path");
+    const libDir = process.argv[1];
+    const Checkpoint = require(path.join(libDir, "checkpoint-engine.cjs"));
     const c = new Checkpoint();
     const list = c.listCheckpoints();
     if (Array.isArray(list)) {
       process.stdout.write("OK");
     }
-    ' 2>$null
+    ' "$mcpLibDir" 2>$null
     if ($chkRes -eq "OK") { $chkOk = $true }
 } catch {}
 
@@ -985,11 +1061,13 @@ Assert-Test -Name "Checkpoint Engine (lib/checkpoint-engine.cjs) gerencia micro-
 $skelMultiOk = $false
 try {
     $skelMultiRes = node -e '
-    const Skeleton = require("./lib/skeleton-engine.cjs");
-    const fs = require("fs");
     const path = require("path");
-    const skel = new Skeleton(process.cwd());
-    const testDir = path.join(process.cwd(), ".agents", "temp-multi-test-ps");
+    const fs = require("fs");
+    const libDir = process.argv[1];
+    const targetDir = process.argv[2];
+    const Skeleton = require(path.join(libDir, "skeleton-engine.cjs"));
+    const skel = new Skeleton(targetDir);
+    const testDir = path.join(targetDir, ".agents", "temp-multi-test-ps");
     fs.mkdirSync(testDir, { recursive: true });
     fs.writeFileSync(path.join(testDir, "test.php"), "<?php\nclass UserService { public function find() {} }", "utf8");
     fs.writeFileSync(path.join(testDir, "test.rb"), "class OrderController\n  def create\n  end\nend", "utf8");
@@ -1003,7 +1081,7 @@ try {
     if (oPhp.includes("class UserService") && oRb.includes("class OrderController") && oDart.includes("class ProductBloc") && oEx.includes("defmodule PaymentGateway")) {
       process.stdout.write("OK");
     }
-    ' 2>$null
+    ' "$mcpLibDir" "$TargetDir" 2>$null
     if ($skelMultiRes -eq "OK") { $skelMultiOk = $true }
 } catch {}
 
@@ -1017,10 +1095,12 @@ Assert-Test -Name "Skeleton Engine suporta extração estrutural em PHP, Ruby, D
 $lensMultiOk = $false
 try {
     $lensMultiRes = node -e '
-    const Lens = require("./lib/lockfile-lens.cjs");
-    const fs = require("fs");
     const path = require("path");
-    const testDir = path.join(process.cwd(), ".agents", "temp-lens-multi-ps");
+    const fs = require("fs");
+    const libDir = process.argv[1];
+    const targetDir = process.argv[2];
+    const Lens = require(path.join(libDir, "lockfile-lens.cjs"));
+    const testDir = path.join(targetDir, ".agents", "temp-lens-multi-ps");
     fs.mkdirSync(testDir, { recursive: true });
     fs.writeFileSync(path.join(testDir, "composer.json"), JSON.stringify({ require: { "laravel/framework": "^10.0" } }), "utf8");
     fs.writeFileSync(path.join(testDir, "Gemfile"), "source \"https://rubygems.org\"\ngem \"rails\", \"~> 7.0\"\n", "utf8");
@@ -1033,7 +1113,7 @@ try {
     if (resPhp.found && resRb.found && resDart.found) {
       process.stdout.write("OK");
     }
-    ' 2>$null
+    ' "$mcpLibDir" "$TargetDir" 2>$null
     if ($lensMultiRes -eq "OK") { $lensMultiOk = $true }
 } catch {}
 
@@ -1050,16 +1130,18 @@ try {
     const fs = require("fs");
     const path = require("path");
     const { execSync } = require("child_process");
-    const testDir = path.join(process.cwd(), ".agents", "temp-proto-test-ps");
+    const patchPath = process.argv[1];
+    const targetDir = process.argv[2];
+    const testDir = path.join(targetDir, ".agents", "temp-proto-test-ps");
     fs.mkdirSync(path.join(testDir, ".agents", "agents"), { recursive: true });
     fs.writeFileSync(path.join(testDir, ".agents", "agents", "gsd-executor.md"), "---\nname: gsd-executor\ntools:\n  - view_file\n---\nExecutor", "utf8");
-    execSync(`node "${path.join(process.cwd(), "patch-agents.cjs")}" "${testDir}"`, { stdio: "ignore" });
+    execSync(`node "${patchPath}" "${testDir}"`, { stdio: "ignore" });
     const content = fs.readFileSync(path.join(testDir, ".agents", "agents", "gsd-executor.md"), "utf8");
     fs.rmSync(testDir, { recursive: true, force: true });
     if (content.includes("GREENFIELD FAST-TRACK") && content.includes("mode=\"greenfield\"")) {
       process.stdout.write("OK");
     }
-    ' 2>$null
+    ' "$patchAgentsPath" "$TargetDir" 2>$null
     if ($protoRes -eq "OK") { $protoOk = $true }
 } catch {}
 
@@ -1075,11 +1157,13 @@ try {
     $autoSliceRes = node -e '
     const fs = require("fs");
     const path = require("path");
-    const dummyFile = path.join(process.cwd(), ".agents", "temp-slice-test-ps.js");
+    const hookPath = process.argv[1];
+    const targetDir = process.argv[2];
+    const dummyFile = path.join(targetDir, ".agents", "temp-slice-test-ps.js");
     fs.writeFileSync(dummyFile, Array(150).fill("console.log(1);").join("\n"), "utf8");
     const { execSync } = require("child_process");
     const payload = JSON.stringify({ toolCall: { name: "view_file", args: { AbsolutePath: dummyFile, StartLine: 1, EndLine: 150 } } });
-    const res = execSync(`node "${path.join(process.cwd(), "hooks", "token-guard-pretool.cjs")}"`, {
+    const res = execSync(`node "${hookPath}"`, {
       input: payload,
       env: { ...process.env, GSD_KIT_MODE: "smart-assist" },
       encoding: "utf8"
@@ -1089,7 +1173,7 @@ try {
     if (parsed.decision === "allow" && parsed.overwrite && parsed.overwrite.EndLine === 100) {
       process.stdout.write("OK");
     }
-    ' 2>$null
+    ' "$pretoolHook" "$TargetDir" 2>$null
     if ($autoSliceRes -eq "OK") { $autoSliceOk = $true }
 } catch {}
 
@@ -1100,10 +1184,19 @@ Assert-Test -Name "Hook PreToolUse auto-corrige range excessivo via overwrite em
 # ------------------------------------------------------------------------------
 # Teste Blindagem de Índices (.graphifyignore e .astgrepignore)
 # ------------------------------------------------------------------------------
-$ignoreOk = (Test-Path (Join-Path $kitDir ".graphifyignore")) -and (Test-Path (Join-Path $kitDir ".astgrepignore"))
-Assert-Test -Name "Arquivos de blindagem de índices (.graphifyignore e .astgrepignore) presentes no kit" `
+$ignoreOk = $false
+if ((Test-Path (Join-Path $TargetDir ".graphifyignore")) -and (Test-Path (Join-Path $TargetDir ".astgrepignore")) -and `
+    ((Get-Content (Join-Path $TargetDir ".graphifyignore") -Raw) -match "graphify-out/") -and `
+    ((Get-Content (Join-Path $TargetDir ".astgrepignore") -Raw) -match "graphify-out/")) {
+    $ignoreOk = $true
+} elseif ((Test-Path (Join-Path $kitDir ".graphifyignore")) -and (Test-Path (Join-Path $kitDir ".astgrepignore")) -and `
+    ((Get-Content (Join-Path $kitDir ".graphifyignore") -Raw) -match "graphify-out/") -and `
+    ((Get-Content (Join-Path $kitDir ".astgrepignore") -Raw) -match "graphify-out/")) {
+    $ignoreOk = $true
+}
+Assert-Test -Name "Arquivos de blindagem de índices (.graphifyignore e .astgrepignore) presentes e com graphify-out/" `
             -Condition $ignoreOk `
-            -ErrorDetails "Arquivos .graphifyignore ou .astgrepignore ausentes na raiz do kit"
+            -ErrorDetails "Arquivos .graphifyignore ou .astgrepignore ausentes ou sem graphify-out/"
 
 # ------------------------------------------------------------------------------
 # Resumo Final

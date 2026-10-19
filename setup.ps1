@@ -38,7 +38,11 @@ param (
     [switch]$Graphify,
 
     [Parameter(ParameterSetName = "Menu")]
-    [switch]$Menu
+    [switch]$Menu,
+
+    [switch]$Cleanup,
+
+    [switch]$NoCleanup
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,8 +52,15 @@ $kitDir = $PSScriptRoot
 # Auto-detecção do diretório alvo (raiz do projeto)
 if (-not $TargetDir) {
     $currentLoc = (Get-Location).Path
-    if ($currentLoc -eq $kitDir -or $currentLoc.StartsWith($kitDir)) {
-        $TargetDir = Split-Path $kitDir -Parent
+    if ($kitDir -match "[\\/]\.agents[\\/]kit$") {
+        $TargetDir = Split-Path (Split-Path $kitDir -Parent) -Parent
+    } elseif ($currentLoc -eq $kitDir -or $currentLoc.StartsWith($kitDir)) {
+        $parentDir = Split-Path $kitDir -Parent
+        if ((Test-Path (Join-Path $parentDir ".agents")) -or (Test-Path (Join-Path $parentDir ".planning"))) {
+            $TargetDir = $parentDir
+        } else {
+            $TargetDir = $kitDir
+        }
     } else {
         $TargetDir = $currentLoc
     }
@@ -79,21 +90,22 @@ if (Test-Path $uiScript) {
     elseif ($Doctor) { $cmdArg = "--doctor" }
     elseif ($Health) { $cmdArg = "--health" }
     elseif ($Graphify) { $cmdArg = "--graphify" }
-    elseif ($Install) {
+    elseif ($Install -or $null -ne $HasFrontend) {
         $cmdArg = "--install"
         if ($null -ne $HasFrontend) { $extraArg = if ($HasFrontend) { "true" } else { "false" } }
     }
     elseif ($Menu) { $cmdArg = "--menu" }
 
+    $cleanupFlag = if ($NoCleanup) { @("--no-cleanup") } elseif ($Cleanup) { @("--cleanup") } else { @() }
     if ($cmdArg) {
         if ($extraArg) {
-            node $uiScript "$TargetDir" "$cmdArg" "$extraArg"
+            node $uiScript "$TargetDir" "$cmdArg" "$extraArg" @cleanupFlag
         } else {
-            node $uiScript "$TargetDir" "$cmdArg"
+            node $uiScript "$TargetDir" "$cmdArg" @cleanupFlag
         }
     } else {
-        # Padrão: abre o Painel de Controle / Hub Interativo
-        node $uiScript "$TargetDir" "--menu"
+        # Padrão: inicia o instalador interativo (perguntando Backend vs Fullstack) e limpa temporários
+        node $uiScript "$TargetDir" "--install" @cleanupFlag
     }
     exit $LASTEXITCODE
 }
@@ -173,18 +185,15 @@ try {
     exit 1
 }
 
-# 2.3: GSD Core / GSD Path no Projeto (Hard Stop)
+# 2.3: GSD Core no Projeto (Hard Stop)
 $gsdCorePath = Join-Path $TargetDir ".agents\gsd-core"
 $gsdAgentsPath = Join-Path $TargetDir ".agents\agents"
-$gsdPathDir = Join-Path $TargetDir ".gsd-path"
-$gsdProjectDir = Join-Path $TargetDir ".project"
-$gsdPathSkills = Join-Path $TargetDir ".agents\skills\gsd-path"
 
-if ((-not (Test-Path $gsdCorePath)) -and (-not (Test-Path $gsdAgentsPath)) -and (-not (Test-Path $gsdPathDir)) -and (-not (Test-Path $gsdProjectDir)) -and (-not (Test-Path $gsdPathSkills))) {
-    Write-Host "`n🛑 [HARD STOP] Ecossistema GSD (Core ou Path) nao detectado neste projeto!" -ForegroundColor Red
-    Write-Host "   Nao foram encontrados .project, .gsd-path, .agents/gsd-core ou .agents/agents em: $TargetDir" -ForegroundColor Yellow
+if ((-not (Test-Path $gsdCorePath)) -and (-not (Test-Path $gsdAgentsPath))) {
+    Write-Host "`n🛑 [HARD STOP] Ecossistema GSD nao detectado neste projeto!" -ForegroundColor Red
+    Write-Host "   Nao foram encontrados .agents/gsd-core ou .agents/agents em: $TargetDir" -ForegroundColor Yellow
     Write-Host "   Este kit foi desenhado para blindar e normalizar um projeto GSD existente." -ForegroundColor Yellow
-    Write-Host "   Inicialize o projeto com o GSD primeiro (ex: rodando /gsd-new-project, /gsd-path ou instalando o GSD)" -ForegroundColor Cyan
+    Write-Host "   Inicialize o projeto com o GSD primeiro (ex: rodando /gsd-new-project ou instalando o GSD)" -ForegroundColor Cyan
     Write-Host "   e entao execute este setup para ativar a governanca.`n" -ForegroundColor Yellow
     exit 1
 }
@@ -203,12 +212,11 @@ if (-not (Test-Path $hooksDir)) {
     New-Item -ItemType Directory -Path $hooksDir -Force | Out-Null
 }
 
-# 4. Copiar Regra Canônica e Hooks para .agents/hooks/
-$sourceRule = Join-Path $kitDir "rules\token-protocol.md"
-$destRule = Join-Path $rulesDir "token-protocol.md"
-if (Test-Path $sourceRule) {
-    Copy-Item -Path $sourceRule -Destination $destRule -Force
-    Write-Host "   Regra de tokens copiada para: $destRule" -ForegroundColor Green
+# 4. Copiar Regras Canônicas e Hooks para .agents/rules/ e .agents/hooks/
+$rulesSrcDir = Join-Path $kitDir "rules"
+if (Test-Path $rulesSrcDir) {
+    Copy-Item -Path "$rulesSrcDir\*" -Destination $rulesDir -Force
+    Write-Host "   Regras de comportamento e tools copiadas para: $rulesDir" -ForegroundColor Green
 }
 
 $kitHooksDir = Join-Path $kitDir "hooks"
@@ -366,32 +374,47 @@ Write-Host "   Servidor MCP registrado em: $mcpJsonPath" -ForegroundColor Green
 Write-Host "   Plugin local registrado em: $pluginsJsonPath" -ForegroundColor Green
 Write-Host "   Memoria episodica (MemPalace) pronta em: $memoryDir" -ForegroundColor Green
 
-# 9. Instalar Scripts Utilitários do Kit (scripts/)
+# 9. Instalar Pacote Completo e Utilitários Nativos (.agents/kit/ e scripts/)
+$targetKitDir = Join-Path $agentsDir "kit"
+New-Item -ItemType Directory -Path $targetKitDir -Force | Out-Null
 $targetScriptsDir = Join-Path $TargetDir "scripts"
 New-Item -ItemType Directory -Path $targetScriptsDir -Force | Out-Null
+
 if (Test-Path $kitLibDir) {
+    Copy-Item -Path "$kitLibDir\*" -Destination (Join-Path $targetKitDir "lib") -Recurse -Force
     $targetScriptsLibDir = Join-Path $targetScriptsDir "lib"
     New-Item -ItemType Directory -Path $targetScriptsLibDir -Force | Out-Null
     Copy-Item -Path "$kitLibDir\*" -Destination $targetScriptsLibDir -Recurse -Force
 }
-$kitScripts = @("token-report.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs", "test-sanitized.ps1", "build-sanitized.ps1", "patch-agents.cjs", "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs", "sanitize-command.ps1", "shrink-prompts.cjs", "gsd-outline.cjs", "gsd-read-strip.cjs", "mcp-server.cjs")
+
+$kitScripts = @("test-kit.ps1", "test-kit.sh", "setup-ui.cjs", "setup.ps1", "setup.sh", "install.ps1", "install.sh", "package.json", "uninstall.ps1", "uninstall.sh", "skills-profile.ps1", "skills-profile.sh", "optimize-tokens.ps1", "optimize-tokens.sh", "sanitize-command.ps1", "token-report.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs", "patch-agents.cjs", "optimize-tokens.cjs", "skills-manager.cjs", "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs", "shrink-prompts.cjs", "gsd-outline.cjs", "gsd-read-strip.cjs", "mcp-server.cjs")
 foreach ($sName in $kitScripts) {
     $src = Join-Path $kitDir $sName
+    if (Test-Path $src) {
+        Copy-Item -Path $src -Destination (Join-Path $targetKitDir $sName) -Force
+    }
+}
+
+# Atalhos diretos em scripts/ para conveniência no terminal
+foreach ($sName in @("test-kit.ps1", "test-kit.sh")) {
+    $src = Join-Path $targetKitDir $sName
     if (Test-Path $src) {
         Copy-Item -Path $src -Destination (Join-Path $targetScriptsDir $sName) -Force
     }
 }
-Write-Host "   Utilitarios de telemetria e testes instalados em: $targetScriptsDir" -ForegroundColor Green
+Write-Host "   Pacote completo do kit instalado nativamente em: $targetKitDir" -ForegroundColor Green
 
-# 10. Copiar Skills Especializadas (.agents/skills/gsd-tokens)
+# 10. Copiar Skills Especializadas (.agents/skills/gsd-tokens e gsd-test)
 $skillsDir = Join-Path $agentsDir "skills"
-$tokenSkillSrc = Join-Path $kitDir "skills\gsd-tokens"
-if (Test-Path $tokenSkillSrc) {
-    $tokenSkillDest = Join-Path $skillsDir "gsd-tokens"
-    if ($tokenSkillSrc -ne $tokenSkillDest) {
-        New-Item -ItemType Directory -Path $tokenSkillDest -Force | Out-Null
-        Copy-Item -Path "$tokenSkillSrc\*" -Destination $tokenSkillDest -Recurse -Force
-        Write-Host "   Skill /gsd-tokens instalada em: $tokenSkillDest" -ForegroundColor Green
+foreach ($skName in @("gsd-tokens", "gsd-test")) {
+    $skSrc = Join-Path $kitDir "skills\$skName"
+    if (Test-Path $skSrc) {
+        $skDest = Join-Path $skillsDir $skName
+        if ($skSrc -ne $skDest) {
+            New-Item -ItemType Directory -Path $skDest -Force | Out-Null
+            Copy-Item -Path "$skSrc\*" -Destination $skDest -Recurse -Force
+            Write-Host "   Skill /$skName instalada em: $skDest" -ForegroundColor Green
+        }
     }
 }
 
@@ -513,7 +536,7 @@ fi
     Write-Host "   Git hooks (post-merge, post-checkout, post-commit assincrono) instalados em .git/hooks" -ForegroundColor Green
 }
 
-# 12.1 Garantir kits e .cache no .gitignore do projeto alvo
+# 12.1 Garantir kits, caches e graphify-out no .gitignore do projeto alvo
 $gitignorePath = Join-Path $TargetDir ".gitignore"
 if (Test-Path $gitignorePath) {
     $giContent = Get-Content $gitignorePath -Raw -Encoding utf8
@@ -523,7 +546,10 @@ if (Test-Path $gitignorePath) {
     if ($giContent -notmatch "(?m)^\.agents/\.cache/?$") {
         Add-Content -Path $gitignorePath -Value "`n.agents/.cache/" -Encoding utf8
     }
-    Write-Host "   Entradas de protecao (.agents/.cache/ e kits) garantidas no .gitignore" -ForegroundColor Green
+    if ($giContent -notmatch "(?m)^graphify-out/?$") {
+        Add-Content -Path $gitignorePath -Value "`ngraphify-out/" -Encoding utf8
+    }
+    Write-Host "   Entradas de protecao (.agents/.cache/, graphify-out/ e kits) garantidas no .gitignore" -ForegroundColor Green
 }
 
 # 12.2 Blindagem de Índices (.graphifyignore e .astgrepignore)

@@ -25,7 +25,7 @@ function resolveProjectRoot() {
   }
   let dir = process.cwd();
   for (;;) {
-    if (fs.existsSync(path.join(dir, '.agents')) || fs.existsSync(path.join(dir, '.git')) || fs.existsSync(path.join(dir, '.project'))) {
+    if (fs.existsSync(path.join(dir, '.agents')) || fs.existsSync(path.join(dir, '.git')) || fs.existsSync(path.join(dir, '.planning'))) {
       return dir;
     }
     const up = path.dirname(dir);

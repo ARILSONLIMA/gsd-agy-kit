@@ -23,7 +23,8 @@ const PROFILES = {
     'gsd-code-review',
     'gsd-dev-preferences',
     'gsd-graphify',
-    'gsd-tokens'
+    'gsd-tokens',
+    'gsd-test'
   ],
   backend: [
     // Core loop
@@ -57,7 +58,8 @@ const PROFILES = {
     'gsd-workstreams',
     'gsd-dev-preferences',
     'gsd-graphify',
-    'gsd-tokens'
+    'gsd-tokens',
+    'gsd-test'
   ]
 };
 
@@ -65,6 +67,7 @@ const GLOBAL_SKILLS = [
   'gsd-progress',
   'gsd-help',
   'gsd-tokens',
+  'gsd-test',
   'gsd-dev-preferences',
   'gsd-settings',
   'gsd-health',
@@ -322,20 +325,39 @@ function detectPhaseFromState(targetDir) {
   if (!fs.existsSync(stateFile)) return 'core';
   try {
     const content = fs.readFileSync(stateFile, 'utf8').toLowerCase();
-    if (/status:\s*(planning|specifying|discussing|plan)/i.test(content) || /phase:\s*.*plan/i.test(content)) {
+    if (/status:\s*(planning|specifying|discussing|plan)/i.test(content) || /phase:\s*.*(plan|define|roadmap)/i.test(content)) {
       return 'planning';
     }
-    if (/status:\s*(executing|in-progress|exec)/i.test(content) || /phase:\s*.*exec/i.test(content)) {
+    if (/status:\s*(executing|in[-_]progress|running|exec|build)/i.test(content) || /(phase|current plan):\s*.*(exec|build|plan)/i.test(content)) {
       return 'execution';
     }
-    if (/status:\s*(verifying|testing|uat|review)/i.test(content) || /phase:\s*.*verif/i.test(content)) {
+    if (/status:\s*(verifying|verification|testing|uat|review|ship)/i.test(content) || /phase:\s*.*(verif|review|ship)/i.test(content)) {
       return 'verification';
     }
-    if (/status:\s*(researching|spike|explore)/i.test(content)) {
+    if (/status:\s*(research|researching|spike|explore)/i.test(content) || /phase:\s*.*research/i.test(content)) {
       return 'research';
     }
   } catch {}
   return 'core';
+}
+
+function getActiveJitSkills(targetDir) {
+  const jitFile = path.join(targetDir, '.agents', '.cache', 'jit-promotions.json');
+  const jitLegacy = path.join(targetDir, '.agents', '.jit-promotions.json');
+  const file = fs.existsSync(jitFile) ? jitFile : (fs.existsSync(jitLegacy) ? jitLegacy : null);
+  const set = new Set();
+  if (!file) return set;
+  try {
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (data && data.skills && typeof data.skills === 'object') {
+      for (const [skillName, meta] of Object.entries(data.skills)) {
+        if (meta && meta.turnsRemaining > 0) {
+          set.add(skillName);
+        }
+      }
+    }
+  } catch {}
+  return set;
 }
 
 function syncSkills(targetDir, explicitPhase) {
@@ -344,7 +366,8 @@ function syncSkills(targetDir, explicitPhase) {
   const { activeDir, poolDir } = getPaths(targetDir);
 
   const phaseList = PHASE_SKILLS[phase] || PHASE_SKILLS.core;
-  const targetSet = new Set([...GLOBAL_SKILLS, ...phaseList]);
+  const jitSkills = getActiveJitSkills(targetDir);
+  const targetSet = new Set([...GLOBAL_SKILLS, ...phaseList, ...jitSkills]);
 
   // Preserva skills de projeto existentes
   const currentActive = fs.readdirSync(activeDir).filter(f => fs.statSync(path.join(activeDir, f)).isDirectory());

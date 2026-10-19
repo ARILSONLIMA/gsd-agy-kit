@@ -99,7 +99,7 @@ O kit opera em 4 camadas complementares:
      - `npm list` / `pnpm list` sem `--depth` ➔ `--depth=0`
      - **Preservação de URLs:** Normaliza letras de drive Windows (`D:/` ➔ `D:\`) sem corromper URLs de rede (`http://`, `https://`, `ftp://`).
 
-   - **`sanitize-output.cjs` / `sanitize-command.ps1`:** Truncador no estilo Headroom que limita saídas longas a head + tail e preserva o dump integral em `.planning/debug/` ou `.project/debug/`.
+   - **`sanitize-output.cjs` / `sanitize-command.ps1`:** Truncador no estilo Headroom que limita saídas longas a head + tail e preserva o dump integral em `.planning/debug/` ou `.agents/debug/`.
 
 10. **Servidor MCP Padronizado & Motores de Economia Dual-Mode (`mcp-server.cjs` & `lib/`):**
     - **Dual-Mode Transparente:** Opera como Servidor MCP Stdio JSON-RPC 2.0 em `.agents/mcp_config.json` e `.agents/plugins/gsd-economy/` quando montado pelo Antigravity, E simultaneamente como utilitário CLI ultra-rápido via `run_command` (`node .agents/mcp-server.cjs <cmd>`) com zero dependências npm.
@@ -122,53 +122,67 @@ O kit opera em 4 camadas complementares:
     - Em projetos existentes (**Brownfield**): mantém a esteira analítica profunda completa.
 
 13. **Blindagem de Grafos e Índices (`.graphifyignore` & `.astgrepignore`):**
-    - Instala templates de exclusão que impedem o `graphify` e o `ast-grep` de indexarem os scripts do kit e arquivos internos de controle, eliminando centenas de milhares de nós e arestas inúteis do grafo de conhecimento.
-
-14. **Compatibilidade Universal Dual-Engine (`gsd-path` + `gsd-core`):**
-    - Suporte automático e transparente para **GSD Path** (`.project/STATE.md`, `.gsd-path/`) e **GSD Core** (`.planning/STATE.md`, `.agents/gsd-core`).
-    - O instalador detecta a arquitetura do projeto e aplica a governança ideal sem quebras ou conflitos.
+    - Instala templates de exclusão que impedem o `graphify` e o `ast-grep` de indexarem os scripts do kit, saídas de grafos (`graphify-out/`) e arquivos internos de controle, eliminando centenas de milhares de nós e arestas inúteis do grafo de conhecimento.
 
 ---
 
-## 🚀 Instalação Rápida
+## 🚀 Instalação Rápida com 1 Comando (Direto na Raiz do Projeto)
 
-Durante a instalação, o assistente perguntará interativamente se o projeto possui interface **Front-End**:
+Durante a instalação, o assistente perguntará interativamente se o projeto possui interface **Front-End** e limpará automaticamente qualquer arquivo temporário ao final:
 - **Sem Front-End (Padrão/Enter):** Desativa fases de UI (`ui_phase: false`, `ui_safety_gate: false`, `ui_review: false`) e ativa o perfil enxuto `backend` (arquivando 43 skills de UI/design).
-- **Com Front-End (s/sim):** Habilita governança de UI e restaura o perfil `full` com 100% das skills ativas.
+- **Com Front-End (2/s/sim):** Habilita governança de UI e restaura o perfil `full` com 100% das skills ativas.
 
-### No Windows (PowerShell)
-```powershell
-# Interativo (pergunta se terá Front-End)
-pwsh gsd-agy-kit/setup.ps1
+### ⚡ Opção 1: Universal via `npx` (Windows, Linux, macOS, WSL)
+Execute diretamente na pasta raiz do seu projeto GSD (não deixa nenhuma pasta residual):
+
+```bash
+# Interativo (pergunta Backend vs Fullstack)
+npx github:ARILSONLIMA/gsd-agy-kit
 
 # Não-interativo (direto para Backend ou Fullstack)
-pwsh gsd-agy-kit/setup.ps1 -HasFrontend:$false
-pwsh gsd-agy-kit/setup.ps1 -HasFrontend:$true
+npx github:ARILSONLIMA/gsd-agy-kit --no-frontend
+npx github:ARILSONLIMA/gsd-agy-kit --frontend
 ```
 
-### No Linux / macOS / WSL (Bash)
+### 🐧 Opção 2: One-Liner via `curl` (Linux / macOS / WSL)
 ```bash
-# Interativo
-chmod +x gsd-agy-kit/setup.sh
-gsd-agy-kit/setup.sh
+# Interativo com limpeza automática de temporários
+curl -fsSL https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.sh | bash
 
 # Não-interativo via flags
-gsd-agy-kit/setup.sh --no-frontend
-gsd-agy-kit/setup.sh --frontend
+curl -fsSL https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.sh | bash -s -- --no-frontend
+curl -fsSL https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.sh | bash -s -- --frontend
 ```
+
+### 🪟 Opção 3: One-Liner via `irm` (Windows PowerShell)
+```powershell
+# Interativo com limpeza automática de temporários
+irm https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.ps1 | iex
+
+# Não-interativo (Backend ou Fullstack)
+$env:GSD_FRONTEND="false"; irm https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.ps1 | iex
+$env:GSD_FRONTEND="true"; irm https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.ps1 | iex
+```
+
+### 📂 Opção 4: Via `git clone` ou Pasta Local
+```bash
+# Linux / macOS / WSL (baixa, instala interativamente e remove a pasta gsd-agy-kit automaticamente ao final)
+git clone --depth 1 https://github.com/ARILSONLIMA/gsd-agy-kit.git && bash gsd-agy-kit/setup.sh
+
+# Windows PowerShell
+git clone --depth 1 https://github.com/ARILSONLIMA/gsd-agy-kit.git; pwsh gsd-agy-kit/setup.ps1
+```
+*(Caso queira manter a pasta clonada `gsd-agy-kit` após a instalação, passe `--no-cleanup` no Bash ou `-NoCleanup` no PowerShell).*
 
 ---
 
-## 📦 Como Transportar para Outros Projetos
+## 📦 Onde o Kit Fica Instalado?
 
-Para blindar qualquer outro projeto que utilize GSD:
-
-1. **Copie a pasta:**
-   Cole a pasta `gsd-agy-kit` diretamente na pasta raiz do seu projeto.
-2. **Execute o setup:**
-   - No Windows: `pwsh gsd-agy-kit/setup.ps1`
-   - No Linux: `bash gsd-agy-kit/setup.sh`
-3. **Pronto!** O projeto estará imediatamente compatibilizado e protegido.
+O kit instala toda a sua infraestrutura de forma **nativa e permanente** dentro de `.agents/`:
+- **`.agents/kit/`**: Bateria de testes, painel de controle (`setup-ui.cjs`), utilitários e desinstalador.
+- **`.agents/hooks/` & `.agents/hooks.json`**: Hard gates (`PreInvocation`, `PreToolUse`, `PostToolUse`, `Stop`).
+- **`.agents/skills/gsd-test/` & `.agents/skills/gsd-tokens/`**: Skills nativas `/gsd-test` e `/gsd-tokens`.
+- **`scripts/test-kit.sh` & `scripts/test-kit.ps1`**: Atalhos rápidos de validação para terminal.
 
 ---
 
@@ -184,21 +198,44 @@ Ao inspecionar ou alterar código, a esteira obrigatória é:
 
 ---
 
-## 🧪 Bateria de Testes Automatizados (Instantânea)
+## 🧪 Bateria de Testes Nativos (Instantânea)
 
-Para validar a integridade de todas as proteções, execute o validador incluído:
+Após a instalação (mesmo tendo deletado a pasta temporária `gsd-agy-kit`), você pode verificar a integridade de todas as proteções das seguintes maneiras:
+
+### 1. Via Skill Nativa no Antigravity CLI
+Basta digitar a skill no chat do agente:
+```markdown
+/gsd-test
+```
+O agente executará a suíte de testes automaticamente via `run_command` no terminal do projeto e reportará os resultados.
+
+### 2. Diretamente pelo Terminal
+
+- **No Linux / macOS / WSL (Bash):**
+  ```bash
+  # Via atalho em scripts/
+  bash scripts/test-kit.sh
+
+  # Ou diretamente do pacote nativo .agents/kit/
+  bash .agents/kit/test-kit.sh
+  ```
 
 - **No Windows (PowerShell):**
   ```powershell
-  pwsh gsd-agy-kit/test-kit.ps1
-  ```
-- **No Linux / WSL (Bash):**
-  ```bash
-  chmod +x gsd-agy-kit/test-kit.sh
-  gsd-agy-kit/test-kit.sh
+  # Via atalho em scripts/
+  pwsh scripts/test-kit.ps1
+
+  # Ou diretamente do pacote nativo .agents/kit/
+  pwsh .agents/kit/test-kit.ps1
   ```
 
-O validador testa e confirma 100% dos 85 testes e regras de proteção:
+### 3. Painel de Controle / Hub Interativo Nativo
+Para abrir o menu interativo a qualquer momento mesmo sem a pasta do instalador:
+```bash
+node .agents/kit/setup-ui.cjs . --menu
+```
+
+O validador testa e confirma 100% dos testes e regras de proteção:
 - ✅ **Normalização dos subagentes:** ausência de `glob`/`grep_search` e protocolo injetado em todos os agentes ativos e no pool.
 - ✅ **Hard Gate `view_file`:** bloqueio sem paginação em modo estrito, bloqueio com range > 100 linhas, liberação cirúrgica (≤ 100 linhas) e liberação irrestrita para documentação.
 - ✅ **Smart-Assist Auto-Slicing:** auto-correção proativa de ranges e paginação cirúrgica via `res.overwrite` sem penalidade de turnos.
@@ -207,7 +244,7 @@ O validador testa e confirma 100% dos 85 testes e regras de proteção:
 - ✅ **Test Isolate Engine:** detecção e isolamento de testes falhos para reexecução cirúrgica via Node, Jest, Go e Pytest.
 - ✅ **Git Micro-Checkpoints:** criação de snapshots e rollback instantâneo para prevenção de loops de alucinação.
 - ✅ **Expansão Multi-Stack:** Skeleton Engine e Lockfile Lens para TypeScript, Go, Python, Rust, C#, Java, PHP, Ruby, Dart e Elixir.
-- ✅ **Blindagem de Índices:** arquivos `.graphifyignore` e `.astgrepignore` garantindo isolamento total do kit e cache.
+- ✅ **Blindagem de Índices:** arquivos `.graphifyignore` e `.astgrepignore` garantindo isolamento total do kit, saída de grafos (`graphify-out/`) e cache.
 - ✅ **Gate Universal de Linguagens:** bloqueio cirúrgico estendido para `.vue`, `.svelte`, `.cs`, `.php`, `.rb`, `.swift`, `.kt`, `.sql`, `.dart`.
 - ✅ **Higienização de URIs:** suporte transparente a esquemas `file:///` e caminhos com til (`~`).
 - ✅ **Hard Gate `run_command`:** bloqueio de despejo cego (`cat`/`Get-Content`/`gc`/`head`), bloqueio de `go test -v`, bloqueio de reescrita em massa com `ast-grep` (`-r -u`) e bloqueio de aspas duplas com `$` no Windows.
@@ -244,14 +281,17 @@ Ao executar o `setup.ps1` ou `setup.sh`, o kit instala automaticamente hooks em 
 
 Se desejar remover o kit e reverter os subagentes para o estado padrão:
 
+- **Universal (Node.js):**
+  ```bash
+  node .agents/kit/setup-ui.cjs . --uninstall
+  ```
 - **No Windows (PowerShell):**
   ```powershell
-  pwsh gsd-agy-kit/uninstall.ps1
+  pwsh .agents/kit/uninstall.ps1
   ```
-- **No Linux / WSL (Bash):**
+- **No Linux / macOS / WSL (Bash):**
   ```bash
-  chmod +x gsd-agy-kit/uninstall.sh
-  gsd-agy-kit/uninstall.sh
+  bash .agents/kit/uninstall.sh
   ```
 
 O script de desinstalação:

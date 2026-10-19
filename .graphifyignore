@@ -1,8 +1,8 @@
 # Graphify Ignore File - Prevents knowledge graph pollution
 gsd-agy-kit/
+graphify-out/
 .agents/
 .planning/
-.project/
 .cache/
 .gemini/
 node_modules/

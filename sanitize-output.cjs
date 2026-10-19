@@ -13,11 +13,6 @@ const { execSync } = require('child_process');
 function resolveLogPath() {
   let dir = process.cwd();
   for (;;) {
-    if (fs.existsSync(path.join(dir, '.project'))) {
-      const debugDir = path.join(dir, '.project', 'debug');
-      if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
-      return path.join(debugDir, 'last-command-output.log');
-    }
     if (fs.existsSync(path.join(dir, '.planning'))) {
       const debugDir = path.join(dir, '.planning', 'debug');
       if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });

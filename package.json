@@ -1,0 +1,34 @@
+{
+  "name": "gsd-agy-kit",
+  "version": "1.4.0",
+  "description": "Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens para GSD no Antigravity CLI",
+  "main": "setup-ui.cjs",
+  "bin": {
+    "gsd-agy-kit": "./setup-ui.cjs"
+  },
+  "scripts": {
+    "start": "node setup-ui.cjs",
+    "install-kit": "node setup-ui.cjs --install",
+    "menu": "node setup-ui.cjs --menu",
+    "test": "bash test-kit.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ARILSONLIMA/gsd-agy-kit.git"
+  },
+  "keywords": [
+    "antigravity",
+    "gsd",
+    "get-stuff-done",
+    "token-optimization",
+    "mcp",
+    "mempalace",
+    "ast-grep",
+    "graphify"
+  ],
+  "author": "Arilson Lima",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

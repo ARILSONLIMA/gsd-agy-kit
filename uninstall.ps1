@@ -12,11 +12,15 @@ $ErrorActionPreference = "Continue"
 $kitDir = $PSScriptRoot
 
 if (-not $TargetDir) {
-    $currentLoc = (Get-Location).Path
-    if ($currentLoc -eq $kitDir -or $currentLoc.StartsWith($kitDir)) {
-        $TargetDir = Split-Path $kitDir -Parent
+    if ($kitDir.EndsWith("\.agents\kit") -or $kitDir.EndsWith("/.agents/kit")) {
+        $TargetDir = Split-Path (Split-Path $kitDir -Parent) -Parent
     } else {
-        $TargetDir = $currentLoc
+        $currentLoc = (Get-Location).Path
+        if ($currentLoc -eq $kitDir -or $currentLoc.StartsWith($kitDir)) {
+            $TargetDir = Split-Path $kitDir -Parent
+        } else {
+            $TargetDir = $currentLoc
+        }
     }
 }
 
@@ -48,13 +52,17 @@ $filesToRemove = @(
     (Join-Path $agentsDir "rules\ast-grep.md"),
     (Join-Path $agentsDir "rules\graphify.md"),
     (Join-Path $agentsDir "rules\idioma.md"),
+    (Join-Path $agentsDir "rules\gopls.md"),
     (Join-Path $agentsDir ".last-heal-check"),
     (Join-Path $agentsDir ".health-cache"),
     (Join-Path $agentsDir ".jit-promotions.json"),
     (Join-Path $agentsDir ".last-synced-phase"),
     (Join-Path $agentsDir ".cache"),
     (Join-Path $agentsDir "kit"),
-    (Join-Path $agentsDir "skills\gsd-tokens")
+    (Join-Path $agentsDir "skills\gsd-tokens"),
+    (Join-Path $agentsDir "skills\gsd-test"),
+    (Join-Path $TargetDir "scripts\test-kit.ps1"),
+    (Join-Path $TargetDir "scripts\test-kit.sh")
 )
 
 foreach ($file in $filesToRemove) {

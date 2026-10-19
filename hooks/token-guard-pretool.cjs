@@ -37,6 +37,16 @@ const HEALTH_CACHE_TTL_MS = 300000;
 const JIT_PROMOTIONS_FILE = path.join(CACHE_DIR, 'jit-promotions.json');
 const JIT_PROMOTIONS_LEGACY = path.join(PROJECT_ROOT, '.agents', '.jit-promotions.json');
 
+function writeJsonAtomic(filePath, data) {
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const tmpFile = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2), 'utf8');
+    fs.renameSync(tmpFile, filePath);
+  } catch {}
+}
+
 function verifyToolsHealth() {
   const now = Date.now();
   try {
@@ -65,9 +75,7 @@ function verifyToolsHealth() {
     health = { ok: false, error: err.message };
   }
 
-  try {
-    fs.writeFileSync(HEALTH_CACHE_FILE, JSON.stringify({ timestamp: now, health }), 'utf8');
-  } catch {}
+  writeJsonAtomic(HEALTH_CACHE_FILE, { timestamp: now, health });
 
   return health;
 }
@@ -78,8 +86,7 @@ function getKitMode() {
   }
   const configPaths = [
     path.join(PROJECT_ROOT, '.planning', 'config.json'),
-    path.join(PROJECT_ROOT, '.agents', 'config.json'),
-    path.join(PROJECT_ROOT, '.project', 'config.json')
+    path.join(PROJECT_ROOT, '.agents', 'config.json')
   ];
   for (const cfgPath of configPaths) {
     if (fs.existsSync(cfgPath)) {
@@ -90,7 +97,7 @@ function getKitMode() {
       } catch {}
     }
   }
-  return 'strict';
+  return 'smart-assist';
 }
 
 function sanitizePath(rawPath) {
@@ -132,7 +139,7 @@ function recordJitPromotion(type, name) {
     if (!data[type]) data[type] = {};
     // Renovação reativa de TTL: 5 turnos a cada acesso
     data[type][name] = { promotedAt: Date.now(), turnsRemaining: 5 };
-    fs.writeFileSync(JIT_PROMOTIONS_FILE, JSON.stringify(data, null, 2), 'utf8');
+    writeJsonAtomic(JIT_PROMOTIONS_FILE, data);
   } catch {}
 }
 
@@ -194,8 +201,7 @@ function respond(decision, reason, overwrite) {
         args: currentArgs || {},
         timestamp: Date.now()
       });
-      if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
-      fs.writeFileSync(incidentsFile, JSON.stringify(incidents.slice(-50), null, 2), 'utf8');
+      writeJsonAtomic(incidentsFile, incidents.slice(-50));
     } catch {}
   }
 
@@ -258,7 +264,7 @@ async function main() {
     let modifiedArgs = null;
     if (skillMatch) {
       const folderType = skillMatch[1];
-      const skillName = skillMatch[2];
+      const skillName = path.basename(skillMatch[2]);
       const projectRoot = PROJECT_ROOT;
       const activeSkillDir = path.join(projectRoot, '.agents', 'skills', skillName);
       const poolSkillDir = path.join(projectRoot, '.agents', 'skills-pool', skillName);
@@ -290,21 +296,26 @@ async function main() {
     let startLine = parseInt(args.StartLine, 10);
     let endLine = parseInt(args.EndLine, 10);
 
-    // Detect file total lines on disk if available
-    let fileTotalLines = 0;
-    try {
-      const resolved = path.resolve(rawTarget);
-      if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
-        const content = fs.readFileSync(resolved, 'utf8');
-        fileTotalLines = content.split('\n').length;
-      }
-    } catch {}
+    // Contagem lazy de linhas no disco (apenas quando necessária)
+    let cachedTotalLines = null;
+    const getFileTotalLines = () => {
+      if (cachedTotalLines !== null) return cachedTotalLines;
+      cachedTotalLines = 0;
+      try {
+        const resolved = path.resolve(rawTarget);
+        if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
+          const content = fs.readFileSync(resolved, 'utf8');
+          cachedTotalLines = content.split('\n').length;
+        }
+      } catch {}
+      return cachedTotalLines;
+    };
 
     // Dicas específicas por stack de linguagem
     const ext = path.extname(target).toLowerCase();
     let langToolHint = "Use busca cirúrgica ou ast-grep run -p '<padrão>'";
     if (ext === '.go') {
-      langToolHint = "Use gopls (MCP: go_search, go_package_api, go_file_context) ou ast-grep run -p '<padrão>' --lang go";
+      langToolHint = "Use gopls (CLI/MCP) ou ast-grep run -p '<padrão>' --lang go";
     } else if (['.js', '.jsx', '.cjs', '.mjs'].includes(ext)) {
       langToolHint = "Use ast-grep run -p '<padrão>' --lang js ou busca textual cirúrgica";
     } else if (['.ts', '.tsx'].includes(ext)) {
@@ -328,6 +339,8 @@ async function main() {
       if (kitMode === 'permissive') {
         return respond('allow', null, modifiedArgs);
       }
+
+      const fileTotalLines = getFileTotalLines();
 
       // Auto-injeção transparente para arquivos pequenos (<= 100 linhas no disco)
       if (fileTotalLines > 0 && fileTotalLines <= 100) {
@@ -364,9 +377,10 @@ async function main() {
         return respond('allow', null, modifiedArgs);
       }
 
-      if (kitMode === 'smart-assist') {
+      const fileTotalLines = getFileTotalLines();
+      if (kitMode === 'smart-assist' && fileTotalLines > 0) {
         // Smart-Assist: Auto-slicing suave cortando para teto de 100 linhas
-        endLine = startLine + 99;
+        endLine = Math.min(fileTotalLines, startLine + 99);
         modifiedArgs = Object.assign({}, modifiedArgs || {}, {
           StartLine: startLine,
           EndLine: endLine
@@ -420,7 +434,7 @@ async function main() {
         timestamp: now
       });
       if (recentReads.length > 10) recentReads = recentReads.slice(-10);
-      try { fs.writeFileSync(RECENT_READS_FILE, JSON.stringify(recentReads), 'utf8'); } catch {}
+      writeJsonAtomic(RECENT_READS_FILE, recentReads);
     } catch {}
 
     return respond('allow', null, modifiedArgs);
@@ -429,7 +443,7 @@ async function main() {
   // 2. Gate for run_command dumping code or verbose logs or mass rewrites
   if (toolName === 'run_command' || toolName === 'bash' || toolName === 'shell') {
     const cmd = typeof args.CommandLine === 'string' ? args.CommandLine : (typeof args.command === 'string' ? args.command : '');
-    const isRawCodeDump = /(?:^|[;&|(]\s*|&&\s*)(cat|type|Get-Content|gc|head|tail)\s+[^\n|><]+\.(go|ts|tsx|js|jsx|py|java|c|cpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|sql|dart)\b/i.test(cmd);
+    const isRawCodeDump = /(?:^|[;&|(]\s*|&&\s*)(cat|type|Get-Content|gc|head|tail|less|more|bat|nl)\s+[^\n|><]+\.(go|ts|tsx|js|jsx|py|java|c|cpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|sql|dart)\b/i.test(cmd);
 
     if (isRawCodeDump) {
       return respond(
@@ -562,7 +576,7 @@ async function main() {
     const rawTarget = sanitizePath(args.TargetFile || args.path || args.file_path || args.filePath || '');
     const target = path.resolve(rawTarget);
     const isCodeFile = /\.(go|ts|tsx|js|jsx|py|java|c|cpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|sql|dart)$/i.test(target);
-    const isScratchOrTemp = /[\\/](scratch|temp|tmp|\.cache)[\\/]/i.test(target);
+    const isScratchOrTemp = /[\\/](\.cache|\.agents[\\/](scratch|temp|tmp)|brain[\\/][^\\/]+[\\/]scratch)[\\/]/i.test(target) || /[\\/]scratch[\\/]/i.test(target);
     const overwrite = args.Overwrite === true || args.overwrite === true;
 
     if (isCodeFile && overwrite && !isScratchOrTemp && fs.existsSync(target)) {
@@ -595,7 +609,8 @@ async function main() {
       const poolDir = path.join(projectRoot, '.agents', 'agents-pool');
       const onDemandDir = path.join(projectRoot, '.agents', 'agents-on-demand');
 
-      for (const agentName of requested) {
+      for (const rawAgentName of requested) {
+        const agentName = path.basename(String(rawAgentName));
         const fileName = agentName.endsWith('.md') ? agentName : `${agentName}.md`;
         const activePath = path.join(agentsDir, fileName);
 

@@ -75,25 +75,33 @@ function checkAndAutoHeal() {
   }
 }
 
+function writeJsonAtomic(filePath, data) {
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const tmpFile = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2), 'utf8');
+    fs.renameSync(tmpFile, filePath);
+  } catch {}
+}
+
 const PHASE_TRACK_FILE = path.join(CACHE_DIR, 'last-synced-phase.txt');
 const PHASE_TRACK_LEGACY = path.join(PROJECT_ROOT, '.agents', '.last-synced-phase');
 
 function checkPhaseSync() {
   try {
-    const projectState = path.join(PROJECT_ROOT, '.project', 'STATE.md');
-    const planningState = path.join(PROJECT_ROOT, '.planning', 'STATE.md');
-    const stateFile = fs.existsSync(projectState) ? projectState : (fs.existsSync(planningState) ? planningState : null);
-    if (!stateFile) return;
+    const stateFile = path.join(PROJECT_ROOT, '.planning', 'STATE.md');
+    if (!fs.existsSync(stateFile)) return;
 
     const content = fs.readFileSync(stateFile, 'utf8').toLowerCase();
     let currentPhase = 'core';
     if (/status:\s*(planning|specifying|discussing|plan)/i.test(content) || /phase:\s*.*(plan|define|roadmap)/i.test(content)) {
       currentPhase = 'planning';
-    } else if (/status:\s*(executing|in-progress|exec|build)/i.test(content) || /phase:\s*.*(exec|build)/i.test(content)) {
+    } else if (/status:\s*(executing|in[-_]progress|running|exec|build)/i.test(content) || /(phase|current plan):\s*.*(exec|build|plan)/i.test(content)) {
       currentPhase = 'execution';
-    } else if (/status:\s*(verifying|testing|uat|review|ship)/i.test(content) || /phase:\s*.*(verif|review|ship)/i.test(content)) {
+    } else if (/status:\s*(verifying|verification|testing|uat|review|ship)/i.test(content) || /phase:\s*.*(verif|review|ship)/i.test(content)) {
       currentPhase = 'verification';
-    } else if (/status:\s*(researching|spike|explore)/i.test(content) || /phase:\s*.*research/i.test(content)) {
+    } else if (/status:\s*(research|researching|spike|explore)/i.test(content) || /phase:\s*.*research/i.test(content)) {
       currentPhase = 'research';
     }
 
@@ -107,15 +115,31 @@ function checkPhaseSync() {
       fs.writeFileSync(PHASE_TRACK_FILE, currentPhase, 'utf8');
       const optScript = findKitScript('optimize-tokens.cjs');
       const skillsScript = findKitScript('skills-manager.cjs');
+      const compactScript = findKitScript('compact-state.cjs');
+
       if (optScript) {
-        try { execSync(`node "${optScript}" "${PROJECT_ROOT}" --sync`, { stdio: 'ignore', timeout: 5000 }); } catch {}
+        try {
+          const { syncDynamicAgentPool } = require(optScript);
+          syncDynamicAgentPool(PROJECT_ROOT, currentPhase);
+        } catch {
+          try { execSync(`node "${optScript}" "${PROJECT_ROOT}" --sync`, { stdio: 'ignore', timeout: 5000 }); } catch {}
+        }
       }
       if (skillsScript) {
-        try { execSync(`node "${skillsScript}" sync "${currentPhase}" "${PROJECT_ROOT}"`, { stdio: 'ignore', timeout: 5000 }); } catch {}
+        try {
+          const { syncSkills } = require(skillsScript);
+          syncSkills(PROJECT_ROOT, currentPhase);
+        } catch {
+          try { execSync(`node "${skillsScript}" sync "${currentPhase}" "${PROJECT_ROOT}"`, { stdio: 'ignore', timeout: 5000 }); } catch {}
+        }
       }
-      const compactScript = findKitScript('compact-state.cjs');
       if (compactScript) {
-        try { execSync(`node "${compactScript}" "${PROJECT_ROOT}"`, { stdio: 'ignore', timeout: 5000 }); } catch {}
+        try {
+          const { compactState } = require(compactScript);
+          compactState(PROJECT_ROOT);
+        } catch {
+          try { execSync(`node "${compactScript}" "${PROJECT_ROOT}"`, { stdio: 'ignore', timeout: 5000 }); } catch {}
+        }
       }
     }
   } catch {}
@@ -175,7 +199,7 @@ function checkJitTtlAndCleanup() {
     }
 
     if (changed) {
-      fs.writeFileSync(JIT_PROMOTIONS_FILE, JSON.stringify(data, null, 2), 'utf8');
+      writeJsonAtomic(JIT_PROMOTIONS_FILE, data);
     }
   } catch {}
 }
