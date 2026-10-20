@@ -929,37 +929,25 @@ Assert-Test -Name "Regras canonicas em rules/ ($($expectedRules.Count) regras) p
             -Condition $rulesAllOk `
             -ErrorDetails "Regras canonicas ausentes ou corrompidas em $rulesDir"
 
-$gsdTokensSkill = if (Test-Path (Join-Path $kitDir "skills\gsd-tokens\SKILL.md")) {
-    Join-Path $kitDir "skills\gsd-tokens\SKILL.md"
-} elseif (Test-Path (Join-Path $TargetDir ".agents\skills\gsd-tokens\SKILL.md")) {
-    Join-Path $TargetDir ".agents\skills\gsd-tokens\SKILL.md"
-} else {
-    Join-Path $PSScriptRoot "skills\gsd-tokens\SKILL.md"
+$canonicalSkills = @("gsd-tokens", "gsd-test", "gsd-agy-update", "gsd-diagnose", "gsd-constitution", "gsd-prototype", "gsd-standards-review")
+$skillOk = $true
+foreach ($sk in $canonicalSkills) {
+    $skPath = if (Test-Path (Join-Path $kitDir "skills\$sk\SKILL.md")) {
+        Join-Path $kitDir "skills\$sk\SKILL.md"
+    } elseif (Test-Path (Join-Path $TargetDir ".agents\skills\$sk\SKILL.md")) {
+        Join-Path $TargetDir ".agents\skills\$sk\SKILL.md"
+    } else {
+        Join-Path $PSScriptRoot "skills\$sk\SKILL.md"
+    }
+    if (-not (Test-Path $skPath) -or ((Get-Content $skPath -Raw) -notmatch "name:\s*$sk")) {
+        $skillOk = $false
+        break
+    }
 }
 
-$gsdTestSkill = if (Test-Path (Join-Path $kitDir "skills\gsd-test\SKILL.md")) {
-    Join-Path $kitDir "skills\gsd-test\SKILL.md"
-} elseif (Test-Path (Join-Path $TargetDir ".agents\skills\gsd-test\SKILL.md")) {
-    Join-Path $TargetDir ".agents\skills\gsd-test\SKILL.md"
-} else {
-    Join-Path $PSScriptRoot "skills\gsd-test\SKILL.md"
-}
-
-$gsdUpdateSkill = if (Test-Path (Join-Path $kitDir "skills\gsd-agy-update\SKILL.md")) {
-    Join-Path $kitDir "skills\gsd-agy-update\SKILL.md"
-} elseif (Test-Path (Join-Path $TargetDir ".agents\skills\gsd-agy-update\SKILL.md")) {
-    Join-Path $TargetDir ".agents\skills\gsd-agy-update\SKILL.md"
-} else {
-    Join-Path $PSScriptRoot "skills\gsd-agy-update\SKILL.md"
-}
-
-$skillOk = (Test-Path $gsdTokensSkill) -and ((Get-Content $gsdTokensSkill -Raw) -match "name:\s*gsd-tokens") -and `
-           (Test-Path $gsdTestSkill) -and ((Get-Content $gsdTestSkill -Raw) -match "name:\s*gsd-test") -and `
-           (Test-Path $gsdUpdateSkill) -and ((Get-Content $gsdUpdateSkill -Raw) -match "name:\s*gsd-agy-update")
-
-Assert-Test -Name "Skills canônicas (/gsd-tokens, /gsd-test e /gsd-agy-update) presentes com frontmatter valido" `
+Assert-Test -Name "Skills canônicas ($($canonicalSkills.Count) skills) presentes com frontmatter valido" `
             -Condition $skillOk `
-            -ErrorDetails "skills/gsd-tokens, skills/gsd-test ou skills/gsd-agy-update ausente ou sem frontmatter valido"
+            -ErrorDetails "Uma ou mais skills canonicas ausentes ou sem frontmatter valido"
 
 
 

@@ -202,7 +202,14 @@ git clone --depth 1 https://github.com/ARILSONLIMA/gsd-agy-kit.git; pwsh gsd-agy
 O kit instala toda a sua infraestrutura de forma **nativa e permanente** dentro de `.agents/`:
 - **`.agents/kit/`**: Bateria de testes, painel de controle (`setup-ui.cjs`), motor de atualização (`gsd-update.cjs`), utilitários e desinstalador.
 - **`.agents/hooks/` & `.agents/hooks.json`**: Hard gates (`PreInvocation`, `PreToolUse`, `PostToolUse`, `Stop`).
-- **`.agents/skills/gsd-test/`, `gsd-tokens/` & `gsd-agy-update/`**: Skills nativas `/gsd-test`, `/gsd-tokens` e `/gsd-agy-update`.
+- **`.agents/skills/`**: Arsenal de 7 skills canônicas nativas para o Antigravity CLI:
+  - **`/gsd-test`**: Bateria de testes de conformidade e integridade do kit.
+  - **`/gsd-tokens`**: Relatório de telemetria, consumo e economia por cache da sessão.
+  - **`/gsd-agy-update`**: Verificador e atualizador automático do kit.
+  - **`/gsd-diagnose`**: Protocolo científico em 5 fases para reprodução e solução de bugs sutis sem palpites.
+  - **`/gsd-constitution`**: Governança declarativa inegociável em `.planning/CONSTITUTION.md` (anti-N+1, tipagem, segurança).
+  - **`/gsd-prototype`**: Prototipagem rápida descartável em arquivo único (HTML de lógica ou rotas com variantes visuais).
+  - **`/gsd-standards-review`**: Revisão imparcial em 2 eixos paralelos (12 Fowler Smells + Anti-N+1 vs Fidelidade à Especificação).
 - **`scripts/test-kit.sh` & `scripts/test-kit.ps1`**: Atalhos rápidos de validação para terminal.
 
 ---

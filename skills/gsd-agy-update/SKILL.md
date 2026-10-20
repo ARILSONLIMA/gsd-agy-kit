@@ -1,6 +1,7 @@
 ---
 name: gsd-agy-update
 description: "Verifica se o Antigravity GSD Kit (gsd-agy-kit) está na última versão, explica todas as novas melhorias e atualiza o kit preservando configurações locais"
+disable-model-invocation: true
 ---
 
 <arguments>$ARGUMENTS</arguments>

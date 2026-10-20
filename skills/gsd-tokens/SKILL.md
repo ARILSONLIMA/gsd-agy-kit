@@ -1,6 +1,7 @@
 ---
 name: gsd-tokens
 description: "Exibe o relatório de telemetria, consumo de tokens e economia por cache da sessão"
+disable-model-invocation: true
 ---
 
 <arguments>$ARGUMENTS</arguments>

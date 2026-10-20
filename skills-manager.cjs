@@ -25,7 +25,11 @@ const PROFILES = {
     'gsd-graphify',
     'gsd-tokens',
     'gsd-test',
-    'gsd-agy-update'
+    'gsd-agy-update',
+    'gsd-diagnose',
+    'gsd-constitution',
+    'gsd-prototype',
+    'gsd-standards-review'
   ],
   backend: [
     // Core loop
@@ -61,7 +65,11 @@ const PROFILES = {
     'gsd-graphify',
     'gsd-tokens',
     'gsd-test',
-    'gsd-agy-update'
+    'gsd-agy-update',
+    'gsd-diagnose',
+    'gsd-constitution',
+    'gsd-prototype',
+    'gsd-standards-review'
   ]
 };
 
@@ -71,6 +79,10 @@ const GLOBAL_SKILLS = [
   'gsd-tokens',
   'gsd-test',
   'gsd-agy-update',
+  'gsd-diagnose',
+  'gsd-constitution',
+  'gsd-prototype',
+  'gsd-standards-review',
   'gsd-dev-preferences',
   'gsd-settings',
   'gsd-health',
@@ -211,7 +223,15 @@ function applyProfile(targetDir, profileName) {
   ensureDir(poolDir);
 
   const profileLower = profileName.toLowerCase();
-  const ALWAYS_ACTIVE = new Set(['gsd-tokens']);
+  const ALWAYS_ACTIVE = new Set([
+    'gsd-tokens',
+    'gsd-test',
+    'gsd-agy-update',
+    'gsd-diagnose',
+    'gsd-constitution',
+    'gsd-prototype',
+    'gsd-standards-review'
+  ]);
 
   if (profileLower === 'full' || profileLower === 'all') {
     // Restaura tudo do pool para active

@@ -766,37 +766,23 @@ for rf in "${RULES_FILES[@]}"; do
 done
 assert_test "Regras canonicas em rules/ (${#RULES_FILES[@]} regras) presentes e validas" "$RULES_ALL_OK"
 
-if [ -f "${KIT_DIR}/skills/gsd-tokens/SKILL.md" ]; then
-    GSD_TOKENS_SKILL="${KIT_DIR}/skills/gsd-tokens/SKILL.md"
-elif [ -f "${TARGET_DIR}/.agents/skills/gsd-tokens/SKILL.md" ]; then
-    GSD_TOKENS_SKILL="${TARGET_DIR}/.agents/skills/gsd-tokens/SKILL.md"
-else
-    GSD_TOKENS_SKILL="${SCRIPT_DIR}/skills/gsd-tokens/SKILL.md"
-fi
-
-if [ -f "${KIT_DIR}/skills/gsd-test/SKILL.md" ]; then
-    GSD_TEST_SKILL="${KIT_DIR}/skills/gsd-test/SKILL.md"
-elif [ -f "${TARGET_DIR}/.agents/skills/gsd-test/SKILL.md" ]; then
-    GSD_TEST_SKILL="${TARGET_DIR}/.agents/skills/gsd-test/SKILL.md"
-else
-    GSD_TEST_SKILL="${SCRIPT_DIR}/skills/gsd-test/SKILL.md"
-fi
-
-if [ -f "${KIT_DIR}/skills/gsd-agy-update/SKILL.md" ]; then
-    GSD_UPDATE_SKILL="${KIT_DIR}/skills/gsd-agy-update/SKILL.md"
-elif [ -f "${TARGET_DIR}/.agents/skills/gsd-agy-update/SKILL.md" ]; then
-    GSD_UPDATE_SKILL="${TARGET_DIR}/.agents/skills/gsd-agy-update/SKILL.md"
-else
-    GSD_UPDATE_SKILL="${SCRIPT_DIR}/skills/gsd-agy-update/SKILL.md"
-fi
-
-SKILL_OK=0
-if [ -f "${GSD_TOKENS_SKILL}" ] && grep -q "name:\s*gsd-tokens" "${GSD_TOKENS_SKILL}" 2>/dev/null && \
-   [ -f "${GSD_TEST_SKILL}" ] && grep -q "name:\s*gsd-test" "${GSD_TEST_SKILL}" 2>/dev/null && \
-   [ -f "${GSD_UPDATE_SKILL}" ] && grep -q "name:\s*gsd-agy-update" "${GSD_UPDATE_SKILL}" 2>/dev/null; then
-    SKILL_OK=1
-fi
-assert_test "Skills canonicas (/gsd-tokens, /gsd-test e /gsd-agy-update) presentes com frontmatter valido" "$SKILL_OK"
+CANONICAL_SKILLS=("gsd-tokens" "gsd-test" "gsd-agy-update" "gsd-diagnose" "gsd-constitution" "gsd-prototype" "gsd-standards-review")
+SKILL_OK=1
+for sk in "${CANONICAL_SKILLS[@]}"; do
+    sk_path=""
+    if [ -f "${KIT_DIR}/skills/${sk}/SKILL.md" ]; then
+        sk_path="${KIT_DIR}/skills/${sk}/SKILL.md"
+    elif [ -f "${TARGET_DIR}/.agents/skills/${sk}/SKILL.md" ]; then
+        sk_path="${TARGET_DIR}/.agents/skills/${sk}/SKILL.md"
+    else
+        sk_path="${SCRIPT_DIR}/skills/${sk}/SKILL.md"
+    fi
+    if [ ! -f "$sk_path" ] || ! grep -q "name:\s*${sk}" "$sk_path" 2>/dev/null; then
+        SKILL_OK=0
+        break
+    fi
+done
+assert_test "Skills canonicas (${#CANONICAL_SKILLS[@]} skills) presentes com frontmatter valido" "$SKILL_OK"
 # ------------------------------------------------------------------------------
 # Teste 29: MemPalace Engine (lib/mempalace-engine.cjs)
 # ------------------------------------------------------------------------------

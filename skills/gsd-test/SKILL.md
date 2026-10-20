@@ -1,6 +1,7 @@
 ---
 name: gsd-test
 description: "Executa a bateria de testes de conformidade, governança e integridade do Antigravity GSD Kit"
+disable-model-invocation: true
 ---
 
 <arguments>$ARGUMENTS</arguments>

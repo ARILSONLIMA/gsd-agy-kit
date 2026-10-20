@@ -39,5 +39,21 @@ Critérios diretos e verificáveis com checkboxes:
 - [ ] Consulta parametrizada com bind parameters `?` sem concatenação de strings.
 - [ ] Suíte de testes local executada com `npm test` aprovada com 0 falhas.
 
-## 3. Benefício
-Seguir este padrão reduz o tamanho do `PLAN.md` de ~40 KB para ~6 KB, economizando até **45% dos tokens faturados** nas fases preliminares sem perder nenhuma precisão técnica.
+## 3. Fatiamento Vertical em Tracer Bullets vs Fatiamento Horizontal
+- **Proibição de Fatiamento Puramente Horizontal:** Evite dividir o plano em camadas técnicas desconectadas (ex: criar todas as tabelas, depois todos os models, depois todos os controllers e só testar tudo junto no final). Isso acumula erros de tipagem e desacoplamento.
+- **Tracer Bullets Verticais:** Cada etapa do plano deve cortar uma fatia estreita e completa através de todas as camadas (banco, regra, rota e teste) entregando um comportamento observável de ponta a ponta na interface pública (*seam*).
+- **Tamanho por Fatia:** Cada fatia vertical deve caber confortavelmente em uma única janela limpa de contexto de execução.
+
+## 4. Padrão Expand-Contract para Refatorações de Grande Alcance (Wide Refactors)
+Quando uma mudança estrutural (como renomear uma coluna, alterar uma assinatura global ou refatorar tipos compartilhados) possui grande raio de impacto (*blast radius*):
+1. **Expand (Expandir):** Crie a nova forma ou coluna ao lado da antiga sem quebrar o código existente.
+2. **Migrate (Migrar em Lotes):** Migre os locais de chamada em lotes isolados (por pacote ou diretório), mantendo os testes e a CI verdes a cada lote porque a forma antiga ainda coexiste.
+3. **Contract (Contrair):** Remova a forma legada apenas quando todos os chamadores estiverem migrados.
+
+## 5. Alinhamento Socrático por Fronteira em Discussões (`gsd-discuss-phase`)
+Durante entrevistas ou discussões de requisitos:
+- **Descobrir Fatos é Obrigação do Agente:** Use ferramentas (`view_file`, `ast_query`, `lsp`) para ler o código e investigar fatos do ambiente; nunca pergunte ao usuário o que você mesmo pode checar.
+- **Trabalhar a Fronteira de Decisões:** Agrupe perguntas por rodadas numeradas (`Q1`, `Q2`), apresentando opções claras e a **resposta recomendada** do agente, redigida de forma que um simples "Sim" aprove a recomendação.
+
+## 6. Benefício
+Seguir este padrão reduz o tamanho do `PLAN.md` de ~40 KB para ~6 KB, economiza mais de **35% a 45% dos tokens faturados** nas fases preliminares e elimina retrabalhos causados por desalinhamento precoce.
