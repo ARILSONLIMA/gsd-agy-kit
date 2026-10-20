@@ -48,9 +48,26 @@ description: Guardrails universais de qualidade, performance de banco (zero N+1)
 - Operações que alteram mais de uma tabela ou registram eventos de auditoria/histórico junto à entidade principal **DEVEM** ser atômicas.
 - Envolva em bloco de transação (`BEGIN TRANSACTION` / `COMMIT` ou `db.transaction(() => { ... })`). Em caso de erro, garanta `ROLLBACK`.
 
-## 8. Prepared Statements & Anti-SQL Injection
-- Proibição absoluta de interpolação de strings em consultas SQL (`SELECT ... WHERE id = ${id}`).
+## 8. Prepared Statements & Anti-SQL Injection (Hard Gate Mandatório)
+- **Proibição absoluta de concatenação ou interpolação de strings em consultas SQL:**
+  ```javascript
+  // ❌ NUNCA FAÇA (Vulnerabilidade Crítica de SQL Injection):
+  sql += " AND garage = '" + garage + "'";
+  const query = `SELECT * FROM vehicles WHERE id = ${vehicleId}`;
+
+  // ✅ FORMA CORRETA OBRIGATÓRIA (Parâmetros Bind):
+  sql += ' AND garage = ?';
+  params.push(garage);
+  const stmt = db.prepare('SELECT * FROM vehicles WHERE id = ?');
+  const vehicle = stmt.get(vehicleId);
+  ```
 - Use exclusivamente bind parameters (`?` no SQLite/MySQL ou `$1` no PostgreSQL).
+- O **Security Stop Gate** do Kit interceptará e bloqueará a conclusão da sessão caso detecte qualquer concatenação de strings em SQL.
+
+## 8.1. Limites de Complexidade Ciclomática e Métodos Monolíticos
+- **Métodos Longos:** Funções com mais de **50 linhas de código** são consideradas *code smells*. Decomponha em funções auxiliares puras.
+- **Aninhamento Profundo:** Mantenha a profundidade de aninhamento abaixo de **4 níveis**. Use *guard clauses* (retorno antecipado) para achatar a estrutura do código.
+- **Complexidade Ciclomática:** Mantenha a complexidade de cada função abaixo de **15** (contagem de ramificações `if`, `for`, `case`, `&&`, `||`). Extraia sub-rotinas de decisão.
 
 ## 9. Máquinas de Estado e Ciclo de Vida (Auditoria Inicial)
 - Ao calcular tempos de SLA ou pausas baseadas em log de eventos (`ticket_history`), verifique se o registro já nasceu no estado de pausa.

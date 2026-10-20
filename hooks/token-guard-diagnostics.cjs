@@ -214,6 +214,88 @@ function handlePostToolUse(payload) {
               }
             }
           }
+
+          // Auditoria de Segurança e Anti-SQL Injection pós-edição
+          const secMod = findLibModule('security-linter.cjs');
+          if (secMod) {
+            try {
+              const SecurityLinter = require(secMod);
+              const linter = new SecurityLinter(PROJECT_ROOT);
+              const secIssues = linter.scanFile(fullEdited);
+              const criticalSec = secIssues.filter(i => i.severity === 'CRITICAL');
+              if (criticalSec.length > 0) {
+                const s = criticalSec[0];
+                recordIncident({
+                  type: 'security_risk',
+                  tool: toolName,
+                  stepIdx: stepIdx,
+                  error: `Vulnerabilidade SQL em ${path.basename(fullEdited)}:${s.line}: ${s.message}`,
+                  args: args
+                });
+                if (ErrorGuard) {
+                  ErrorGuard.emitError(PROJECT_ROOT, {
+                    category: 'SECURITY',
+                    component: 'security:linter',
+                    title: `Risco de SQL Injection detectado em ${path.basename(fullEdited)}:${s.line}`,
+                    stderr: `${s.snippet}\n${s.message}`,
+                    file: fullEdited,
+                    hint: 'Substitua concatenação de strings por parâmetros parametrizados (?) imediatamente.',
+                    severity: 'error'
+                  });
+                }
+              }
+            } catch {}
+          }
+
+          // Auditoria de Code Smells e Complexidade Ciclomática pós-edição
+          const compMod = findLibModule('complexity-guard.cjs');
+          if (compMod) {
+            try {
+              const ComplexityGuard = require(compMod);
+              const guard = new ComplexityGuard();
+              const smells = guard.scanFile(fullEdited);
+              const criticalSmells = smells.filter(s => s.type === 'high_complexity' || s.type === 'long_method');
+              if (criticalSmells.length > 0) {
+                const s = criticalSmells[0];
+                if (ErrorGuard) {
+                  ErrorGuard.emitError(PROJECT_ROOT, {
+                    category: 'QUALITY',
+                    component: 'complexity:guard',
+                    title: `Code Smell detectado em ${path.basename(fullEdited)}:${s.line}`,
+                    stderr: s.message,
+                    file: fullEdited,
+                    hint: 'Decomponha rotinas complexas em métodos auxiliares puros.',
+                    severity: 'warning'
+                  });
+                }
+              }
+            } catch {}
+          }
+
+          // Auditoria de Código Duplicado (DRY)
+          const dryMod = findLibModule('dry-checker.cjs');
+          if (dryMod && fs.existsSync(MODIFIED_FILES_PATH)) {
+            try {
+              const DryChecker = require(dryMod);
+              const checker = new DryChecker(6);
+              const modifiedList = JSON.parse(fs.readFileSync(MODIFIED_FILES_PATH, 'utf8')) || [];
+              const filesToCheck = modifiedList.map(m => m.file).filter(f => fs.existsSync(f));
+              if (filesToCheck.length >= 2) {
+                const dups = checker.checkFiles(filesToCheck);
+                if (dups.length > 0 && ErrorGuard) {
+                  ErrorGuard.emitError(PROJECT_ROOT, {
+                    category: 'QUALITY',
+                    component: 'dry:checker',
+                    title: `Duplicação de código detectada (${dups.length} bloco(s) >= 6 linhas)`,
+                    stderr: `Código idêntico detectado entre arquivos tocados:\n` + dups.slice(0, 2).map(d => ` - ${d.locations.map(l => path.basename(l.file) + ':' + l.line).join(' <-> ')}`).join('\n'),
+                    file: fullEdited,
+                    hint: 'Extraia lógica repetida para um helper/utilitário compartilhado em vez de copiar código.',
+                    severity: 'warning'
+                  });
+                }
+              }
+            } catch {}
+          }
         }
       } catch {}
     }
@@ -307,16 +389,16 @@ function checkAutoVerifyStopGate(terminationReason) {
     }
   }
 
-  // 2. Verificar diagnósticos sintáticos/LSP nos arquivos de código editados na sessão
+  // 2. Verificar diagnósticos sintáticos/LSP e Segurança nos arquivos de código editados na sessão
   if (fs.existsSync(MODIFIED_FILES_PATH)) {
     try {
       const modifiedList = JSON.parse(fs.readFileSync(MODIFIED_FILES_PATH, 'utf8')) || [];
-      try { fs.unlinkSync(MODIFIED_FILES_PATH); } catch {}
       const recentFiles = modifiedList
         .filter(item => item && item.file && (now - Number(item.timestamp || 0)) < 300000 && fs.existsSync(item.file))
-        .slice(-3);
+        .slice(-5);
 
       if (recentFiles.length > 0) {
+        // 2.1 Verificação LSP de Sintaxe
         const lspMod = findLibModule('lsp-engine.cjs');
         if (lspMod) {
           const LspEngine = require(lspMod);
@@ -332,7 +414,29 @@ function checkAutoVerifyStopGate(terminationReason) {
             }
           }
         }
+
+        // 2.2 Verificação de Segurança (Anti-SQL Injection Gate)
+        const secMod = findLibModule('security-linter.cjs');
+        if (secMod) {
+          try {
+            const SecurityLinter = require(secMod);
+            const linter = new SecurityLinter(PROJECT_ROOT);
+            const secIssues = linter.scanFiles(recentFiles.map(r => r.file));
+            const criticalSql = secIssues.filter(i => i.severity === 'CRITICAL');
+            if (criticalSql.length > 0) {
+              const first = criticalSql[0];
+              writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+              return (
+                `🛑 [SECURITY GATE] Parada prematura interceptada: VULNERABILIDADE DE SQL INJECTION detectada em ${path.basename(first.file)}:${first.line}!\n` +
+                `Trecho: ${first.snippet}\n` +
+                `Diagnóstico: ${first.message}\n` +
+                `Substitua a concatenação/interpolação de string por parâmetro bind '?' antes de concluir.`
+              );
+            }
+          } catch {}
+        }
       }
+      try { fs.unlinkSync(MODIFIED_FILES_PATH); } catch {}
     } catch {}
   }
 
