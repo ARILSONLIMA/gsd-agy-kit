@@ -609,16 +609,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
       title: 'Dynamic Skill Pool & Carregamento JIT (.agents/skills-pool/)',
       run: async () => {
         const skillsDir = path.join(agentsDir, 'skills');
-        const canonicalSkills = [
-          'gsd-tokens',
-          'gsd-test',
-          'gsd-agy-update',
-          'gsd-diagnose',
-          'gsd-constitution',
-          'gsd-prototype',
-          'gsd-standards-review'
-        ];
-        for (const skName of canonicalSkills) {
+        for (const skName of ['gsd-tokens', 'gsd-test', 'gsd-agy-update']) {
           const skSrc = path.join(kitDir, 'skills', skName);
           if (fs.existsSync(skSrc)) {
             const skDest = path.join(skillsDir, skName);
@@ -965,10 +956,6 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
   console.log(`   ${C.bGreen}• .agents/skills/gsd-test/${C.reset} ${C.dim}(skill nativa /gsd-test no Antigravity CLI)${C.reset}`);
   console.log(`   ${C.bGreen}• .agents/skills/gsd-tokens/${C.reset} ${C.dim}(skill nativa /gsd-tokens no Antigravity CLI)${C.reset}`);
   console.log(`   ${C.bGreen}• .agents/skills/gsd-agy-update/${C.reset} ${C.dim}(skill nativa /gsd-agy-update no Antigravity CLI)${C.reset}`);
-  console.log(`   ${C.bGreen}• .agents/skills/gsd-diagnose/${C.reset} ${C.dim}(diagnóstico científico em 5 fases /gsd-diagnose)${C.reset}`);
-  console.log(`   ${C.bGreen}• .agents/skills/gsd-constitution/${C.reset} ${C.dim}(governança inegociável anti-N+1 /gsd-constitution)${C.reset}`);
-  console.log(`   ${C.bGreen}• .agents/skills/gsd-prototype/${C.reset} ${C.dim}(prototipagem rápida descartável /gsd-prototype)${C.reset}`);
-  console.log(`   ${C.bGreen}• .agents/skills/gsd-standards-review/${C.reset} ${C.dim}(revisão em 2 eixos: Fowler Smells vs Spec)${C.reset}`);
   console.log(`   ${C.bGreen}• scripts/test-kit.sh${C.reset} ${C.dim}(atalho para execução direta no terminal)${C.reset}\n`);
 
   if (options.interactivePromptTest && canPromptInteractively()) {

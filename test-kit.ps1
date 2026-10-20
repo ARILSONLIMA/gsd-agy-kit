@@ -929,7 +929,7 @@ Assert-Test -Name "Regras canonicas em rules/ ($($expectedRules.Count) regras) p
             -Condition $rulesAllOk `
             -ErrorDetails "Regras canonicas ausentes ou corrompidas em $rulesDir"
 
-$canonicalSkills = @("gsd-tokens", "gsd-test", "gsd-agy-update", "gsd-diagnose", "gsd-constitution", "gsd-prototype", "gsd-standards-review")
+$canonicalSkills = @("gsd-tokens", "gsd-test", "gsd-agy-update")
 $skillOk = $true
 foreach ($sk in $canonicalSkills) {
     $skPath = if (Test-Path (Join-Path $kitDir "skills\$sk\SKILL.md")) {
@@ -945,7 +945,7 @@ foreach ($sk in $canonicalSkills) {
     }
 }
 
-Assert-Test -Name "Skills canônicas ($($canonicalSkills.Count) skills) presentes com frontmatter valido" `
+Assert-Test -Name "Skills canônicas (/gsd-tokens, /gsd-test e /gsd-agy-update) presentes com frontmatter valido" `
             -Condition $skillOk `
             -ErrorDetails "Uma ou mais skills canonicas ausentes ou sem frontmatter valido"
 

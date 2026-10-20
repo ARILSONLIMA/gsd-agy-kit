@@ -766,7 +766,7 @@ for rf in "${RULES_FILES[@]}"; do
 done
 assert_test "Regras canonicas em rules/ (${#RULES_FILES[@]} regras) presentes e validas" "$RULES_ALL_OK"
 
-CANONICAL_SKILLS=("gsd-tokens" "gsd-test" "gsd-agy-update" "gsd-diagnose" "gsd-constitution" "gsd-prototype" "gsd-standards-review")
+CANONICAL_SKILLS=("gsd-tokens" "gsd-test" "gsd-agy-update")
 SKILL_OK=1
 for sk in "${CANONICAL_SKILLS[@]}"; do
     sk_path=""
@@ -782,7 +782,7 @@ for sk in "${CANONICAL_SKILLS[@]}"; do
         break
     fi
 done
-assert_test "Skills canonicas (${#CANONICAL_SKILLS[@]} skills) presentes com frontmatter valido" "$SKILL_OK"
+assert_test "Skills canonicas (/gsd-tokens, /gsd-test e /gsd-agy-update) presentes com frontmatter valido" "$SKILL_OK"
 # ------------------------------------------------------------------------------
 # Teste 29: MemPalace Engine (lib/mempalace-engine.cjs)
 # ------------------------------------------------------------------------------
