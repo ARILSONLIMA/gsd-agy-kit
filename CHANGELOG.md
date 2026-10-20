@@ -2,6 +2,22 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [1.9.0] - 2026-10-20
+- **Otimização de Contexto e Cold Start com `disable-model-invocation: true` (`skills/`):**
+  - Aplicado no frontmatter YAML das skills utilitárias canônicas nativas (`/gsd-tokens`, `/gsd-test`, `/gsd-agy-update`).
+  - O Antigravity CLI remove a descrição dessas ferramentas da janela de atenção ativa do LLM a cada turno da conversa, eliminando o consumo contínuo de tokens de prompt e distrações cognitivas do modelo, mantendo 100% da usabilidade de invocação manual via barra (`/`).
+- **Diretrizes de Planejamento Enxuto & Fatiamento Vertical (`rules/compact-planning.md`):**
+  - **Tracer Bullets (Fatiamento Vertical):** Proibição de decomposição puramente horizontal em camadas; cada etapa do plano corta verticalmente todas as camadas necessárias (banco, regra, rota e teste) entregando comportamento observável de ponta a ponta na interface pública (*seam*).
+  - **Padrão Expand-Contract para Refatorações de Grande Alcance (Wide Refactors):** Sequenciamento estruturado para mudanças de alto *blast radius* (Expandir sem quebrar ➔ Migrar chamadores em lotes mantendo CI verde ➔ Contrair e remover o legado).
+  - **Alinhamento Socrático por Fronteira em Discussões (`gsd-discuss-phase`):** O modelo assume a responsabilidade de investigar fatos do código via ferramentas e apresenta decisões em rodadas numeradas com opções e recomendação explícita onde responder "Sim" aprova a sugestão.
+- **Motores Avançados de Análise e Governança de Código (`lib/`):**
+  - `SecurityLinter` (`lib/security-linter.cjs`): Análise estática preventiva contra injeções SQL e concatenações inseguras.
+  - `ComplexityGuard` (`lib/complexity-guard.cjs`): Detecção de funções com complexidade ciclomática excessiva (> 15) e aninhamentos profundos (> 4 níveis).
+  - `DryChecker` (`lib/dry-checker.cjs`): Inspeção heurística de blocos duplicados e code smells.
+- **Sincronização e Validação do Kit:**
+  - Atualização dos scripts de validação (`test-kit.sh` e `test-kit.ps1`) para conformidade contínua.
+  - Sincronização de versão do Painel de Controle e Hub Interativo (`setup-ui.cjs`) com `package.json`.
+
 ## [1.7.0] - 2026-10-19
 - **Guardrails Avançados de Arquitetura & Paridade de Rotas (`rules/quality-guardrails.md`):**
   - **Padrões Anti-N+1 Mandatórios com Código:** Exemplos práticos exigindo subconsultas correlacionadas `(SELECT ...)` ou pré-carregamento em batch com `Map<id, data>` em $O(1)$ para eliminar queries em laços.

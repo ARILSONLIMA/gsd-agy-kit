@@ -1,6 +1,6 @@
 {
   "name": "gsd-agy-kit",
-  "version": "1.7.0",
+  "version": "1.9.0",
   "description": "Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens para GSD no Antigravity CLI",
   "main": "setup-ui.cjs",
   "bin": {
