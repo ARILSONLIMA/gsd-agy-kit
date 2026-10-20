@@ -179,9 +179,44 @@ function handlePostToolUse(payload) {
         ErrorGuard.invalidateHealthCache(PROJECT_ROOT);
       }
     }
-  } else if (['replace_file_content', 'multi_replace_file_content', 'write_to_file', 'write'].includes(toolName)) {
-    const editedPath = args.TargetFile || args.AbsolutePath || args.path || args.file_path || '';
+  } else if (['replace_file_content', 'multi_replace_file_content', 'write_to_file', 'write', 'edit_file', 'write_file'].includes(toolName)) {
+    const editedPath = args.Path || args.TargetFile || args.AbsolutePath || args.path || args.file_path || args.filePath || '';
     recordModifiedCodeFile(editedPath);
+
+    // Auto-validação de sintaxe pós-edição imediata (LSP Engine / Node Check)
+    if (editedPath && typeof editedPath === 'string') {
+      try {
+        const fullEdited = path.isAbsolute(editedPath) ? editedPath : path.resolve(PROJECT_ROOT, editedPath);
+        if (fs.existsSync(fullEdited)) {
+          const lspMod = findLibModule('lsp-engine.cjs');
+          if (lspMod) {
+            const LspEngine = require(lspMod);
+            const lsp = new LspEngine(PROJECT_ROOT);
+            const diag = lsp.diagnostics({ file_path: fullEdited });
+            if (diag && (diag.isError || diag.hasDiagnostics)) {
+              recordIncident({
+                type: 'syntax_error',
+                tool: toolName,
+                stepIdx: stepIdx,
+                error: `Erro de sintaxe em ${path.basename(fullEdited)}: ${diag.text || 'Falha na validação'}`,
+                args: args
+              });
+              if (ErrorGuard) {
+                ErrorGuard.emitError(PROJECT_ROOT, {
+                  category: 'LSP',
+                  component: 'lsp:diagnostics',
+                  title: `Erro de sintaxe/compilação detectado em ${path.basename(fullEdited)}`,
+                  stderr: diag.text || '',
+                  file: fullEdited,
+                  hint: 'Corrija o erro de sintaxe antes de executar os testes.',
+                  severity: 'error'
+                });
+              }
+            }
+          }
+        }
+      } catch {}
+    }
   }
 
   // Monitorar comandos de teste para Auto-Isolate, Checkpoints e MemPalace v2

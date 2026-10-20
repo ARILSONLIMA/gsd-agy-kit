@@ -270,7 +270,7 @@ data["token-efficiency-guard"] = {
   ],
   PreToolUse: [
     {
-      matcher: "view_file|run_command|write_to_file|Write|write|invoke_subagent",
+      matcher: "read_file|view_file|run_command|write_file|write_to_file|Write|write|edit_file|replace_file_content|invoke_subagent",
       hooks: [
         {
           type: "command",
@@ -384,6 +384,12 @@ EOF
 echo -e "   \033[0;32mServidor MCP registrado em: ${MCP_JSON}\033[0m"
 echo -e "   \033[0;32mPlugin local registrado em: ${AGENTS_DIR}/plugins.json\033[0m"
 echo -e "   \033[0;32mMemória episódica (MemPalace) pronta em: ${MEMORY_DIR}\033[0m"
+
+# Registrar servidor MCP nativamente no Antigravity CLI caso o binário agy esteja presente
+if command -v agy >/dev/null 2>&1; then
+    agy mcp add gsd-economy node "${AGENTS_DIR}/mcp-server.cjs" >/dev/null 2>&1 || true
+    echo -e "   \033[0;32mServidor MCP gsd-economy registrado no runtime Antigravity (agy mcp)\033[0m"
+fi
 
 # 9. Instalar Pacote Completo e Utilitários Nativos (.agents/kit/ e scripts/)
 TARGET_KIT_DIR="${AGENTS_DIR}/kit"

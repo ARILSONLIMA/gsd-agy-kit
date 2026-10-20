@@ -218,6 +218,24 @@ rm -f "${DUMMY_CODE_TARGET}" 2>/dev/null || true
 assert_test "Hook PreToolUse bloqueia sobrescrita integral de arquivo de codigo via alias 'write'" \
             "$([ "$RESP_WRITE_ALIAS" = '"decision":"deny"' ] && echo 1 || echo 0)"
 
+# 4.1 Native Antigravity Tools: read_file e write_file
+PAYLOAD_READ_FAIL='{"toolCall":{"name":"read_file","args":{"Path":"cmd/api/main.go"}}}'
+RESP_READ_FAIL=$(printf '%s' "$PAYLOAD_READ_FAIL" | node "$HOOK_PATH" 2>/dev/null | grep -o '"decision":"[^"]*"' || echo "")
+assert_test "Hook PreToolUse bloqueia read_file sem StartLine/EndLine em codigo" \
+            "$([ "$RESP_READ_FAIL" = '"decision":"deny"' ] && echo 1 || echo 0)"
+
+PAYLOAD_READ_OK='{"toolCall":{"name":"read_file","args":{"Path":"cmd/api/main.go","StartLine":1,"EndLine":50}}}'
+RESP_READ_OK=$(printf '%s' "$PAYLOAD_READ_OK" | node "$HOOK_PATH" 2>/dev/null | grep -o '"decision":"[^"]*"' || echo "")
+assert_test "Hook PreToolUse permite read_file cirurgico (<= 100 linhas) em codigo" \
+            "$([ "$RESP_READ_OK" = '"decision":"allow"' ] && echo 1 || echo 0)"
+
+echo "// existing code" > "${DUMMY_CODE_TARGET}"
+PAYLOAD_WRITE_FILE="{\"toolCall\":{\"name\":\"write_file\",\"args\":{\"Path\":\"${DUMMY_CODE_TARGET}\",\"Overwrite\":true}}}"
+RESP_WRITE_FILE=$(printf '%s' "$PAYLOAD_WRITE_FILE" | node "$HOOK_PATH" 2>/dev/null | grep -o '"decision":"[^"]*"' || echo "")
+rm -f "${DUMMY_CODE_TARGET}" 2>/dev/null || true
+assert_test "Hook PreToolUse bloqueia sobrescrita integral via write_file em arquivo existente" \
+            "$([ "$RESP_WRITE_FILE" = '"decision":"deny"' ] && echo 1 || echo 0)"
+
 
 # 5. PreInvocation Hook
 PRE_INVOC_PATH="${TARGET_DIR}/.agents/hooks/token-guard-preinvocation.cjs"

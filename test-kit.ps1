@@ -294,6 +294,29 @@ Assert-Test -Name "Hook PreToolUse bloqueia sobrescrita integral de arquivo de c
             -Condition ($resWriteAlias.decision -eq "deny") `
             -ErrorDetails "Esperado 'deny', recebido '$($resWriteAlias.decision)'"
 
+# 4.5: Native Antigravity - Bloqueio read_file sem linhas em código
+$payloadReadFile = '{"toolCall":{"name":"read_file","args":{"Path":"cmd/api/main.go"}}}'
+$resReadNoLines = $payloadReadFile | node $hookPath | ConvertFrom-Json
+Assert-Test -Name "Hook PreToolUse bloqueia read_file sem StartLine/EndLine em codigo" `
+            -Condition ($resReadNoLines.decision -eq "deny") `
+            -ErrorDetails "Esperado 'deny', recebido '$($resReadNoLines.decision)'"
+
+# 4.6: Native Antigravity - Permissão read_file cirúrgico
+$payloadReadSurgical = '{"toolCall":{"name":"read_file","args":{"Path":"cmd/api/main.go","StartLine":1,"EndLine":50}}}'
+$resReadSurgical = $payloadReadSurgical | node $hookPath | ConvertFrom-Json
+Assert-Test -Name "Hook PreToolUse permite read_file cirurgico (<= 100 linhas) em codigo" `
+            -Condition ($resReadSurgical.decision -eq "allow") `
+            -ErrorDetails "Esperado 'allow', recebido '$($resReadSurgical.decision)'"
+
+# 4.7: Native Antigravity - Bloqueio write_file com Overwrite em código existente
+Set-Content -Path $codeFile -Value "// existing code" -Encoding utf8
+$payloadWriteFile = '{"toolCall":{"name":"write_file","args":{"Path":"' + ($codeFile -replace '\\', '/') + '","Overwrite":true}}}'
+$resWriteFile = $payloadWriteFile | node $hookPath | ConvertFrom-Json
+Remove-Item -Path $codeFile -Force -ErrorAction SilentlyContinue
+Assert-Test -Name "Hook PreToolUse bloqueia sobrescrita integral via write_file em arquivo existente" `
+            -Condition ($resWriteFile.decision -eq "deny") `
+            -ErrorDetails "Esperado 'deny', recebido '$($resWriteFile.decision)'"
+
 
 # ------------------------------------------------------------------------------
 # Teste 5: Hook PreInvocation (Execução Limpa e Auto-Cura)

@@ -18,5 +18,5 @@ Motor LSP integrado (CLI e MCP `gsd-economy`) para 20 ecossistemas (Go, TS/JS, P
 | Renomear símbolo com segurança no projeto | `lsp_rename` | `node .agents/mcp-server.cjs lsp rename "<antigo>" "<novo>" [caminho]` |
 
 ## Regras de Execução
-- **Antes de editar contrato/assinatura:** Verifique referências com `lsp_references`.
-- **Imediatamente após editar:** Valide sintaxe e tipos com `lsp_diagnostics` antes de executar suítes pesadas de teste.
+- **Antes de editar contrato/assinatura:** Verifique referências com `lsp_references` (`node .agents/mcp-server.cjs lsp references "<símbolo>"`).
+- **Imediatamente após editar:** Valide sintaxe e tipos com `lsp_diagnostics` (`node .agents/mcp-server.cjs lsp diagnostics [arquivo]`) ou com o verificador rápido de sintaxe da stack (`node -c <arquivo>`, `go vet`, `python -m py_compile`) antes de executar suítes de teste.

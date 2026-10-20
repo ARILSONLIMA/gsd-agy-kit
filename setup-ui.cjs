@@ -525,7 +525,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             ],
             "PreToolUse": [
               {
-                "matcher": "view_file|run_command|write_to_file|Write|write|invoke_subagent",
+                "matcher": "read_file|view_file|run_command|write_file|write_to_file|Write|write|edit_file|replace_file_content|invoke_subagent",
                 "hooks": [
                   {
                     "type": "command",
@@ -770,6 +770,12 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           ]
         };
         fs.writeFileSync(pluginsJsonPath, JSON.stringify(pluginsConfig, null, 2), 'utf8');
+
+        // Registrar MCP nativo no Antigravity CLI (agy mcp add) para disponibilização imediata
+        const destMcp = path.join(agentsDir, 'mcp-server.cjs');
+        try {
+          execSync(`agy mcp add gsd-economy node "${destMcp}"`, { stdio: 'ignore', timeout: 5000 });
+        } catch {}
 
         await sleep(60);
       }

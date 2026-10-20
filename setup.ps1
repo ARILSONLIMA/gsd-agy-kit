@@ -257,7 +257,7 @@ $hooksConfig = @{
         )
         "PreToolUse" = @(
             @{
-                "matcher" = "view_file|run_command|write_to_file|Write|write|invoke_subagent"
+                "matcher" = "read_file|view_file|run_command|write_file|write_to_file|Write|write|edit_file|replace_file_content|invoke_subagent"
                 "hooks" = @(
                     @{
                         "type" = "command"
@@ -388,6 +388,13 @@ Set-Content -Path $pluginsJsonPath -Value $pluginsConfig -Encoding utf8
 Write-Host "   Servidor MCP registrado em: $mcpJsonPath" -ForegroundColor Green
 Write-Host "   Plugin local registrado em: $pluginsJsonPath" -ForegroundColor Green
 Write-Host "   Memoria episodica (MemPalace) pronta em: $memoryDir" -ForegroundColor Green
+
+if (Get-Command agy -ErrorAction SilentlyContinue) {
+    try {
+        & agy mcp add gsd-economy node (Join-Path $agentsDir "mcp-server.cjs") *>$null
+        Write-Host "   Servidor MCP gsd-economy registrado no runtime Antigravity (agy mcp)" -ForegroundColor Green
+    } catch {}
+}
 
 # 9. Instalar Pacote Completo e Utilitários Nativos (.agents/kit/ e scripts/)
 $targetKitDir = Join-Path $agentsDir "kit"

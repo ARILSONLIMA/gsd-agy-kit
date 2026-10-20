@@ -296,9 +296,9 @@ function recordTokenSaving(category, estimatedTokens = 500) {
   } catch {}
 }
 
-  // 1. Gate for view_file
-  if (toolName === 'view_file') {
-    const rawTarget = sanitizePath(args.AbsolutePath || args.TargetFile || args.path || '');
+  // 1. Gate for view_file / read_file
+  if (toolName === 'view_file' || toolName === 'read_file') {
+    const rawTarget = sanitizePath(args.Path || args.AbsolutePath || args.TargetFile || args.path || args.file_path || '');
     const target = rawTarget.replace(/\\/g, '/');
 
     // STATE.md Blocker
@@ -316,12 +316,12 @@ function recordTokenSaving(category, estimatedTokens = 500) {
       recordTokenSaving('secret_shield', 400);
       return respond(
         'deny',
-        '🛑 SECRET SHIELD (PROTEÇÃO DE SEGREDOS E TOKENS): É proibido ler arquivos .env diretamente com view_file para evitar exposição de credenciais no contexto!\n' +
+        '🛑 SECRET SHIELD (PROTEÇÃO DE SEGREDOS E TOKENS): É proibido ler arquivos .env diretamente com view_file/read_file para evitar exposição de credenciais no contexto!\n' +
         'Utilize a lente segura que mascara valores sensíveis: node .agents/mcp-server.cjs env (ou tool MCP env_skeleton).'
       );
     }
 
-    // 1.1 JIT Auto-Promoter para Skills: Se view_file acessar uma skill no pool ou skills
+    // 1.1 JIT Auto-Promoter para Skills: Se view_file/read_file acessar uma skill no pool ou skills
     const skillMatch = target.match(/\.agents\/(skills|skills-pool|skills-archive)\/([a-zA-Z0-9_-]+)/i);
     let modifiedArgs = null;
     if (skillMatch) {
@@ -344,7 +344,11 @@ function recordTokenSaving(category, estimatedTokens = 500) {
 
       if (folderType === 'skills-pool' || folderType === 'skills-archive') {
         const redirected = target.replace(`/.agents/${folderType}/`, '/.agents/skills/');
-        modifiedArgs = { AbsolutePath: path.normalize(redirected) };
+        if (args.Path) {
+          modifiedArgs = { Path: path.normalize(redirected) };
+        } else {
+          modifiedArgs = { AbsolutePath: path.normalize(redirected) };
+        }
       }
     }
 
@@ -417,31 +421,33 @@ function recordTokenSaving(category, estimatedTokens = 500) {
 
       const fileTotalLines = getFileTotalLines();
 
+      const setLineRangeArgs = (base, s, e) => {
+        const out = Object.assign({}, base || {});
+        out.StartLine = s;
+        out.EndLine = e;
+        if (args.Path && !out.Path) out.Path = args.Path;
+        return out;
+      };
+
       // Auto-injeção transparente para arquivos pequenos (<= 100 linhas no disco)
       if (fileTotalLines > 0 && fileTotalLines <= 100) {
         startLine = isNaN(startLine) ? 1 : Math.max(1, startLine);
         endLine = isNaN(endLine) ? fileTotalLines : Math.min(fileTotalLines, endLine);
-        modifiedArgs = Object.assign({}, modifiedArgs || {}, {
-          StartLine: startLine,
-          EndLine: endLine
-        });
+        modifiedArgs = setLineRangeArgs(modifiedArgs, startLine, endLine);
       } else if (kitMode === 'smart-assist' && fileTotalLines > 0) {
         // Smart-Assist Auto-Slicing: Em vez de fail/deny, aplica overwrite cirúrgico de 100 linhas
         startLine = isNaN(startLine) ? 1 : Math.max(1, startLine);
         endLine = Math.min(fileTotalLines, startLine + 99);
-        modifiedArgs = Object.assign({}, modifiedArgs || {}, {
-          StartLine: startLine,
-          EndLine: endLine
-        });
+        modifiedArgs = setLineRangeArgs(modifiedArgs, startLine, endLine);
         recordTokenSaving('auto_slice', Math.max(200, (fileTotalLines - (endLine - startLine + 1)) * 10));
       } else {
         return respond(
           'deny',
-          '🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: É proibido ler arquivos de código (.go, .ts, .js, etc.) inteiros com view_file!\n' +
+          '🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: É proibido ler arquivos de código (.go, .ts, .js, etc.) inteiros com read_file / view_file!\n' +
           'Ordem obrigatória:\n' +
           '1) Para entender arquitetura e dependências, consulte o grafo: graphify query "<pergunta>"\n' +
           `2) ${langToolHint} para localizar o trecho exato.\n` +
-          '3) Para ler o código via view_file, informe obrigatoriamente StartLine e EndLine cirúrgicos (máximo de 100 linhas).\n' +
+          '3) Para ler o código via read_file/view_file, informe obrigatoriamente StartLine e EndLine cirúrgicos (máximo de 100 linhas).\n' +
           `4) Para ler toda a estrutura do arquivo de forma barata, use ${outlineScriptPath} <arquivo>.`
         );
       }
@@ -457,16 +463,20 @@ function recordTokenSaving(category, estimatedTokens = 500) {
       if (kitMode === 'smart-assist' && fileTotalLines > 0) {
         // Smart-Assist: Auto-slicing suave cortando para teto de 100 linhas
         endLine = Math.min(fileTotalLines, startLine + 99);
-        modifiedArgs = Object.assign({}, modifiedArgs || {}, {
-          StartLine: startLine,
-          EndLine: endLine
-        });
+        const setLineRangeArgs = (base, s, e) => {
+          const out = Object.assign({}, base || {});
+          out.StartLine = s;
+          out.EndLine = e;
+          if (args.Path && !out.Path) out.Path = args.Path;
+          return out;
+        };
+        modifiedArgs = setLineRangeArgs(modifiedArgs, startLine, endLine);
         recordTokenSaving('auto_slice', Math.max(200, (range - 100) * 10));
       } else {
         return respond(
           'deny',
           `🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: O intervalo de ${range} linhas excede o limite permitido (máximo 100 linhas para arquivos de código). ` +
-          `Utilize ${outlineScriptPath} <arquivo> para ver a estrutura limpa, ou ${langToolHint} para o bloco exato, reduzindo o range do view_file.`
+          `Utilize ${outlineScriptPath} <arquivo> para ver a estrutura limpa, ou ${langToolHint} para o bloco exato, reduzindo o range do read_file/view_file.`
         );
       }
     }
@@ -694,9 +704,9 @@ function recordTokenSaving(category, estimatedTokens = 500) {
     return respond('allow', null, modifiedArgs);
   }
 
-  // 3. Gate for write_to_file / Write (garantir diffs cirurgicos em vez de sobrescrita integral de codigo)
-  if (toolName === 'write_to_file' || toolName === 'write') {
-    const rawTarget = sanitizePath(args.TargetFile || args.path || args.file_path || args.filePath || '');
+  // 3. Gate for write_to_file / Write / write_file (garantir diffs cirúrgicos em vez de sobrescrita integral de código)
+  if (toolName === 'write_to_file' || toolName === 'write' || toolName === 'write_file') {
+    const rawTarget = sanitizePath(args.Path || args.TargetFile || args.path || args.file_path || args.filePath || args.AbsolutePath || '');
     const target = path.resolve(rawTarget);
     const isCodeFile = /\.(go|ts|tsx|js|jsx|cjs|mjs|py|java|c|cpp|cc|cxx|h|hpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|sql|dart|lua|sh|bash|ex|exs|tf)$/i.test(target);
     const isScratchOrTemp = /[\\/](\.cache|\.agents[\\/](scratch|temp|tmp)|brain[\\/][^\\/]+[\\/]scratch)[\\/]/i.test(target) || /[\\/]scratch[\\/]/i.test(target);
@@ -706,8 +716,8 @@ function recordTokenSaving(category, estimatedTokens = 500) {
       return respond(
         'deny',
         '🛑 BLOQUEIO DE REESCRITA INTEGRAL (DIFFS CIRÚRGICOS): O arquivo de código já existe!\n' +
-        'É proibido sobrescrever arquivos de código inteiros com write_to_file.\n' +
-        'Utilize replace_file_content para aplicar diffs cirúrgicos apenas no trecho estritamente necessário.'
+        'É proibido sobrescrever arquivos de código inteiros com write_file / write_to_file.\n' +
+        'Utilize edit_file (ou replace_file_content) para aplicar diffs cirúrgicos apenas no trecho estritamente necessário.'
       );
     }
 

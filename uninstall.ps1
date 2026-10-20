@@ -91,6 +91,13 @@ foreach ($cd in $compatDirs) {
     }
 }
 
+if (Get-Command agy -ErrorAction SilentlyContinue) {
+    try {
+        & agy mcp remove gsd-economy *>$null
+        Write-Host "   ✅ Servidor MCP gsd-economy desregistrado do Antigravity (agy mcp)" -ForegroundColor Green
+    } catch {}
+}
+
 # 4. Remover Git Hooks criados pelo kit
 $gitHooks = @(
     (Join-Path $TargetDir ".git\hooks\post-merge"),

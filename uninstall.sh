@@ -65,6 +65,9 @@ rm -rf "${AGENTS_DIR}/tools/gsd-agy-kit"
 rm -rf "${AGENTS_DIR}/gsd-agy-kit"
 rm -f "${TARGET_DIR}/scripts/test-kit.sh"
 rm -f "${TARGET_DIR}/scripts/test-kit.ps1"
+if command -v agy >/dev/null 2>&1; then
+    agy mcp remove gsd-economy >/dev/null 2>&1 || true
+fi
 echo -e "   \033[0;32m✅ Arquivos de hook, regras e caches removidos.\033[0m"
 
 # 3. Remover Git Hooks
