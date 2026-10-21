@@ -21,7 +21,9 @@ description: Busca estrutural baseada em AST via ast-grep para localização pre
     - Classes: `ast-grep run -p 'class $NAME: $$$'`
 - **Inspeção Cirúrgica via Outline:** Para obter a estrutura completa de assinaturas de qualquer arquivo de código sem ler o corpo, use a ferramenta MCP `view_skeleton` ou o comando:
   ```bash
-  node .agents/gsd-outline.cjs <caminho-do-arquivo>
+  node .agents/kit/gsd-outline.cjs <caminho-do-arquivo>
+  # ou alternativamente via MCP CLI:
+  node .agents/mcp-server.cjs skeleton <caminho-do-arquivo>
   ```
 - **Inspeção Cirúrgica:** Use os números de linha retornados pelo `ast-grep` para abrir apenas o trecho exato com `view_file` (`StartLine`/`EndLine`).
 - **Apenas Busca:** Proibido usar `ast-grep --rewrite` (`-r`). Edições em arquivos existentes devem ser cirúrgicas via `replace_file_content` / `edit_file`.

@@ -965,11 +965,6 @@ Assert-Test -Name "Script de skeleton (gsd-outline.cjs) presente" `
             -Condition (Test-Path $outlineScript) `
             -ErrorDetails "gsd-outline.cjs não encontrado na raiz do kit"
 
-$stripScript = Find-KitScript "gsd-read-strip.cjs"
-Assert-Test -Name "Script de read-strip (gsd-read-strip.cjs) presente" `
-            -Condition (Test-Path $stripScript) `
-            -ErrorDetails "gsd-read-strip.cjs não encontrado na raiz do kit"
-
 # Testa se o hook token-guard-pretool.cjs tem os novos gates
 $pretoolHook = if (Test-Path (Join-Path $kitDir "hooks\token-guard-pretool.cjs")) {
     Join-Path $kitDir "hooks\token-guard-pretool.cjs"

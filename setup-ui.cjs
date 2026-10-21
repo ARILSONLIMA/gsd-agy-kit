@@ -488,11 +488,14 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         if (!fs.existsSync(rulesDir)) fs.mkdirSync(rulesDir, { recursive: true });
         // Remove regra legada gopls.md caso exista para evitar duplicidade com lsp.md
         try { fs.rmSync(path.join(rulesDir, 'gopls.md'), { force: true }); } catch {}
-        const coreRules = ['token-protocol.md', 'ast-grep.md', 'graphify.md', 'idioma.md', 'lsp.md'];
-        for (const r of coreRules) {
-          const src = path.join(kitDir, 'rules', r);
-          const dest = path.join(rulesDir, r);
-          if (fs.existsSync(src)) fs.copyFileSync(src, dest);
+        const kitRulesDir = path.join(kitDir, 'rules');
+        if (fs.existsSync(kitRulesDir)) {
+          const ruleFiles = fs.readdirSync(kitRulesDir).filter(f => f.endsWith('.md'));
+          for (const r of ruleFiles) {
+            const src = path.join(kitRulesDir, r);
+            const dest = path.join(rulesDir, r);
+            fs.copyFileSync(src, dest);
+          }
         }
         await sleep(50);
       }
@@ -644,7 +647,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           "token-report.cjs", "gsd-update.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs",
           "patch-agents.cjs", "optimize-tokens.cjs", "skills-manager.cjs",
           "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs",
-          "gsd-outline.cjs", "gsd-read-strip.cjs", "shrink-prompts.cjs", "mcp-server.cjs"
+          "gsd-outline.cjs", "shrink-prompts.cjs", "mcp-server.cjs"
         ];
         for (const sName of kitScripts) {
           const src = path.join(kitDir, sName);
