@@ -173,12 +173,11 @@ function recordJitPromotion(type, name) {
   } catch {}
 }
 
-function readStdin(maxWaitMs = 1500, chunkTimeoutMs = 300) {
+function readStdin(maxWaitMs = 800) {
   if (process.stdin.isTTY) return Promise.resolve('');
   return new Promise((resolve) => {
     let data = '';
     let settled = false;
-    let activityTimer = null;
 
     const cleanup = () => {
       process.stdin.removeListener('data', onData);
@@ -190,22 +189,22 @@ function readStdin(maxWaitMs = 1500, chunkTimeoutMs = 300) {
     const done = (result) => {
       if (settled) return;
       settled = true;
-      if (activityTimer) clearTimeout(activityTimer);
       clearTimeout(globalTimer);
       cleanup();
       resolve(result);
-    };
-
-    const resetActivityTimer = () => {
-      if (activityTimer) clearTimeout(activityTimer);
-      activityTimer = setTimeout(() => done(data), chunkTimeoutMs);
     };
 
     const globalTimer = setTimeout(() => done(data), maxWaitMs);
 
     const onData = chunk => {
       data += chunk;
-      resetActivityTimer();
+      const trimmed = data.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          JSON.parse(trimmed);
+          done(trimmed);
+        } catch {}
+      }
     };
     const onEnd = () => done(data);
     const onError = () => done('');
@@ -217,7 +216,6 @@ function readStdin(maxWaitMs = 1500, chunkTimeoutMs = 300) {
 
     try {
       process.stdin.resume();
-      resetActivityTimer();
     } catch {
       done('');
     }
@@ -265,8 +263,15 @@ function respond(decision, reason, overwrite) {
   if (overwrite && typeof overwrite === 'object' && Object.keys(overwrite).length > 0) {
     res.overwrite = overwrite;
   }
-  process.stdout.write(JSON.stringify(res) + '\n');
-  process.exit(0);
+  
+  const payload = JSON.stringify(res) + '\n';
+  const flushed = process.stdout.write(payload, () => {
+    process.exit(0);
+  });
+  if (!flushed) {
+    process.stdout.once('drain', () => process.exit(0));
+  }
+  setTimeout(() => process.exit(0), 500).unref();
 }
 
 async function main() {

@@ -21,7 +21,7 @@ const LspEngine = require('./lib/lsp-engine.cjs');
 const ImpactEngine = require('./lib/impact-engine.cjs');
 const EnvSkeletonEngine = require('./lib/env-skeleton.cjs');
 const ErrorGuard = require('./lib/error-guard.cjs');
-const { spawnSync } = require('child_process');
+const { spawnSync, spawn } = require('child_process');
 
 function resolveProjectRoot() {
   if (process.env.PROJECT_ROOT && fs.existsSync(process.env.PROJECT_ROOT)) {
@@ -40,7 +40,20 @@ function resolveProjectRoot() {
 }
 
 const PROJECT_ROOT = resolveProjectRoot();
-ErrorGuard.installProcessGuards({ projectRoot: PROJECT_ROOT, source: 'mcp-server' });
+let isShuttingDown = false;
+
+function closeAllEngines() {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  if (engines.mempalace && typeof engines.mempalace.close === 'function') {
+    try { engines.mempalace.close(); } catch (_) {}
+  }
+  if (engines.ragDocs && typeof engines.ragDocs.close === 'function') {
+    try { engines.ragDocs.close(); } catch (_) {}
+  }
+}
+
+ErrorGuard.installProcessGuards({ projectRoot: PROJECT_ROOT, source: 'mcp-server', onShutdown: closeAllEngines });
 
 const SCRIPT_NAME = (process.argv[1] && path.relative(process.cwd(), process.argv[1])) || 'mcp-server.cjs';
 const CLI_CMD = `node ${SCRIPT_NAME.includes(' ') ? `"${SCRIPT_NAME}"` : SCRIPT_NAME}`;
@@ -74,16 +87,43 @@ const lspEngine = lazyProxy(getLspEngine);
 const impactEngine = lazyProxy(getImpactEngine);
 const envSkeleton = lazyProxy(getEnvSkeleton);
 
-function closeAllEngines() {
-  if (engines.mempalace && typeof engines.mempalace.close === 'function') {
-    try { engines.mempalace.close(); } catch (_) {}
-  }
-  if (engines.ragDocs && typeof engines.ragDocs.close === 'function') {
-    try { engines.ragDocs.close(); } catch (_) {}
-  }
+function execProcessAsync(bin, args, options = {}, timeoutMs = 15000) {
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+
+    const child = spawn(bin, args, {
+      cwd: options.cwd || PROJECT_ROOT,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+      setTimeout(() => {
+        if (!child.killed) {
+          try { child.kill('SIGKILL'); } catch (_) {}
+        }
+      }, 1000).unref();
+    }, timeoutMs);
+
+    child.stdout.on('data', d => { stdout += d.toString(); });
+    child.stderr.on('data', d => { stderr += d.toString(); });
+
+    child.on('error', err => {
+      clearTimeout(timer);
+      resolve({ error: err, status: null, signal: null, stdout, stderr, timedOut });
+    });
+
+    child.on('close', (status, signal) => {
+      clearTimeout(timer);
+      resolve({ error: null, status, signal, stdout, stderr, timedOut });
+    });
+  });
 }
 
-function runAstQuery({ pattern, lang, path: targetPath = '.', limit = 10 }) {
+async function runAstQuery({ pattern, lang, path: targetPath = '.', limit = 10 }) {
   if (!pattern) return { text: 'Erro: padrão (pattern) é obrigatório.', isError: true, stderr: 'Parâmetro "pattern" ausente.' };
   const bin = 'ast-grep';
   const cmdArgs = ['run', '-p', pattern];
@@ -92,9 +132,9 @@ function runAstQuery({ pattern, lang, path: targetPath = '.', limit = 10 }) {
   cmdArgs.push('--json=stream');
 
   try {
-    let res = spawnSync(bin, cmdArgs, { cwd: PROJECT_ROOT, encoding: 'utf8', timeout: 15000 });
+    let res = await execProcessAsync(bin, cmdArgs, { cwd: PROJECT_ROOT }, 15000);
     if (res.error && res.error.code === 'ENOENT') {
-      res = spawnSync('npx', ['-y', '--package', '@ast-grep/cli', 'ast-grep', ...cmdArgs], { cwd: PROJECT_ROOT, encoding: 'utf8', timeout: 20000 });
+      res = await execProcessAsync('npx', ['-y', '--package', '@ast-grep/cli', 'ast-grep', ...cmdArgs], { cwd: PROJECT_ROOT }, 20000);
     }
 
     if (res.error) {
@@ -354,10 +394,18 @@ const TOOLS_MANIFEST = [
 ];
 
 function sendJson(msg) {
-  process.stdout.write(JSON.stringify(msg) + '\n');
+  try {
+    const jsonStr = JSON.stringify(msg) + '\n';
+    const ok = process.stdout.write(jsonStr);
+    if (!ok) {
+      process.stdout.once('drain', () => {});
+    }
+  } catch (err) {
+    try { process.stderr.write(`[gsd-economy-mcp] Erro ao enviar JSON-RPC: ${err.message}\n`); } catch (_) {}
+  }
 }
 
-function handleToolCall(name, args) {
+async function handleToolCall(name, args) {
   let outcome;
   try {
     switch (name) {
@@ -413,7 +461,7 @@ function handleToolCall(name, args) {
         break;
       }
       case 'ast_query': {
-        outcome = runAstQuery({
+        outcome = await runAstQuery({
           pattern: args.pattern,
           lang: args.lang,
           path: args.path,
@@ -430,10 +478,12 @@ function handleToolCall(name, args) {
         const action = args.action || 'list';
         if (action === 'create') {
           const res = checkpointEngine.createCheckpoint(args.phase || 'manual');
-          outcome = { text: res.message || res.error, isError: !res.ok, stderr: res.stderr };
+          const msg = res.message || res.error || (res.ok ? 'Checkpoint criado com sucesso.' : 'Falha ao criar checkpoint.');
+          outcome = { text: msg, isError: !res.ok, stderr: res.stderr };
         } else if (action === 'rollback') {
           const res = checkpointEngine.rollback(args.tag);
-          outcome = { text: res.message || res.error, isError: !res.ok, stderr: res.stderr };
+          const msg = res.message || res.error || (res.ok ? 'Rollback executado com sucesso.' : 'Falha ao executar rollback.');
+          outcome = { text: msg, isError: !res.ok, stderr: res.stderr };
         } else {
           const list = checkpointEngine.listCheckpoints();
           if (list.length === 0) {
@@ -539,7 +589,7 @@ function handleToolCall(name, args) {
   return outcome;
 }
 
-function handleMessage(msg) {
+async function handleMessage(msg) {
   if (!msg || typeof msg !== 'object') return;
 
   const id = msg.id;
@@ -580,20 +630,39 @@ function handleMessage(msg) {
     case 'tools/call': {
       const toolName = msg.params?.name;
       const toolArgs = msg.params?.arguments || {};
-      const { text, isError } = handleToolCall(toolName, toolArgs);
-      sendJson({
-        jsonrpc: '2.0',
-        id,
-        result: {
-          content: [
-            {
-              type: 'text',
-              text
-            }
-          ],
-          isError
-        }
-      });
+      try {
+        const outcome = (await handleToolCall(toolName, toolArgs)) || {};
+        const safeText = typeof outcome.text === 'string'
+          ? outcome.text
+          : (outcome.text != null ? String(outcome.text) : (outcome.stderr || 'Operação concluída sem saída de texto.'));
+        sendJson({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            content: [
+              {
+                type: 'text',
+                text: safeText
+              }
+            ],
+            isError: Boolean(outcome.isError)
+          }
+        });
+      } catch (callErr) {
+        sendJson({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            content: [
+              {
+                type: 'text',
+                text: `Erro fatal ao executar ${toolName}: ${callErr.message}`
+              }
+            ],
+            isError: true
+          }
+        });
+      }
       break;
     }
     case 'ping': {
@@ -623,7 +692,7 @@ function exitCli(code = 0) {
   process.exit(code);
 }
 
-function handleCli(args) {
+async function handleCli(args) {
   const cmd = args[0];
   if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
     printHelp();
@@ -669,7 +738,7 @@ function handleCli(args) {
         exitCli(1);
       }
     }
-    const { text, isError } = handleToolCall(toolName, toolArgs);
+    const { text, isError } = await handleToolCall(toolName, toolArgs);
     if (isError) {
       console.error(text);
       exitCli(1);
@@ -688,7 +757,7 @@ function handleCli(args) {
     }
     const room = args[2] && ['decisions', 'problems', 'milestones'].includes(args[2]) ? args[2] : undefined;
     const limit = args[3] ? Number(args[3]) : 5;
-    const { text, isError } = handleToolCall('mempalace_recall', { query, room, limit });
+    const { text, isError } = await handleToolCall('mempalace_recall', { query, room, limit });
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);
@@ -703,7 +772,7 @@ function handleCli(args) {
       console.error(`Erro: uso: ${CLI_CMD} capture <decisions|problems|milestones> "<tópico>" "<conteúdo>" [motivo]`);
       exitCli(1);
     }
-    const { text, isError } = handleToolCall('mempalace_capture', { room, topic, content, rationale });
+    const { text, isError } = await handleToolCall('mempalace_capture', { room, topic, content, rationale });
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);
@@ -715,7 +784,7 @@ function handleCli(args) {
       console.error(`Erro: informe o caminho do arquivo. Ex: ${CLI_CMD} skeleton "src/models/user.js"`);
       exitCli(1);
     }
-    const { text, isError } = handleToolCall('view_skeleton', { file_path: filePath });
+    const { text, isError } = await handleToolCall('view_skeleton', { file_path: filePath });
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);
@@ -727,7 +796,7 @@ function handleCli(args) {
       console.error(`Erro: informe o nome do pacote. Ex: ${CLI_CMD} dep "express"`);
       exitCli(1);
     }
-    const { text, isError } = handleToolCall('check_dependency', { package_name: pkgName });
+    const { text, isError } = await handleToolCall('check_dependency', { package_name: pkgName });
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);
@@ -740,7 +809,7 @@ function handleCli(args) {
       exitCli(1);
     }
     const maxResults = args[2] ? Number(args[2]) : 3;
-    const { text, isError } = handleToolCall('query_docs', { query, max_results: maxResults });
+    const { text, isError } = await handleToolCall('query_docs', { query, max_results: maxResults });
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);
@@ -755,7 +824,7 @@ function handleCli(args) {
     const lang = args[2] || undefined;
     const targetPath = args[3] || '.';
     const limit = args[4] ? Number(args[4]) : 10;
-    const { text, isError } = handleToolCall('ast_query', { pattern, lang, path: targetPath, limit });
+    const { text, isError } = await handleToolCall('ast_query', { pattern, lang, path: targetPath, limit });
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);
@@ -763,7 +832,7 @@ function handleCli(args) {
 
   if (cmd === 'test-isolate') {
     const runner = args[1] || 'auto';
-    const { text, isError } = handleToolCall('test_isolate', { runner });
+    const { text, isError } = await handleToolCall('test_isolate', { runner });
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);
@@ -775,7 +844,7 @@ function handleCli(args) {
     const payload = { action };
     if (action === 'create') payload.phase = param || 'manual';
     if (action === 'rollback') payload.tag = param;
-    const { text, isError } = handleToolCall('checkpoint_manager', payload);
+    const { text, isError } = await handleToolCall('checkpoint_manager', payload);
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);
@@ -786,7 +855,7 @@ function handleCli(args) {
     if (sub === 'diagnostics' || sub === 'diag' || sub === 'check') {
       const filePath = args[2];
       const lang = args[3];
-      const { text, isError } = handleToolCall('lsp_diagnostics', { file_path: filePath, lang });
+      const { text, isError } = await handleToolCall('lsp_diagnostics', { file_path: filePath, lang });
       if (isError) { console.error(text); exitCli(1); }
       console.log(text);
       exitCli(0);
@@ -795,7 +864,7 @@ function handleCli(args) {
       const symbol = args[2];
       const filePath = args[3];
       const lang = args[4];
-      const { text, isError } = handleToolCall('lsp_definition', { symbol, file_path: filePath, lang });
+      const { text, isError } = await handleToolCall('lsp_definition', { symbol, file_path: filePath, lang });
       if (isError) { console.error(text); exitCli(1); }
       console.log(text);
       exitCli(0);
@@ -804,7 +873,7 @@ function handleCli(args) {
       const symbol = args[2];
       const filePath = args[3];
       const limit = args[4] ? Number(args[4]) : 25;
-      const { text, isError } = handleToolCall('lsp_references', { symbol, file_path: filePath, limit });
+      const { text, isError } = await handleToolCall('lsp_references', { symbol, file_path: filePath, limit });
       if (isError) { console.error(text); exitCli(1); }
       console.log(text);
       exitCli(0);
@@ -813,7 +882,7 @@ function handleCli(args) {
       const symbol = args[2];
       const filePath = args[3];
       const lang = args[4];
-      const { text, isError } = handleToolCall('lsp_hover', { symbol, file_path: filePath, lang });
+      const { text, isError } = await handleToolCall('lsp_hover', { symbol, file_path: filePath, lang });
       if (isError) { console.error(text); exitCli(1); }
       console.log(text);
       exitCli(0);
@@ -824,7 +893,7 @@ function handleCli(args) {
         console.error(`Erro: informe o arquivo para listar símbolos. Ex: ${CLI_CMD} lsp symbols "src/index.ts"`);
         exitCli(1);
       }
-      const { text, isError } = handleToolCall('lsp_hover', { file_path: filePath });
+      const { text, isError } = await handleToolCall('lsp_hover', { file_path: filePath });
       if (isError) { console.error(text); exitCli(1); }
       console.log(text);
       exitCli(0);
@@ -834,7 +903,7 @@ function handleCli(args) {
       const newName = args[3];
       const targetPath = args[4] && !args[4].startsWith('--') ? args[4] : '.';
       const dryRun = args.includes('--dry-run');
-      const { text, isError } = handleToolCall('lsp_rename', { symbol, new_name: newName, path: targetPath, dry_run: dryRun });
+      const { text, isError } = await handleToolCall('lsp_rename', { symbol, new_name: newName, path: targetPath, dry_run: dryRun });
       if (isError) { console.error(text); exitCli(1); }
       console.log(text);
       exitCli(0);
@@ -865,7 +934,7 @@ function handleCli(args) {
     }
     const filePath = args[2];
     const limit = args[3] ? Number(args[3]) : 20;
-    const { text, isError } = handleToolCall('impact_analysis', { symbol: target, file_path: filePath, limit });
+    const { text, isError } = await handleToolCall('impact_analysis', { symbol: target, file_path: filePath, limit });
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);
@@ -873,7 +942,7 @@ function handleCli(args) {
 
   if (cmd === 'env' || cmd === 'env-skeleton') {
     const filePath = args[1];
-    const { text, isError } = handleToolCall('env_skeleton', { file_path: filePath });
+    const { text, isError } = await handleToolCall('env_skeleton', { file_path: filePath });
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);
@@ -917,7 +986,11 @@ Uso MCP Stdio (Daemon):
 }
 
 function runStdioServer() {
+  let rl = null;
   const cleanupAndExit = (code = 0) => {
+    try {
+      if (rl && typeof rl.close === 'function') rl.close();
+    } catch (_) {}
     closeAllEngines();
     process.exit(code);
   };
@@ -928,17 +1001,24 @@ function runStdioServer() {
     }
   });
 
-  const rl = readline.createInterface({
+  process.stdin.on('error', err => {
+    if (err.code === 'EPIPE' || err.code === 'ECONNRESET') {
+      cleanupAndExit(0);
+    }
+  });
+
+  rl = readline.createInterface({
     input: process.stdin,
+    output: process.stdout,
     terminal: false
   });
 
-  rl.on('line', line => {
+  rl.on('line', async line => {
     const trimmed = line.trim();
     if (!trimmed) return;
     try {
       const msg = JSON.parse(trimmed);
-      handleMessage(msg);
+      await handleMessage(msg);
     } catch (err) {
       process.stderr.write(`[gsd-economy-mcp] Erro de parse JSON: ${err.message}\n`);
       sendJson({
@@ -955,13 +1035,18 @@ function runStdioServer() {
   rl.on('close', () => cleanupAndExit(0));
   process.on('SIGINT', () => cleanupAndExit(0));
   process.on('SIGTERM', () => cleanupAndExit(0));
+  process.on('SIGHUP', () => cleanupAndExit(0));
+  process.on('exit', () => closeAllEngines());
 
   process.stderr.write(`[gsd-economy-mcp] Servidor MCP iniciado para: ${PROJECT_ROOT}\n`);
 }
 
 // Inicialização Dual-Mode
 if (process.argv.length > 2) {
-  handleCli(process.argv.slice(2));
+  handleCli(process.argv.slice(2)).catch(err => {
+    process.stderr.write(`[gsd-economy-mcp] Falha na CLI: ${err.message}\n`);
+    exitCli(1);
+  });
 } else {
   runStdioServer();
 }

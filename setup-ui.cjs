@@ -73,7 +73,14 @@ function askPrompt(question) {
   if (process.stdin.isTTY) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     return new Promise(resolve => {
+      const onSigint = () => {
+        rl.close();
+        if (IS_TTY) process.stdout.write(C.showCursor);
+        process.exit(130);
+      };
+      rl.once('SIGINT', onSigint);
       rl.question(question, ans => {
+        rl.removeListener('SIGINT', onSigint);
         rl.close();
         resolve((ans || '').trim().toLowerCase());
       });
@@ -84,7 +91,15 @@ function askPrompt(question) {
       const ttyStream = fs.createReadStream('/dev/tty');
       const rl = readline.createInterface({ input: ttyStream, output: process.stdout });
       return new Promise(resolve => {
+        const onSigint = () => {
+          rl.close();
+          ttyStream.destroy();
+          if (IS_TTY) process.stdout.write(C.showCursor);
+          process.exit(130);
+        };
+        rl.once('SIGINT', onSigint);
         rl.question(question, ans => {
+          rl.removeListener('SIGINT', onSigint);
           rl.close();
           ttyStream.destroy();
           resolve((ans || '').trim().toLowerCase());
@@ -152,9 +167,9 @@ function getWorkspaceStatus(targetDir) {
 function getKitVersion() {
   try {
     const pkgData = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-    return pkgData.version || '1.9.2';
+    return pkgData.version || '1.9.4';
   } catch (_) {
-    return '1.9.2';
+    return '1.9.4';
   }
 }
 
@@ -600,7 +615,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           }
           const patchScript = path.join(kitDir, 'patch-agents.cjs');
           if (fs.existsSync(patchScript)) {
-            execSync(`node "${patchScript}" "${targetDir}"`, { stdio: 'ignore' });
+            spawnSync(process.execPath, [patchScript, targetDir], { stdio: 'ignore' });
           }
         }
         await sleep(80);
@@ -613,8 +628,8 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         if (fs.existsSync(targetAgentsDir)) {
           const optScript = path.join(kitDir, 'optimize-tokens.cjs');
           if (fs.existsSync(optScript)) {
-            execSync(`node "${optScript}" "${targetDir}"`, { stdio: 'ignore' });
-            execSync(`node "${optScript}" "${targetDir}" --sync`, { stdio: 'ignore' });
+            spawnSync(process.execPath, [optScript, targetDir], { stdio: 'ignore' });
+            spawnSync(process.execPath, [optScript, targetDir, '--sync'], { stdio: 'ignore' });
           }
         }
         await sleep(80);
@@ -636,8 +651,8 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         if (fs.existsSync(skillsMgr)) {
           const profile = hasFrontend ? 'full' : 'backend';
           try {
-            execSync(`node "${skillsMgr}" profile "${profile}" "${targetDir}"`, { stdio: 'ignore' });
-            execSync(`node "${skillsMgr}" sync "" "${targetDir}"`, { stdio: 'ignore' });
+            spawnSync(process.execPath, [skillsMgr, 'profile', profile, targetDir], { stdio: 'ignore' });
+            spawnSync(process.execPath, [skillsMgr, 'sync', '', targetDir], { stdio: 'ignore' });
           } catch {}
         }
         await sleep(80);
@@ -789,7 +804,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         // Registrar MCP nativo no Antigravity CLI (agy mcp add) para disponibilização imediata
         const destMcp = path.join(agentsDir, 'mcp-server.cjs');
         try {
-          execSync(`agy mcp add gsd-economy node "${destMcp}"`, { stdio: 'ignore', timeout: 5000 });
+          spawnSync('agy', ['mcp', 'add', 'gsd-economy', 'node', destMcp], { stdio: 'ignore', timeout: 5000 });
         } catch {}
 
         await sleep(60);

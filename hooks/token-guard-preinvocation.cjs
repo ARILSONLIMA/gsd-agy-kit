@@ -367,7 +367,11 @@ function checkLoopAndBudgetAlert() {
     if (TrackerClass) {
       try {
         const tracker = new TrackerClass(PROJECT_ROOT);
-        tracker.record('loop_prevention', 1200, alerts[0]);
+        if (typeof tracker.record === 'function') {
+          tracker.record('loop_prevention', 1200);
+        } else if (typeof tracker.recordSaving === 'function') {
+          tracker.recordSaving('loop_prevention', 1200);
+        }
       } catch {}
     }
 
@@ -384,13 +388,13 @@ checkPhaseSync();
 checkJitTtlAndCleanup();
 
 const loopAlertMsg = checkLoopAndBudgetAlert();
-if (loopAlertMsg) {
-  process.stdout.write(JSON.stringify({
-    injectSteps: [{ ephemeralMessage: loopAlertMsg }]
-  }) + '\n');
-} else {
-  // Retorna objeto limpo para manter a interface e logs 100% livres de banners repetidos
-  process.stdout.write(JSON.stringify({}) + '\n');
+const outMsg = loopAlertMsg
+  ? JSON.stringify({ injectSteps: [{ ephemeralMessage: loopAlertMsg }] }) + '\n'
+  : JSON.stringify({}) + '\n';
+
+const flushed = process.stdout.write(outMsg, () => process.exit(0));
+if (!flushed) {
+  process.stdout.once('drain', () => process.exit(0));
 }
-process.exit(0);
+setTimeout(() => process.exit(0), 500).unref();
 

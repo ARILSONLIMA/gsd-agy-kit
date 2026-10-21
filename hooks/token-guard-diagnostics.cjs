@@ -73,12 +73,11 @@ function writeJsonAtomic(filePath, data) {
   } catch {}
 }
 
-function readStdin(maxWaitMs = 1500, chunkTimeoutMs = 300) {
+function readStdin(maxWaitMs = 800) {
   if (process.stdin.isTTY) return Promise.resolve('');
   return new Promise((resolve) => {
     let data = '';
     let settled = false;
-    let activityTimer = null;
 
     const cleanup = () => {
       process.stdin.removeListener('data', onData);
@@ -90,22 +89,22 @@ function readStdin(maxWaitMs = 1500, chunkTimeoutMs = 300) {
     const done = (result) => {
       if (settled) return;
       settled = true;
-      if (activityTimer) clearTimeout(activityTimer);
       clearTimeout(globalTimer);
       cleanup();
       resolve(result);
-    };
-
-    const resetActivityTimer = () => {
-      if (activityTimer) clearTimeout(activityTimer);
-      activityTimer = setTimeout(() => done(data), chunkTimeoutMs);
     };
 
     const globalTimer = setTimeout(() => done(data), maxWaitMs);
 
     const onData = chunk => {
       data += chunk;
-      resetActivityTimer();
+      const trimmed = data.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          JSON.parse(trimmed);
+          done(trimmed);
+        } catch {}
+      }
     };
     const onEnd = () => done(data);
     const onError = () => done('');
@@ -117,7 +116,6 @@ function readStdin(maxWaitMs = 1500, chunkTimeoutMs = 300) {
 
     try {
       process.stdin.resume();
-      resetActivityTimer();
     } catch {
       done('');
     }
@@ -381,8 +379,11 @@ function handlePostToolUse(payload) {
   }
 
   // Resposta obrigatória do PostToolUse: JSON vazio
-  process.stdout.write('{}\n');
-  process.exit(0);
+  const flushed = process.stdout.write('{}\n', () => process.exit(0));
+  if (!flushed) {
+    process.stdout.once('drain', () => process.exit(0));
+  }
+  setTimeout(() => process.exit(0), 500).unref();
 }
 
 function checkAutoVerifyStopGate(terminationReason) {
@@ -488,8 +489,13 @@ function handleStop(payload) {
   // Verificar Gate Anti-Parada Prematura (TDD / LSP) quando terminationReason === NO_TOOL_CALL
   const autoVerifyReason = checkAutoVerifyStopGate(terminationReason);
   if (autoVerifyReason) {
-    process.stdout.write(JSON.stringify({ decision: 'continue', reason: autoVerifyReason }) + '\n');
-    process.exit(0);
+    const payload = JSON.stringify({ decision: 'continue', reason: autoVerifyReason }) + '\n';
+    const flushed = process.stdout.write(payload, () => process.exit(0));
+    if (!flushed) {
+      process.stdout.once('drain', () => process.exit(0));
+    }
+    setTimeout(() => process.exit(0), 500).unref();
+    return;
   }
 
   const egMod = findLibModule('error-guard.cjs');
@@ -575,8 +581,12 @@ function handleStop(payload) {
   }
 
   // Resposta padrão ao Antigravity CLI permitindo o término normal
-  process.stdout.write(JSON.stringify({ decision: "allow" }) + '\n');
-  process.exit(0);
+  const payload = JSON.stringify({ decision: "allow" }) + '\n';
+  const flushed = process.stdout.write(payload, () => process.exit(0));
+  if (!flushed) {
+    process.stdout.once('drain', () => process.exit(0));
+  }
+  setTimeout(() => process.exit(0), 500).unref();
 }
 
 // -----------------------------------------------------------------------------

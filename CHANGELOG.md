@@ -2,6 +2,23 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [1.9.4] - 2026-10-21
+- **Eliminação de Vazamentos de Abstração & Conformidade MCP:**
+  - `mcp-server.cjs`: Sanitização estrita do schema MCP nas respostas de ferramentas (`tools/call`). Garantido que o campo `text` de cada bloco de retorno nunca seja `undefined` (mesmo quando a ferramenta retorna `result: null` ou texto vazio), prevenindo rejeição de schema e crashes de parsing nos clientes MCP do Antigravity CLI.
+  - `setup-ui.cjs`: Substituição de interpolação vulnerável de strings em shell por execução segura via `child_process.spawnSync` com vetor de argumentos explícito (`process.execPath`), isolando a execução de scripts utilitários contra problemas de escape de caminhos e injeção.
+  - `hooks/token-guard-preinvocation.cjs`: Higienização e correção do payload repassado para `tracker.recordSaving`, mantendo rastreabilidade consistente de tokens sem lançar exceções silenciosas.
+- **Tratamento de Erros, Drenagem de Streams e Graceful Shutdown:**
+  - `mcp-server.cjs`: Ciclo de vida estendido com captura de `SIGHUP`, `SIGINT`, `SIGTERM`, `beforeExit`, `exit` e erro no `stdin`. Implementado controle de concorrência com flag idempotente `isShuttingDown` e encerramento determinístico de conexões SQLite e locks de arquivo via `closeAllEngines()`.
+  - `mcp-server.cjs`: Adicionado controle de contrapressão (*backpressure*) em `sendJson()`, pausando envios e aguardando o evento `'drain'` quando o buffer de escrita do `stdout` estiver saturado.
+  - `hooks/` (`token-guard-pretool.cjs`, `token-guard-preinvocation.cjs`, `token-guard-diagnostics.cjs`): Substituído o encerramento prematuro via `process.exit(0)` por drenagem assíncrona garantida do stream `process.stdout.write(..., () => process.exit(0))`, eliminando corrupção e truncamento de respostas JSON em pipes de IPC.
+  - `setup-ui.cjs`: Adicionado handler de interrupção (`SIGINT`) no loop de prompts interativos (`askPrompt`), restaurando imediatamente o cursor do terminal (`\x1b[?25h`) e fechando a interface `readline` de forma limpa.
+  - `lib/error-guard.cjs`: Extensão do hook `installProcessGuards` com suporte a callback customizado `opts.onShutdown` e uso de `setImmediate` antes de `process.exit(1)`, permitindo descarga completa de streams de log e stderr.
+- **Otimização de I/O, Concorrência e Execução Não-Bloqueante:**
+  - `mcp-server.cjs`: Conversão do despachador de ferramentas MCP (`handleToolCall`) e do loop de mensagens para fluxo assíncrono (`async/await`), eliminando congelamentos do event loop de stdio. Adicionada execução de subprocessos assíncrona (`execProcessAsync`) e migração de `runAstQuery` para async.
+  - `lib/token-savings.cjs`: Remoção de `Atomics.wait` bloqueante na thread principal em `withFileLock`, substituído por retentativas assíncronas com backoff e jitter via `setTimeout`. Correção de bug crítico de concorrência onde a ação protegida era executada mesmo se a trava falhasse (agora retorna `null` com log defensivo).
+  - `lib/rag-docs-engine.cjs`: Inserções em lote no SQLite agrupadas dentro de transações explícitas (`BEGIN TRANSACTION` / `COMMIT` / `ROLLBACK`), eliminando dezenas de `fsync` redundantes por arquivo indexado e reduzindo expressivamente a latência de I/O em disco.
+  - `hooks/token-guard-pretool.cjs` & `hooks/token-guard-diagnostics.cjs`: Otimização do leitor de `stdin` para resolver e processar imediatamente no primeiro JSON completo balanceado `{...}`, eliminando até 300ms de latência de inatividade artificial em cada invocação de ferramenta.
+
 ## [1.9.2] - 2026-10-21
 - **Eliminação de Vazamentos de Abstração:**
   - `mcp-server.cjs`: Substituídos caminhos hardcoded `.agents/mcp-server.cjs` por descoberta dinâmica (`SCRIPT_NAME` / `CLI_CMD`), permitindo execução correta a partir de qualquer diretório ou alias.
