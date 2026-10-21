@@ -77,23 +77,36 @@ function readStdin(timeoutMs = 400) {
   if (process.stdin.isTTY) return Promise.resolve('');
   return new Promise((resolve) => {
     let data = '';
-    const timer = setTimeout(() => {
+    let settled = false;
+
+    const cleanup = () => {
+      process.stdin.removeListener('data', onData);
+      process.stdin.removeListener('end', onEnd);
+      process.stdin.removeListener('error', onError);
       try { process.stdin.pause(); } catch {}
-      resolve(data);
-    }, timeoutMs);
+    };
+
+    const done = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => done(data), timeoutMs);
+
+    const onData = chunk => { data += chunk; };
+    const onEnd = () => done(data);
+    const onError = () => done('');
+
     process.stdin.setEncoding('utf8');
-    process.stdin.on('data', chunk => { data += chunk; });
-    process.stdin.on('end', () => {
-      clearTimeout(timer);
-      resolve(data);
-    });
-    process.stdin.on('error', () => {
-      clearTimeout(timer);
-      resolve('');
-    });
+    process.stdin.on('data', onData);
+    process.stdin.on('end', onEnd);
+    process.stdin.on('error', onError);
+
     try { process.stdin.resume(); } catch {
-      clearTimeout(timer);
-      resolve('');
+      done('');
     }
   });
 }
@@ -188,7 +201,9 @@ function handlePostToolUse(payload) {
       try {
         const fullEdited = path.isAbsolute(editedPath) ? editedPath : path.resolve(PROJECT_ROOT, editedPath);
         if (fs.existsSync(fullEdited)) {
-          const lspMod = findLibModule('lsp-engine.cjs');
+          const stat = fs.statSync(fullEdited);
+          if (stat.size <= 256 * 1024) {
+            const lspMod = findLibModule('lsp-engine.cjs');
           if (lspMod) {
             const LspEngine = require(lspMod);
             const lsp = new LspEngine(PROJECT_ROOT);
@@ -296,6 +311,7 @@ function handlePostToolUse(payload) {
               }
             } catch {}
           }
+        }
         }
       } catch {}
     }

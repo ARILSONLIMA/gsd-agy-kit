@@ -2,7 +2,23 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
-## [1.9.0] - 2026-10-20
+## [1.9.1] - 2026-10-21
+- **Resiliência e Ciclo de Vida do Servidor MCP Stdio (`mcp-server.cjs`):**
+  - **Graceful Shutdown:** Implementado encerramento limpo para sinais `SIGINT`, `SIGTERM` e evento `close` do readline, fechando conexões ativas SQLite e liberando locks de arquivo.
+  - **Lazy Loading de Motores:** Instanciação sob demanda via Lazy Proxies para todos os 9 motores (`mempalace`, `ragDocs`, `lockfileLens`, `skeletonEngine`, etc.), eliminando bloqueios de I/O na inicialização e chamadas de CLI rápidas.
+  - **Conformidade JSON-RPC 2.0:** Resposta estruturada com código de erro `-32700 Parse error` para mensagens malformadas recebidas no stream.
+- **Robustez de I/O e Anti-OOM no Sanitizador (`sanitize-output.cjs`):**
+  - **Prevenção de Buffer Overflow:** Elevado `maxBuffer` do `execSync` para 64 MB para suportar saídas densas de compilação e suítes de testes sem disparar erro `ENOBUFS`.
+  - **Prevenção de Out-Of-Memory (OOM):** Estabelecido teto de 16 MB em streams de entrada via `stdin` com truncamento inteligente e tratamento do evento `error`.
+  - **Descoberta Segura do Projeto:** Implementada busca heurística de raiz (`findProjectRootFrom`) evitando path traversal incorreto em diretórios arbitrários.
+- **Otimização de Concorrência e Handlers de Hooks (`hooks/`):**
+  - **Cleanup Estrito de Streams (`readStdin`):** Remoção determinística de listeners de eventos (`data`, `end`, `error`) nos hooks `token-guard-diagnostics` e `token-guard-pretool`, prevenindo vazamento de memória e handles pendentes no event loop.
+  - **Triagem de I/O em Auditorias Pós-Edição:** Filtro de tamanho de arquivo (<= 256 KB) na cascata de linters síncronos no evento `PostToolUse`, eliminando travamentos de CPU em arquivos pesados.
+  - **Circuit Breaker Tolerante a Falhas:** Ferramentas auxiliares opcionais (como `graphify`) tratadas como advertências sem bloquear o acesso a ferramentas nativas essenciais do sistema.
+- **Integridade de Persistência e Terminal UI (`lib/` e `setup-ui.cjs`):**
+  - **Encerramento de Conexões SQLite:** Método `close()` implementado em `MemPalaceEngine` e `RagDocsEngine` com liberação de checkpoint WAL.
+  - **Gravação Atômica no Fallback JSON:** Uso de arquivo temporário `.tmp` e `renameSync` no fallback do MemPalace para blindar contra corrupção por encerramento abrupto.
+  - **Restauração de Cursor do Terminal (`StepperUI`):** Handlers de interrupção de sinal garantem restauração do cursor (`\x1b[?25h`) em cancelamentos com Ctrl+C.
 - **Otimização de Contexto e Cold Start com `disable-model-invocation: true` (`skills/`):**
   - Aplicado no frontmatter YAML das skills utilitárias canônicas nativas (`/gsd-tokens`, `/gsd-test`, `/gsd-agy-update`).
   - O Antigravity CLI remove a descrição dessas ferramentas da janela de atenção ativa do LLM a cada turno da conversa, eliminando o consumo contínuo de tokens de prompt e distrações cognitivas do modelo, mantendo 100% da usabilidade de invocação manual via barra (`/`).

@@ -76,7 +76,13 @@ function verifyToolsHealth() {
     } catch {
       execSync('npx -y --package @ast-grep/cli ast-grep --version', { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10000, encoding: 'utf8' });
     }
-    execSync('graphify --version', { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10000, encoding: 'utf8' });
+
+    let warnings = [];
+    try {
+      execSync('graphify --version', { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000, encoding: 'utf8' });
+    } catch {
+      warnings.push('graphify não encontrado no PATH');
+    }
 
     const lspPath = findLibModule('lsp-engine.cjs');
     if (lspPath) {
@@ -84,12 +90,16 @@ function verifyToolsHealth() {
       const lsp = new LspEngine(PROJECT_ROOT);
       const stackHealth = lsp.checkStackHealth(PROJECT_ROOT);
       if (!stackHealth.ok) {
-        throw new Error(stackHealth.error);
+        warnings.push(`LSP: ${stackHealth.error}`);
       }
     } else if (fs.existsSync(path.join(PROJECT_ROOT, 'go.mod'))) {
-      execSync('gopls version', { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10000, encoding: 'utf8' });
+      try {
+        execSync('gopls version', { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000, encoding: 'utf8' });
+      } catch {
+        warnings.push('gopls não encontrado no PATH');
+      }
     }
-    health = { ok: true };
+    health = { ok: true, warnings: warnings.length > 0 ? warnings : null };
   } catch (err) {
     const errDetail = (err.stderr ? err.stderr.toString().trim() : '') || err.message;
     health = { ok: false, error: errDetail };
@@ -167,24 +177,36 @@ function readStdin(timeoutMs = 500) {
   if (process.stdin.isTTY) return Promise.resolve('');
   return new Promise((resolve) => {
     let data = '';
-    const timer = setTimeout(() => {
+    let settled = false;
+
+    const cleanup = () => {
+      process.stdin.removeListener('data', onData);
+      process.stdin.removeListener('end', onEnd);
+      process.stdin.removeListener('error', onError);
       try { process.stdin.pause(); } catch {}
-      resolve(data);
-    }, timeoutMs);
+    };
+
+    const done = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => done(data), timeoutMs);
+
+    const onData = chunk => { data += chunk; };
+    const onEnd = () => done(data);
+    const onError = () => done('');
 
     process.stdin.setEncoding('utf8');
-    process.stdin.on('data', chunk => { data += chunk; });
-    process.stdin.on('end', () => {
-      clearTimeout(timer);
-      resolve(data);
-    });
-    process.stdin.on('error', () => {
-      clearTimeout(timer);
-      resolve('');
-    });
+    process.stdin.on('data', onData);
+    process.stdin.on('end', onEnd);
+    process.stdin.on('error', onError);
+
     try { process.stdin.resume(); } catch {
-      clearTimeout(timer);
-      resolve('');
+      done('');
     }
   });
 }

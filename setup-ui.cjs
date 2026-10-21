@@ -152,9 +152,9 @@ function getWorkspaceStatus(targetDir) {
 function getKitVersion() {
   try {
     const pkgData = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-    return pkgData.version || '1.9.0';
+    return pkgData.version || '1.9.1';
   } catch (_) {
-    return '1.9.0';
+    return '1.9.1';
   }
 }
 
@@ -230,6 +230,13 @@ class StepperUI {
     this.spinnerIdx = 0;
     this.intervalId = null;
     this.stepStartTime = 0;
+
+    this._sigintHandler = () => {
+      this.cleanup();
+      process.exit(130);
+    };
+    process.once('SIGINT', this._sigintHandler);
+    process.once('SIGTERM', this._sigintHandler);
   }
 
   printHeader() {
@@ -286,7 +293,12 @@ class StepperUI {
   }
 
   cleanup() {
-    if (this.intervalId) clearInterval(this.intervalId);
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    process.removeListener('SIGINT', this._sigintHandler);
+    process.removeListener('SIGTERM', this._sigintHandler);
     if (IS_TTY) process.stdout.write(C.showCursor);
   }
 }

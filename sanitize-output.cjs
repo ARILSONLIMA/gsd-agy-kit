@@ -30,6 +30,19 @@ function resolveLogPath() {
   return path.join(process.cwd(), 'last-command-output.log');
 }
 
+function findProjectRootFrom(startPath) {
+  let curr = path.dirname(startPath);
+  for (let i = 0; i < 6; i++) {
+    if (fs.existsSync(path.join(curr, '.planning')) || fs.existsSync(path.join(curr, '.agents')) || fs.existsSync(path.join(curr, '.git'))) {
+      return curr;
+    }
+    const up = path.dirname(curr);
+    if (up === curr) break;
+    curr = up;
+  }
+  return process.cwd();
+}
+
 function sanitizeText(text, maxLines = 50, headCount = 20, tailCount = 20) {
   const lines = text.split(/\r?\n/);
   if (lines.length <= maxLines) {
@@ -47,7 +60,7 @@ function sanitizeText(text, maxLines = 50, headCount = 20, tailCount = 20) {
 
   // Contabilizar economia de tokens gerada pelo truncamento Headroom
   try {
-    const projectRoot = path.dirname(path.dirname(path.dirname(logFile)));
+    const projectRoot = findProjectRootFrom(logFile);
     const savingsCandidates = [
       path.join(__dirname, 'lib', 'token-savings.cjs'),
       path.join(projectRoot, '.agents', 'lib', 'token-savings.cjs'),
@@ -87,7 +100,11 @@ function main() {
 
   if (execCmd) {
     try {
-      const out = execSync(execCmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+      const out = execSync(execCmd, {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        maxBuffer: 64 * 1024 * 1024
+      });
       process.stdout.write(sanitizeText(out) + '\n');
       process.exit(0);
     } catch (err) {
@@ -103,10 +120,26 @@ function main() {
   }
 
   let buffer = '';
+  const MAX_INPUT_BYTES = 16 * 1024 * 1024;
+  let bytesReceived = 0;
+
   process.stdin.setEncoding('utf8');
-  process.stdin.on('data', chunk => { buffer += chunk; });
+  process.stdin.on('data', chunk => {
+    bytesReceived += Buffer.byteLength(chunk, 'utf8');
+    if (bytesReceived <= MAX_INPUT_BYTES) {
+      buffer += chunk;
+    }
+  });
   process.stdin.on('end', () => {
+    if (bytesReceived > MAX_INPUT_BYTES) {
+      buffer += `\n[... Truncado: fluxo de entrada excedeu ${MAX_INPUT_BYTES / (1024 * 1024)} MB ...]`;
+    }
     process.stdout.write(sanitizeText(buffer) + '\n');
+    process.exit(0);
+  });
+  process.stdin.on('error', err => {
+    process.stderr.write(`[sanitize-output] Erro em stdin: ${err.message}\n`);
+    process.exit(1);
   });
 }
 

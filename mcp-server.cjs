@@ -41,15 +41,44 @@ function resolveProjectRoot() {
 
 const PROJECT_ROOT = resolveProjectRoot();
 ErrorGuard.installProcessGuards({ projectRoot: PROJECT_ROOT, source: 'mcp-server' });
-const mempalace = new MemPalaceEngine(PROJECT_ROOT);
-const ragDocs = new RagDocsEngine(PROJECT_ROOT);
-const lockfileLens = new LockfileLens(PROJECT_ROOT);
-const skeletonEngine = new SkeletonEngine(PROJECT_ROOT);
-const testIsolate = new TestIsolate(PROJECT_ROOT);
-const checkpointEngine = new CheckpointEngine(PROJECT_ROOT);
-const lspEngine = new LspEngine(PROJECT_ROOT);
-const impactEngine = new ImpactEngine(PROJECT_ROOT);
-const envSkeleton = new EnvSkeletonEngine(PROJECT_ROOT);
+
+const engines = {};
+const getMemPalace = () => (engines.mempalace ||= new MemPalaceEngine(PROJECT_ROOT));
+const getRagDocs = () => (engines.ragDocs ||= new RagDocsEngine(PROJECT_ROOT));
+const getLockfileLens = () => (engines.lockfileLens ||= new LockfileLens(PROJECT_ROOT));
+const getSkeletonEngine = () => (engines.skeletonEngine ||= new SkeletonEngine(PROJECT_ROOT));
+const getTestIsolate = () => (engines.testIsolate ||= new TestIsolate(PROJECT_ROOT));
+const getCheckpointEngine = () => (engines.checkpointEngine ||= new CheckpointEngine(PROJECT_ROOT));
+const getLspEngine = () => (engines.lspEngine ||= new LspEngine(PROJECT_ROOT));
+const getImpactEngine = () => (engines.impactEngine ||= new ImpactEngine(PROJECT_ROOT));
+const getEnvSkeleton = () => (engines.envSkeleton ||= new EnvSkeletonEngine(PROJECT_ROOT));
+
+const lazyProxy = (getter) => new Proxy({}, {
+  get: (_, prop) => {
+    const target = getter();
+    const val = target[prop];
+    return typeof val === 'function' ? val.bind(target) : val;
+  }
+});
+
+const mempalace = lazyProxy(getMemPalace);
+const ragDocs = lazyProxy(getRagDocs);
+const lockfileLens = lazyProxy(getLockfileLens);
+const skeletonEngine = lazyProxy(getSkeletonEngine);
+const testIsolate = lazyProxy(getTestIsolate);
+const checkpointEngine = lazyProxy(getCheckpointEngine);
+const lspEngine = lazyProxy(getLspEngine);
+const impactEngine = lazyProxy(getImpactEngine);
+const envSkeleton = lazyProxy(getEnvSkeleton);
+
+function closeAllEngines() {
+  if (engines.mempalace && typeof engines.mempalace.close === 'function') {
+    try { engines.mempalace.close(); } catch (_) {}
+  }
+  if (engines.ragDocs && typeof engines.ragDocs.close === 'function') {
+    try { engines.ragDocs.close(); } catch (_) {}
+  }
+}
 
 function runAstQuery({ pattern, lang, path: targetPath = '.', limit = 10 }) {
   if (!pattern) return { text: 'Erro: padrão (pattern) é obrigatório.', isError: true, stderr: 'Parâmetro "pattern" ausente.' };
@@ -882,9 +911,13 @@ Uso MCP Stdio (Daemon):
 function runStdioServer() {
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout,
     terminal: false
   });
+
+  const cleanupAndExit = (code = 0) => {
+    closeAllEngines();
+    process.exit(code);
+  };
 
   rl.on('line', line => {
     const trimmed = line.trim();
@@ -894,8 +927,20 @@ function runStdioServer() {
       handleMessage(msg);
     } catch (err) {
       process.stderr.write(`[gsd-economy-mcp] Erro de parse JSON: ${err.message}\n`);
+      sendJson({
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32700,
+          message: `Parse error: ${err.message}`
+        }
+      });
     }
   });
+
+  rl.on('close', () => cleanupAndExit(0));
+  process.on('SIGINT', () => cleanupAndExit(0));
+  process.on('SIGTERM', () => cleanupAndExit(0));
 
   process.stderr.write(`[gsd-economy-mcp] Servidor MCP iniciado para: ${PROJECT_ROOT}\n`);
 }
