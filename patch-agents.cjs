@@ -67,35 +67,57 @@ function detectStack(targetDir) {
   };
 }
 
+const IGNORED_SCAN_DIRS = new Set([
+  'node_modules', '.git', 'vendor', 'dist', 'build', 'target', '.venv', 'venv',
+  '.agents', '.gemini', '.planning', 'graphify-out', 'coverage', '.cache'
+]);
+
+const maturityCache = new Map();
+
 function detectProjectMaturity(targetDir) {
+  const normKey = path.resolve(targetDir || process.cwd());
+  if (maturityCache.has(normKey)) return maturityCache.get(normKey);
+
   let codeCount = 0;
   const codeExts = new Set(['.go', '.ts', '.tsx', '.js', '.jsx', '.py', '.rs', '.java', '.cs', '.php', '.rb', '.dart', '.ex', '.cpp', '.c']);
   const scanDirs = ['src', 'lib', 'app', 'cmd', 'server', 'client', 'api', 'pkg', 'services'];
 
   for (const sub of scanDirs) {
-    const subPath = path.join(targetDir, sub);
-    if (fs.existsSync(subPath)) {
-      try {
-        const files = fs.readdirSync(subPath, { recursive: true });
-        for (const f of files) {
-          const ext = path.extname(f).toLowerCase();
-          if (codeExts.has(ext)) codeCount++;
+    const subPath = path.join(normKey, sub);
+    if (!fs.existsSync(subPath)) continue;
+    try {
+      const items = fs.readdirSync(subPath, { withFileTypes: true });
+      for (const item of items) {
+        if (item.isFile()) {
+          const ext = path.extname(item.name).toLowerCase();
+          if (codeExts.has(ext)) {
+            codeCount++;
+            if (codeCount > 3) break;
+          }
         }
-      } catch {}
-    }
+      }
+    } catch {}
+    if (codeCount > 3) break;
   }
 
-  try {
-    const topEntries = fs.readdirSync(targetDir, { withFileTypes: true });
-    for (const e of topEntries) {
-      if (e.isFile()) {
-        const ext = path.extname(e.name).toLowerCase();
-        if (codeExts.has(ext)) codeCount++;
+  if (codeCount <= 3) {
+    try {
+      const topEntries = fs.readdirSync(normKey, { withFileTypes: true });
+      for (const e of topEntries) {
+        if (e.isFile()) {
+          const ext = path.extname(e.name).toLowerCase();
+          if (codeExts.has(ext)) {
+            codeCount++;
+            if (codeCount > 3) break;
+          }
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
-  return codeCount <= 2 ? 'greenfield' : 'brownfield';
+  const result = codeCount <= 2 ? 'greenfield' : 'brownfield';
+  maturityCache.set(normKey, result);
+  return result;
 }
 
 function buildProtocolBlock(targetDir) {
@@ -185,7 +207,7 @@ function normalizeTools(toolsList, isReadOnly = false) {
   return Array.from(current);
 }
 
-function patchAgentFile(filePath, targetDir) {
+function patchAgentFile(filePath, targetDir, precomputedProtocol = null) {
   const content = fs.readFileSync(filePath, 'utf8');
   
   // Parse frontmatter
@@ -219,7 +241,7 @@ function patchAgentFile(filePath, targetDir) {
   let newFm = rawFm.replace(toolsMatch[0].trim(), newToolsBlock);
 
   // Inject or update Protocol Block in body
-  const protocolBlock = buildProtocolBlock(targetDir || process.cwd());
+  const protocolBlock = precomputedProtocol || buildProtocolBlock(targetDir || process.cwd());
   if (body.includes(PROTOCOL_MARKER_START)) {
     const startIdx = body.indexOf(PROTOCOL_MARKER_START);
     const endIdx = body.indexOf(PROTOCOL_MARKER_END) + PROTOCOL_MARKER_END.length;
@@ -249,6 +271,8 @@ function runPatch(targetDir) {
     process.exit(1);
   }
 
+  const protocolBlock = buildProtocolBlock(targetDir || process.cwd());
+
   const dirsToPatch = [agentsDir];
   if (fs.existsSync(poolDir)) dirsToPatch.push(poolDir);
   if (fs.existsSync(onDemandDir)) dirsToPatch.push(onDemandDir);
@@ -262,7 +286,7 @@ function runPatch(targetDir) {
     for (const file of files) {
       const fullPath = path.join(dir, file);
       try {
-        if (patchAgentFile(fullPath, targetDir)) {
+        if (patchAgentFile(fullPath, targetDir, protocolBlock)) {
           patchedCount++;
         }
       } catch (err) {

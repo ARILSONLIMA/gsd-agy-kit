@@ -1,4 +1,4 @@
-# Antigravity GSD Kit v1.9.1 🚀
+# Antigravity GSD Kit v1.9.2 🚀
 
 > **Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens para GSD no Antigravity CLI**
 

@@ -173,11 +173,12 @@ function recordJitPromotion(type, name) {
   } catch {}
 }
 
-function readStdin(timeoutMs = 500) {
+function readStdin(maxWaitMs = 1500, chunkTimeoutMs = 300) {
   if (process.stdin.isTTY) return Promise.resolve('');
   return new Promise((resolve) => {
     let data = '';
     let settled = false;
+    let activityTimer = null;
 
     const cleanup = () => {
       process.stdin.removeListener('data', onData);
@@ -189,14 +190,23 @@ function readStdin(timeoutMs = 500) {
     const done = (result) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (activityTimer) clearTimeout(activityTimer);
+      clearTimeout(globalTimer);
       cleanup();
       resolve(result);
     };
 
-    const timer = setTimeout(() => done(data), timeoutMs);
+    const resetActivityTimer = () => {
+      if (activityTimer) clearTimeout(activityTimer);
+      activityTimer = setTimeout(() => done(data), chunkTimeoutMs);
+    };
 
-    const onData = chunk => { data += chunk; };
+    const globalTimer = setTimeout(() => done(data), maxWaitMs);
+
+    const onData = chunk => {
+      data += chunk;
+      resetActivityTimer();
+    };
     const onEnd = () => done(data);
     const onError = () => done('');
 
@@ -205,7 +215,10 @@ function readStdin(timeoutMs = 500) {
     process.stdin.on('end', onEnd);
     process.stdin.on('error', onError);
 
-    try { process.stdin.resume(); } catch {
+    try {
+      process.stdin.resume();
+      resetActivityTimer();
+    } catch {
       done('');
     }
   });
@@ -328,7 +341,7 @@ function recordTokenSaving(category, estimatedTokens = 500) {
       return respond(
         'deny',
         '🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: A leitura bruta do STATE.md gasta milhares de tokens inúteis em formatação de tabelas Markdown.\n' +
-        'Utilize o script de sumário rodando o comando: node .agents/kit/gsd-state-summary.cjs (ou node gsd-state-summary.cjs ou cat .planning/state_summary.json)'
+        'Utilize o arquivo estruturado pré-compilado: leia .planning/state_summary.json ou execute "node gsd-state-summary.cjs" para obter o resumo cirúrgico.'
       );
     }
 
@@ -339,7 +352,7 @@ function recordTokenSaving(category, estimatedTokens = 500) {
       return respond(
         'deny',
         '🛑 SECRET SHIELD (PROTEÇÃO DE SEGREDOS E TOKENS): É proibido ler arquivos .env diretamente com view_file/read_file para evitar exposição de credenciais no contexto!\n' +
-        'Utilize a lente segura que mascara valores sensíveis: node .agents/mcp-server.cjs env (ou tool MCP env_skeleton).'
+        'Utilize a ferramenta MCP "env_skeleton" para inspecionar variáveis de ambiente de forma segura.'
       );
     }
 

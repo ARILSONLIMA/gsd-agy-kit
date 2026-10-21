@@ -86,9 +86,10 @@ function getCompactStateBrief(projectRoot) {
 function getRecentMemPalaceBrief(projectRoot) {
   const mpPath = findLibModule('mempalace-engine.cjs');
   if (!mpPath) return null;
+  let mp = null;
   try {
     const MemPalaceEngine = require(mpPath);
-    const mp = new MemPalaceEngine(projectRoot);
+    mp = new MemPalaceEngine(projectRoot);
     const stats = mp.stats();
     if (!stats || !stats.total) return null;
 
@@ -101,6 +102,10 @@ function getRecentMemPalaceBrief(projectRoot) {
     return `${stats.total} fato(s) disponíveis no MemPalace (use mempalace_recall)`;
   } catch {
     return null;
+  } finally {
+    if (mp && typeof mp.close === 'function') {
+      try { mp.close(); } catch {}
+    }
   }
 }
 

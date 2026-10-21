@@ -62,7 +62,8 @@ function checkAndAutoHeal() {
     const sampleAgent = path.join(agentsDir, 'gsd-executor.md');
     if (fs.existsSync(sampleAgent)) {
       const content = fs.readFileSync(sampleAgent, 'utf8');
-      if (content.includes('- glob')) {
+      const hasGlobInFrontmatter = /^tools:\s*[\s\S]*?^\s*-\s*glob\b/m.test(content) || /^---\r?\n[\s\S]*?\n\s*-\s*glob\b[\s\S]*?\r?\n---/m.test(content);
+      if (hasGlobInFrontmatter) {
         // GSD foi atualizado e reintroduziu 'glob' — disparar auto-heal!
         const patchScript = findKitScript('patch-agents.cjs');
         if (patchScript) {
@@ -332,14 +333,19 @@ function checkLoopAndBudgetAlert() {
     const memMod = findLibModule('mempalace-engine.cjs') || findLibModule('mempalace.cjs');
     const MemClass = memMod && (memMod.MemPalaceEngine || (typeof memMod === 'function' ? memMod : null));
     if (MemClass) {
+      let mem = null;
       try {
-        const mem = new MemClass(PROJECT_ROOT);
+        mem = new MemClass(PROJECT_ROOT);
         const res = mem.recall({ query: queryTerm || 'error', room: 'problems', limit: 1 });
         if (res && Array.isArray(res.results) && res.results.length > 0) {
           const top = res.results[0];
           hints.push(`MemPalace [problems]: "${String(top.content || '').slice(0, 120)}"`);
         }
-      } catch {}
+      } catch {} finally {
+        if (mem && typeof mem.close === 'function') {
+          try { mem.close(); } catch {}
+        }
+      }
     }
 
     const cpMod = findLibModule('checkpoint-engine.cjs');

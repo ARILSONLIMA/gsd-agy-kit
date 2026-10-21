@@ -2,6 +2,22 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [1.9.2] - 2026-10-21
+- **Eliminação de Vazamentos de Abstração:**
+  - `mcp-server.cjs`: Substituídos caminhos hardcoded `.agents/mcp-server.cjs` por descoberta dinâmica (`SCRIPT_NAME` / `CLI_CMD`), permitindo execução correta a partir de qualquer diretório ou alias.
+  - `hooks/token-guard-pretool.cjs`: Mensagens de Hard Gate higienizadas para referenciar a ferramenta canônica `env_skeleton` e o arquivo pré-compilado `.planning/state_summary.json` sem expor a topologia de pastas do kit ao LLM.
+  - `setup-ui.cjs`: Resolução dinâmica do executável PowerShell no Windows (`pwsh` com fallback transparente para `powershell.exe`).
+  - `hooks/token-guard-preinvocation.cjs`: Verificação de `- glob` restrita ao bloco `tools:` do frontmatter YAML, eliminando falsos positivos na auto-cura causados por menções textuais em instruções ou documentação.
+- **Tratamento de Erros, Resiliência e Shutdown:**
+  - `mcp-server.cjs`: Implementado `exitCli(code)` com chamada mandatória a `closeAllEngines()`, garantindo o flush e checkpoint WAL em bancos SQLite antes de qualquer término do processo no modo CLI.
+  - `mcp-server.cjs`: Registrado handler para evento `EPIPE` no `stdout`, prevenindo falhas fatais não tratadas quando o cliente MCP desconecta o pipe.
+  - `hooks/`: Conexões com `MemPalaceEngine` devidamente encerradas em blocos `finally` em `token-guard-sessionstart.cjs`, `token-guard-diagnostics.cjs` e `token-guard-preinvocation.cjs`.
+  - `setup-ui.cjs`: Validação de código de saída e captura de erros em `runDoctor`, prevenindo relatórios de falso sucesso caso os subprocessos de auto-cura falhem.
+  - `hooks/`: Implementado leitor de `stdin` adaptativo com timer de inatividade entre chunks em `token-guard-diagnostics.cjs` e `token-guard-pretool.cjs`, prevenindo corrupção e truncamento em payloads volumosos.
+- **Otimização de I/O e Blindagem contra Concorrência:**
+  - `patch-agents.cjs`: Função `detectProjectMaturity` otimizada com cache de resultado, curto-circuito (> 3 arquivos) e exclusão estrita de diretórios pesados (`node_modules`, `vendor`, `.git`, etc.). O bloco de protocolo passa a ser pré-computado uma única vez por execução de `runPatch`.
+  - `lib/token-savings.cjs`: Adicionado mecanismo de lock atômico baseado em arquivo (`withFileLock`) com liberação automática de travas estagnadas, prevenindo *race conditions* (TOCTOU) e perda de telemetria em execuções paralelas de subagentes.
+
 ## [1.9.1] - 2026-10-21
 - **Resiliência e Ciclo de Vida do Servidor MCP Stdio (`mcp-server.cjs`):**
   - **Graceful Shutdown:** Implementado encerramento limpo para sinais `SIGINT`, `SIGTERM` e evento `close` do readline, fechando conexões ativas SQLite e liberando locks de arquivo.

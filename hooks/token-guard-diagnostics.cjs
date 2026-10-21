@@ -73,11 +73,12 @@ function writeJsonAtomic(filePath, data) {
   } catch {}
 }
 
-function readStdin(timeoutMs = 400) {
+function readStdin(maxWaitMs = 1500, chunkTimeoutMs = 300) {
   if (process.stdin.isTTY) return Promise.resolve('');
   return new Promise((resolve) => {
     let data = '';
     let settled = false;
+    let activityTimer = null;
 
     const cleanup = () => {
       process.stdin.removeListener('data', onData);
@@ -89,14 +90,23 @@ function readStdin(timeoutMs = 400) {
     const done = (result) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (activityTimer) clearTimeout(activityTimer);
+      clearTimeout(globalTimer);
       cleanup();
       resolve(result);
     };
 
-    const timer = setTimeout(() => done(data), timeoutMs);
+    const resetActivityTimer = () => {
+      if (activityTimer) clearTimeout(activityTimer);
+      activityTimer = setTimeout(() => done(data), chunkTimeoutMs);
+    };
 
-    const onData = chunk => { data += chunk; };
+    const globalTimer = setTimeout(() => done(data), maxWaitMs);
+
+    const onData = chunk => {
+      data += chunk;
+      resetActivityTimer();
+    };
     const onEnd = () => done(data);
     const onError = () => done('');
 
@@ -105,7 +115,10 @@ function readStdin(timeoutMs = 400) {
     process.stdin.on('end', onEnd);
     process.stdin.on('error', onError);
 
-    try { process.stdin.resume(); } catch {
+    try {
+      process.stdin.resume();
+      resetActivityTimer();
+    } catch {
       done('');
     }
   });
@@ -338,17 +351,22 @@ function handlePostToolUse(payload) {
 
           if (hadPreviousFailures) {
             // Transição Vermelho -> Verde detectada!
+            let mempalace = null;
             try {
               const mpMod = findLibModule('mempalace-engine.cjs');
               const MemPalace = mpMod ? require(mpMod) : require('../lib/mempalace-engine.cjs');
-              const mempalace = new MemPalace(PROJECT_ROOT);
+              mempalace = new MemPalace(PROJECT_ROOT);
               mempalace.capture({
                 room: 'problems',
                 topic: `Teste Verde: ${cmd.slice(0, 50)}`,
                 content: `Testes passaram após correção no código.`,
                 rationale: 'Auto-captura heurística do GSD AGY Kit na resolução do teste.'
               });
-            } catch {}
+            } catch {} finally {
+              if (mempalace && typeof mempalace.close === 'function') {
+                try { mempalace.close(); } catch {}
+              }
+            }
 
             try {
               const chkMod = findLibModule('checkpoint-engine.cjs');

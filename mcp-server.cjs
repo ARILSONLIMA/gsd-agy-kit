@@ -42,6 +42,9 @@ function resolveProjectRoot() {
 const PROJECT_ROOT = resolveProjectRoot();
 ErrorGuard.installProcessGuards({ projectRoot: PROJECT_ROOT, source: 'mcp-server' });
 
+const SCRIPT_NAME = (process.argv[1] && path.relative(process.cwd(), process.argv[1])) || 'mcp-server.cjs';
+const CLI_CMD = `node ${SCRIPT_NAME.includes(' ') ? `"${SCRIPT_NAME}"` : SCRIPT_NAME}`;
+
 const engines = {};
 const getMemPalace = () => (engines.mempalace ||= new MemPalaceEngine(PROJECT_ROOT));
 const getRagDocs = () => (engines.ragDocs ||= new RagDocsEngine(PROJECT_ROOT));
@@ -509,7 +512,7 @@ function handleToolCall(name, args) {
           text: `Ferramenta desconhecida: "${name}"`,
           isError: true,
           stderr: `Ferramenta "${name}" não consta nas ferramentas manifestadas do MCP.`,
-          remediation: 'Consulte "node .agents/mcp-server.cjs tools" para ver a lista de ferramentas disponíveis.'
+          remediation: `Consulte "${CLI_CMD} tools" para ver a lista de ferramentas disponíveis.`
         };
         break;
     }
@@ -615,22 +618,27 @@ function handleMessage(msg) {
   }
 }
 
+function exitCli(code = 0) {
+  closeAllEngines();
+  process.exit(code);
+}
+
 function handleCli(args) {
   const cmd = args[0];
   if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
     printHelp();
-    process.exit(0);
+    exitCli(0);
   }
 
   if (cmd === 'errors' || cmd === 'error-log') {
     if (args.includes('--clear')) {
       ErrorGuard.clearErrors(PROJECT_ROOT);
       console.log('🧹 [ErrorGuard] Histórico de erros em cache (.agents/.cache/error-log.json) foi limpo.');
-      process.exit(0);
+      exitCli(0);
     }
     const errs = ErrorGuard.listErrors(PROJECT_ROOT);
     console.log(ErrorGuard.formatErrorList(errs));
-    process.exit(errs.length > 0 ? 1 : 0);
+    exitCli(errs.length > 0 ? 1 : 0);
   }
 
   if (cmd === 'tools' || cmd === 'list') {
@@ -641,16 +649,16 @@ function handleCli(args) {
       for (const t of TOOLS_MANIFEST) {
         console.log(`\n• \x1b[36m${t.name}\x1b[0m: ${t.description}`);
       }
-      console.log('\nUso CLI: node .agents/mcp-server.cjs <comando> [argumentos]');
+      console.log(`\nUso CLI: ${CLI_CMD} <comando> [argumentos]`);
     }
-    process.exit(0);
+    exitCli(0);
   }
 
   if (cmd === 'call') {
     const toolName = args[1];
     if (!toolName) {
-      console.error('Erro: informe o nome da ferramenta. Ex: node mcp-server.cjs call mempalace_recall \'{"query":"..."}\'');
-      process.exit(1);
+      console.error(`Erro: informe o nome da ferramenta. Ex: ${CLI_CMD} call mempalace_recall '{"query":"..."}'`);
+      exitCli(1);
     }
     let toolArgs = {};
     if (args[2]) {
@@ -658,16 +666,16 @@ function handleCli(args) {
         toolArgs = JSON.parse(args[2]);
       } catch (e) {
         console.error(`Erro: argumentos JSON inválidos: ${e.message}`);
-        process.exit(1);
+        exitCli(1);
       }
     }
     const { text, isError } = handleToolCall(toolName, toolArgs);
     if (isError) {
       console.error(text);
-      process.exit(1);
+      exitCli(1);
     } else {
       console.log(text);
-      process.exit(0);
+      exitCli(0);
     }
   }
 
@@ -675,15 +683,15 @@ function handleCli(args) {
   if (cmd === 'recall') {
     const query = args[1];
     if (!query) {
-      console.error('Erro: informe o termo de busca. Ex: node mcp-server.cjs recall "rate limiting"');
-      process.exit(1);
+      console.error(`Erro: informe o termo de busca. Ex: ${CLI_CMD} recall "rate limiting"`);
+      exitCli(1);
     }
     const room = args[2] && ['decisions', 'problems', 'milestones'].includes(args[2]) ? args[2] : undefined;
     const limit = args[3] ? Number(args[3]) : 5;
     const { text, isError } = handleToolCall('mempalace_recall', { query, room, limit });
-    if (isError) { console.error(text); process.exit(1); }
+    if (isError) { console.error(text); exitCli(1); }
     console.log(text);
-    process.exit(0);
+    exitCli(0);
   }
 
   if (cmd === 'capture') {
@@ -692,73 +700,73 @@ function handleCli(args) {
     const content = args[3];
     const rationale = args[4] || '';
     if (!room || !topic || !content) {
-      console.error('Erro: uso: node mcp-server.cjs capture <decisions|problems|milestones> "<tópico>" "<conteúdo>" [motivo]');
-      process.exit(1);
+      console.error(`Erro: uso: ${CLI_CMD} capture <decisions|problems|milestones> "<tópico>" "<conteúdo>" [motivo]`);
+      exitCli(1);
     }
     const { text, isError } = handleToolCall('mempalace_capture', { room, topic, content, rationale });
-    if (isError) { console.error(text); process.exit(1); }
+    if (isError) { console.error(text); exitCli(1); }
     console.log(text);
-    process.exit(0);
+    exitCli(0);
   }
 
   if (cmd === 'skeleton') {
     const filePath = args[1];
     if (!filePath) {
-      console.error('Erro: informe o caminho do arquivo. Ex: node mcp-server.cjs skeleton "src/models/user.js"');
-      process.exit(1);
+      console.error(`Erro: informe o caminho do arquivo. Ex: ${CLI_CMD} skeleton "src/models/user.js"`);
+      exitCli(1);
     }
     const { text, isError } = handleToolCall('view_skeleton', { file_path: filePath });
-    if (isError) { console.error(text); process.exit(1); }
+    if (isError) { console.error(text); exitCli(1); }
     console.log(text);
-    process.exit(0);
+    exitCli(0);
   }
 
   if (cmd === 'dep' || cmd === 'dependency') {
     const pkgName = args[1];
     if (!pkgName) {
-      console.error('Erro: informe o nome do pacote. Ex: node mcp-server.cjs dep "express"');
-      process.exit(1);
+      console.error(`Erro: informe o nome do pacote. Ex: ${CLI_CMD} dep "express"`);
+      exitCli(1);
     }
     const { text, isError } = handleToolCall('check_dependency', { package_name: pkgName });
-    if (isError) { console.error(text); process.exit(1); }
+    if (isError) { console.error(text); exitCli(1); }
     console.log(text);
-    process.exit(0);
+    exitCli(0);
   }
 
   if (cmd === 'docs') {
     const query = args[1];
     if (!query) {
-      console.error('Erro: informe o termo de busca na documentação. Ex: node mcp-server.cjs docs "webhook"');
-      process.exit(1);
+      console.error(`Erro: informe o termo de busca na documentação. Ex: ${CLI_CMD} docs "webhook"`);
+      exitCli(1);
     }
     const maxResults = args[2] ? Number(args[2]) : 3;
     const { text, isError } = handleToolCall('query_docs', { query, max_results: maxResults });
-    if (isError) { console.error(text); process.exit(1); }
+    if (isError) { console.error(text); exitCli(1); }
     console.log(text);
-    process.exit(0);
+    exitCli(0);
   }
 
   if (cmd === 'ast') {
     const pattern = args[1];
     if (!pattern) {
-      console.error('Erro: informe o padrão AST. Ex: node mcp-server.cjs ast "function $NAME($$$)" [lang] [path]');
-      process.exit(1);
+      console.error(`Erro: informe o padrão AST. Ex: ${CLI_CMD} ast "function $NAME($$$)" [lang] [path]`);
+      exitCli(1);
     }
     const lang = args[2] || undefined;
     const targetPath = args[3] || '.';
     const limit = args[4] ? Number(args[4]) : 10;
     const { text, isError } = handleToolCall('ast_query', { pattern, lang, path: targetPath, limit });
-    if (isError) { console.error(text); process.exit(1); }
+    if (isError) { console.error(text); exitCli(1); }
     console.log(text);
-    process.exit(0);
+    exitCli(0);
   }
 
   if (cmd === 'test-isolate') {
     const runner = args[1] || 'auto';
     const { text, isError } = handleToolCall('test_isolate', { runner });
-    if (isError) { console.error(text); process.exit(1); }
+    if (isError) { console.error(text); exitCli(1); }
     console.log(text);
-    process.exit(0);
+    exitCli(0);
   }
 
   if (cmd === 'checkpoint') {
@@ -768,9 +776,9 @@ function handleCli(args) {
     if (action === 'create') payload.phase = param || 'manual';
     if (action === 'rollback') payload.tag = param;
     const { text, isError } = handleToolCall('checkpoint_manager', payload);
-    if (isError) { console.error(text); process.exit(1); }
+    if (isError) { console.error(text); exitCli(1); }
     console.log(text);
-    process.exit(0);
+    exitCli(0);
   }
 
   if (cmd === 'lsp') {
@@ -779,47 +787,47 @@ function handleCli(args) {
       const filePath = args[2];
       const lang = args[3];
       const { text, isError } = handleToolCall('lsp_diagnostics', { file_path: filePath, lang });
-      if (isError) { console.error(text); process.exit(1); }
+      if (isError) { console.error(text); exitCli(1); }
       console.log(text);
-      process.exit(0);
+      exitCli(0);
     }
     if (sub === 'definition' || sub === 'def') {
       const symbol = args[2];
       const filePath = args[3];
       const lang = args[4];
       const { text, isError } = handleToolCall('lsp_definition', { symbol, file_path: filePath, lang });
-      if (isError) { console.error(text); process.exit(1); }
+      if (isError) { console.error(text); exitCli(1); }
       console.log(text);
-      process.exit(0);
+      exitCli(0);
     }
     if (sub === 'references' || sub === 'refs' || sub === 'ref') {
       const symbol = args[2];
       const filePath = args[3];
       const limit = args[4] ? Number(args[4]) : 25;
       const { text, isError } = handleToolCall('lsp_references', { symbol, file_path: filePath, limit });
-      if (isError) { console.error(text); process.exit(1); }
+      if (isError) { console.error(text); exitCli(1); }
       console.log(text);
-      process.exit(0);
+      exitCli(0);
     }
     if (sub === 'hover') {
       const symbol = args[2];
       const filePath = args[3];
       const lang = args[4];
       const { text, isError } = handleToolCall('lsp_hover', { symbol, file_path: filePath, lang });
-      if (isError) { console.error(text); process.exit(1); }
+      if (isError) { console.error(text); exitCli(1); }
       console.log(text);
-      process.exit(0);
+      exitCli(0);
     }
     if (sub === 'symbols' || sub === 'sym') {
       const filePath = args[2];
       if (!filePath) {
-        console.error('Erro: informe o arquivo para listar símbolos. Ex: node .agents/mcp-server.cjs lsp symbols "src/index.ts"');
-        process.exit(1);
+        console.error(`Erro: informe o arquivo para listar símbolos. Ex: ${CLI_CMD} lsp symbols "src/index.ts"`);
+        exitCli(1);
       }
       const { text, isError } = handleToolCall('lsp_hover', { file_path: filePath });
-      if (isError) { console.error(text); process.exit(1); }
+      if (isError) { console.error(text); exitCli(1); }
       console.log(text);
-      process.exit(0);
+      exitCli(0);
     }
     if (sub === 'rename') {
       const symbol = args[2];
@@ -827,9 +835,9 @@ function handleCli(args) {
       const targetPath = args[4] && !args[4].startsWith('--') ? args[4] : '.';
       const dryRun = args.includes('--dry-run');
       const { text, isError } = handleToolCall('lsp_rename', { symbol, new_name: newName, path: targetPath, dry_run: dryRun });
-      if (isError) { console.error(text); process.exit(1); }
+      if (isError) { console.error(text); exitCli(1); }
       console.log(text);
-      process.exit(0);
+      exitCli(0);
     }
     if (sub === 'health') {
       const status = lspEngine.checkStackHealth(PROJECT_ROOT);
@@ -843,36 +851,36 @@ function handleCli(args) {
           console.log(`  ${icon} ${s.name}: ${binInfo}`);
         }
       }
-      process.exit(status.ok ? 0 : 1);
+      exitCli(status.ok ? 0 : 1);
     }
     console.error(`Subcomando LSP desconhecido: "${sub}". Use: diagnostics, definition, references, hover, symbols, rename ou health.`);
-    process.exit(1);
+    exitCli(1);
   }
 
   if (cmd === 'impact') {
     const target = args[1];
     if (!target) {
-      console.error('Erro: informe o símbolo ou arquivo. Ex: node .agents/mcp-server.cjs impact "LspEngine"');
-      process.exit(1);
+      console.error(`Erro: informe o símbolo ou arquivo. Ex: ${CLI_CMD} impact "LspEngine"`);
+      exitCli(1);
     }
     const filePath = args[2];
     const limit = args[3] ? Number(args[3]) : 20;
     const { text, isError } = handleToolCall('impact_analysis', { symbol: target, file_path: filePath, limit });
-    if (isError) { console.error(text); process.exit(1); }
+    if (isError) { console.error(text); exitCli(1); }
     console.log(text);
-    process.exit(0);
+    exitCli(0);
   }
 
   if (cmd === 'env' || cmd === 'env-skeleton') {
     const filePath = args[1];
     const { text, isError } = handleToolCall('env_skeleton', { file_path: filePath });
-    if (isError) { console.error(text); process.exit(1); }
+    if (isError) { console.error(text); exitCli(1); }
     console.log(text);
-    process.exit(0);
+    exitCli(0);
   }
 
-  console.error(`Comando desconhecido: "${cmd}". Execute "node mcp-server.cjs help" para ver as opções.`);
-  process.exit(1);
+  console.error(`Comando desconhecido: "${cmd}". Execute "${CLI_CMD} help" para ver as opções.`);
+  exitCli(1);
 }
 
 function printHelp() {
@@ -880,44 +888,50 @@ function printHelp() {
 Antigravity GSD Kit - MCP Server & CLI Dispatcher (Dual-Mode)
 
 Uso CLI direto (via run_command):
-  node .agents/mcp-server.cjs recall "<query>" [room] [limit]
-  node .agents/mcp-server.cjs capture <room> "<tópico>" "<conteúdo>" [motivo]
-  node .agents/mcp-server.cjs skeleton "<caminho_arquivo>"
-  node .agents/mcp-server.cjs dep "<nome_pacote>"
-  node .agents/mcp-server.cjs docs "<query>" [max_results]
-  node .agents/mcp-server.cjs ast "<pattern>" [lang] [path] [limit]
-  node .agents/mcp-server.cjs lsp diagnostics [arquivo] [lang]
-  node .agents/mcp-server.cjs lsp definition "<símbolo>" [arquivo] [lang]
-  node .agents/mcp-server.cjs lsp references "<símbolo>" [caminho] [limit]
-  node .agents/mcp-server.cjs lsp hover "<símbolo>" [arquivo] [lang]
-  node .agents/mcp-server.cjs lsp symbols "<arquivo>"
-  node .agents/mcp-server.cjs lsp rename "<antigo>" "<novo>" [caminho] [--dry-run]
-  node .agents/mcp-server.cjs lsp health
-  node .agents/mcp-server.cjs impact "<símbolo_ou_arquivo>" [arquivo] [limit]
-  node .agents/mcp-server.cjs env [caminho_env]
-  node .agents/mcp-server.cjs test-isolate [runner]
-  node .agents/mcp-server.cjs checkpoint <create|list|rollback> [arg]
-  node .agents/mcp-server.cjs errors [--clear]
-  node .agents/mcp-server.cjs call <ferramenta> '<json_args>'
-  node .agents/mcp-server.cjs tools [--json]
-  node .agents/mcp-server.cjs help
+  ${CLI_CMD} recall "<query>" [room] [limit]
+  ${CLI_CMD} capture <room> "<tópico>" "<conteúdo>" [motivo]
+  ${CLI_CMD} skeleton "<caminho_arquivo>"
+  ${CLI_CMD} dep "<nome_pacote>"
+  ${CLI_CMD} docs "<query>" [max_results]
+  ${CLI_CMD} ast "<pattern>" [lang] [path] [limit]
+  ${CLI_CMD} lsp diagnostics [arquivo] [lang]
+  ${CLI_CMD} lsp definition "<símbolo>" [arquivo] [lang]
+  ${CLI_CMD} lsp references "<símbolo>" [caminho] [limit]
+  ${CLI_CMD} lsp hover "<símbolo>" [arquivo] [lang]
+  ${CLI_CMD} lsp symbols "<arquivo>"
+  ${CLI_CMD} lsp rename "<antigo>" "<novo>" [caminho] [--dry-run]
+  ${CLI_CMD} lsp health
+  ${CLI_CMD} impact "<símbolo_ou_arquivo>" [arquivo] [limit]
+  ${CLI_CMD} env [caminho_env]
+  ${CLI_CMD} test-isolate [runner]
+  ${CLI_CMD} checkpoint <create|list|rollback> [arg]
+  ${CLI_CMD} errors [--clear]
+  ${CLI_CMD} call <ferramenta> '<json_args>'
+  ${CLI_CMD} tools [--json]
+  ${CLI_CMD} help
 
 Uso MCP Stdio (Daemon):
-  node .agents/mcp-server.cjs
+  ${CLI_CMD}
   (Quando executado sem argumentos, opera em loop JSON-RPC 2.0 padrão para Antigravity)
 `);
 }
 
 function runStdioServer() {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    terminal: false
-  });
-
   const cleanupAndExit = (code = 0) => {
     closeAllEngines();
     process.exit(code);
   };
+
+  process.stdout.on('error', err => {
+    if (err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED') {
+      cleanupAndExit(0);
+    }
+  });
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    terminal: false
+  });
 
   rl.on('line', line => {
     const trimmed = line.trim();

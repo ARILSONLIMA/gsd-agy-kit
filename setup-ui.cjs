@@ -152,9 +152,9 @@ function getWorkspaceStatus(targetDir) {
 function getKitVersion() {
   try {
     const pkgData = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-    return pkgData.version || '1.9.1';
+    return pkgData.version || '1.9.2';
   } catch (_) {
-    return '1.9.1';
+    return '1.9.2';
   }
 }
 
@@ -1002,6 +1002,15 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
   }
 }
 
+function getPowerShellBinary() {
+  if (process.platform !== 'win32') return 'pwsh';
+  try {
+    const check = spawnSync('where', ['pwsh.exe'], { stdio: 'ignore' });
+    if (check.status === 0) return 'pwsh';
+  } catch {}
+  return 'powershell.exe';
+}
+
 function runTest(targetDir) {
   const kitDir = path.resolve(__dirname);
   console.log(`\n${C.bCyan}🧪 Executando Bateria de Testes Automatizados no Workspace...${C.reset}\n`);
@@ -1016,7 +1025,8 @@ function runTest(targetDir) {
   }
 
   if (process.platform === 'win32') {
-    spawnSync('pwsh', ['-NoProfile', '-File', psScript, '-TargetDir', targetDir], { stdio: 'inherit' });
+    const psBin = getPowerShellBinary();
+    spawnSync(psBin, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', psScript, '-TargetDir', targetDir], { stdio: 'inherit' });
   } else {
     spawnSync('bash', [shScript, targetDir], { stdio: 'inherit' });
   }
@@ -1119,19 +1129,29 @@ function runDoctor(targetDir) {
   const optScript = path.join(kitDir, 'optimize-tokens.cjs');
   const skillsMgr = path.join(kitDir, 'skills-manager.cjs');
 
-  if (fs.existsSync(patchScript)) {
-    console.log(`  ${C.dim}• Normalizando ferramentas e protocolo nos subagentes...${C.reset}`);
-    spawnSync(process.execPath, [patchScript, targetDir], { stdio: 'ignore' });
+  const tasks = [
+    { name: 'Normalização de ferramentas e protocolo nos subagentes', script: patchScript, args: [targetDir] },
+    { name: 'Sincronização de catálogo e Dynamic Agent Pool', script: optScript, args: [targetDir, '--sync'] },
+    { name: 'Reconciliação de Dynamic Skill Pool com a fase atual', script: skillsMgr, args: ['sync', '', targetDir] }
+  ];
+
+  let hasErrors = false;
+  for (const t of tasks) {
+    if (!fs.existsSync(t.script)) continue;
+    console.log(`  ${C.dim}• ${t.name}...${C.reset}`);
+    const res = spawnSync(process.execPath, [t.script, ...t.args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    if (res.status !== 0) {
+      hasErrors = true;
+      const errOut = (res.stderr || res.stdout || '').trim() || `Código de saída ${res.status}`;
+      console.log(`    ${C.bRed}✖ Falha:${C.reset} ${errOut.split('\n')[0]}`);
+    }
   }
-  if (fs.existsSync(optScript)) {
-    console.log(`  ${C.dim}• Sincronizando catálogo enxuto e Dynamic Agent Pool...${C.reset}`);
-    spawnSync(process.execPath, [optScript, targetDir, '--sync'], { stdio: 'ignore' });
+
+  if (hasErrors) {
+    console.log(`\n${C.bYellow}⚠️  Auto-cura concluída com alertas. Verifique o log com "--errors".${C.reset}\n`);
+  } else {
+    console.log(`\n${C.bGreen}🎉 Workspace auto-curado com sucesso e 100% blindado!${C.reset}\n`);
   }
-  if (fs.existsSync(skillsMgr)) {
-    console.log(`  ${C.dim}• Reconciliando Dynamic Skill Pool com a fase atual...${C.reset}`);
-    spawnSync(process.execPath, [skillsMgr, 'sync', '', targetDir], { stdio: 'ignore' });
-  }
-  console.log(`\n${C.bGreen}🎉 Workspace auto-curado com sucesso e 100% blindado!${C.reset}\n`);
 }
 
 async function runUninstall(targetDir) {
@@ -1144,7 +1164,8 @@ async function runUninstall(targetDir) {
 
   if (process.platform === 'win32') {
     const unScript = path.join(kitDir, 'uninstall.ps1');
-    spawnSync('pwsh', ['-NoProfile', '-File', unScript, '-TargetDir', targetDir], { stdio: 'inherit' });
+    const psBin = getPowerShellBinary();
+    spawnSync(psBin, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', unScript, '-TargetDir', targetDir], { stdio: 'inherit' });
   } else {
     const unScript = path.join(kitDir, 'uninstall.sh');
     spawnSync('bash', [unScript, targetDir], { stdio: 'inherit' });
