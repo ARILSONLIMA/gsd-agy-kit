@@ -433,18 +433,31 @@ foreach ($sName in @("test-kit.ps1", "test-kit.sh")) {
 }
 Write-Host "   Pacote completo do kit instalado nativamente em: $targetKitDir" -ForegroundColor Green
 
-# 10. Copiar Skills Especializadas (.agents/skills/gsd-tokens, gsd-test e gsd-agy-update)
+# 10. Copiar Catálogo Completo de Skills e Subagentes Cavecrew
 $skillsDir = Join-Path $agentsDir "skills"
-foreach ($skName in @("gsd-tokens", "gsd-test", "gsd-agy-update")) {
-    $skSrc = Join-Path $kitDir "skills\$skName"
-    if (Test-Path $skSrc) {
-        $skDest = Join-Path $skillsDir $skName
-        if ($skSrc -ne $skDest) {
-            New-Item -ItemType Directory -Path $skDest -Force | Out-Null
-            Copy-Item -Path "$skSrc\*" -Destination $skDest -Recurse -Force
-            Write-Host "   Skill /$skName instalada em: $skDest" -ForegroundColor Green
-        }
-    }
+$skillsPoolDir = Join-Path $agentsDir "skills-pool"
+New-Item -ItemType Directory -Path $skillsDir -Force | Out-Null
+New-Item -ItemType Directory -Path $skillsPoolDir -Force | Out-Null
+
+$kitSkillsSrc = Join-Path $kitDir "skills"
+if (Test-Path $kitSkillsSrc) {
+    Copy-Item -Path "$kitSkillsSrc\*" -Destination $skillsPoolDir -Recurse -Force
+    Copy-Item -Path "$kitSkillsSrc\*" -Destination $skillsDir -Recurse -Force
+    $targetKitSkills = Join-Path $targetKitDir "skills"
+    New-Item -ItemType Directory -Path $targetKitSkills -Force | Out-Null
+    Copy-Item -Path "$kitSkillsSrc\*" -Destination $targetKitSkills -Recurse -Force
+    Write-Host "   Catálogo de Skills (incluindo Ponytail & Caveman) instalado em: $skillsDir" -ForegroundColor Green
+}
+
+$kitSubagentsSrc = Join-Path $kitDir "subagents"
+if (Test-Path $kitSubagentsSrc) {
+    $agentsPoolDir = Join-Path $agentsDir "agents-pool"
+    New-Item -ItemType Directory -Path $agentsPoolDir -Force | Out-Null
+    Copy-Item -Path "$kitSubagentsSrc\*" -Destination $agentsPoolDir -Recurse -Force
+    $targetKitSubagents = Join-Path $targetKitDir "subagents"
+    New-Item -ItemType Directory -Path $targetKitSubagents -Force | Out-Null
+    Copy-Item -Path "$kitSubagentsSrc\*" -Destination $targetKitSubagents -Recurse -Force
+    Write-Host "   Subagentes Cavecrew (investigator, builder, reviewer) instalados em: $agentsPoolDir" -ForegroundColor Green
 }
 
 # 10.1 Sincronizar Perfil de Skills conforme Front-End

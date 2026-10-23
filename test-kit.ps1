@@ -916,7 +916,7 @@ $rulesDir = if (Test-Path (Join-Path $kitDir "rules")) {
     Join-Path $PSScriptRoot "rules"
 }
 
-$expectedRules = @("ast-grep.md", "lsp.md", "graphify.md", "idioma.md", "token-protocol.md")
+$expectedRules = @("ast-grep.md", "lsp.md", "graphify.md", "idioma.md", "token-protocol.md", "ponytail.md", "caveman.md")
 $rulesAllOk = $true
 foreach ($rule in $expectedRules) {
     $rulePath = Join-Path $rulesDir $rule
@@ -968,8 +968,10 @@ Assert-Test -Name "Script de skeleton (gsd-outline.cjs) presente" `
 # Testa se o hook token-guard-pretool.cjs tem os novos gates
 $pretoolHook = if (Test-Path (Join-Path $kitDir "hooks\token-guard-pretool.cjs")) {
     Join-Path $kitDir "hooks\token-guard-pretool.cjs"
+} elseif (Test-Path (Join-Path $TargetDir ".agents\hooks\token-guard-pretool.cjs")) {
+    Join-Path $TargetDir ".agents\hooks\token-guard-pretool.cjs"
 } else {
-    Join-Path $agentsDir "hooks\token-guard-pretool.cjs"
+    Join-Path $PSScriptRoot "hooks\token-guard-pretool.cjs"
 }
 $pretoolContent = Get-Content $pretoolHook -Raw -Encoding utf8
 $hasStateGate = $pretoolContent -match "STATE.md Blocker"
@@ -1632,6 +1634,191 @@ try {
 Assert-Test -Name "Controle Rigoroso de Erros (ErrorGuard, Triple Visibility, Circuit Breaker e Diagnóstico Estrito)" `
             -Condition $strictErrorOk `
             -ErrorDetails "ErrorGuard ou verificação de erro estrito falhou"
+
+# ------------------------------------------------------------------------------
+# Teste 52: Motores Nativos Caveman & Ponytail (codebase-map e caveman-shrink)
+# ------------------------------------------------------------------------------
+$enginesOk = $false
+try {
+    $enginesRes = node -e '
+    const path = require("path");
+    const fs = require("fs");
+    const libDir = process.argv[1];
+    const targetDir = process.argv[2];
+
+    const CodebaseMap = require(path.join(libDir, "codebase-map.cjs"));
+    const CavemanShrink = require(path.join(libDir, "caveman-shrink.cjs"));
+
+    const mapOut = (CodebaseMap.generateMap || CodebaseMap.buildCodebaseMap)(targetDir, { maxChars: 2000 });
+    const mapOk = typeof mapOut === "string" && mapOut.length > 0 && mapOut.length <= 2000 && mapOut.includes("•");
+
+    const sampleChat = "Sure! I would be happy to help you with that.\n" + "```js\nconsole.log(1);\n```\n" + "Let me know if you need anything else!";
+    const sanitized = CavemanShrink.sanitizeChatOutput(sampleChat);
+    const shrinkOk = !sanitized.includes("Sure!") && !sanitized.includes("happy to help") && sanitized.includes("console.log(1)");
+
+    const sampleMd = "# Heading\n\n\n\nSome text here with extra blanks.\n\n\n";
+    const compressed = CavemanShrink.compressMarkdown(sampleMd);
+    const compressOk = compressed.length < sampleMd.length;
+
+    if (mapOk && shrinkOk && compressOk) {
+      process.stdout.write("OK");
+    }
+    ' "$mcpLibDir" "$TargetDir" 2>$null
+    if ($enginesRes -eq "OK") { $enginesOk = $true }
+} catch {}
+
+Assert-Test -Name "Motores Nativos Ponytail (codebase-map) e Caveman (caveman-shrink) operacionais sob teto de tokens" `
+            -Condition $enginesOk `
+            -ErrorDetails "codebase-map.cjs ou caveman-shrink.cjs falhou na compactacao ou teto de caracteres"
+
+# ------------------------------------------------------------------------------
+# Teste 53: Servidor MCP & Comandos CLI para Ponytail e Caveman (map, debt, shrink)
+# ------------------------------------------------------------------------------
+$mcpPonyCaveOk = $false
+try {
+    $mcpPonyCaveRes = node -e '
+    const { execSync } = require("child_process");
+    const mcpBin = process.argv[1];
+    const targetDir = process.argv[2];
+
+    try {
+      const mapOut = execSync(`node "${mcpBin}" map "${targetDir}"`, { encoding: "utf8" });
+      const mapCliOk = mapOut.includes("Codebase Map") || mapOut.includes("•");
+
+      const debtOut = execSync(`node "${mcpBin}" debt "${targetDir}"`, { encoding: "utf8" });
+      const debtCliOk = typeof debtOut === "string";
+
+      const tmpFile = require("path").join(targetDir, ".agents", "temp-shrink-cli-test-ps.md");
+      require("fs").writeFileSync(tmpFile, "# Title\n\n\nText\n\n", "utf8");
+      const shrinkOut = execSync(`node "${mcpBin}" shrink "${tmpFile}"`, { encoding: "utf8" });
+      require("fs").rmSync(tmpFile, { force: true });
+      const shrinkCliOk = shrinkOut.includes("Caveman Shrink") && shrinkOut.includes("comprimido");
+
+      if (mapCliOk && debtCliOk && shrinkCliOk) {
+        process.stdout.write("OK");
+      }
+    } catch {}
+    ' "$mcpBinPath" "$TargetDir" 2>$null
+    if ($mcpPonyCaveRes -eq "OK") { $mcpPonyCaveOk = $true }
+} catch {}
+
+Assert-Test -Name "Ferramentas MCP & CLI para Ponytail e Caveman (map, debt, shrink) respondem com exito" `
+            -Condition $mcpPonyCaveOk `
+            -ErrorDetails "Comandos CLI map, debt ou shrink retornaram erro"
+
+# ------------------------------------------------------------------------------
+# Teste 54: Suíte Integral de Skills Ponytail e Caveman (16 skills) com Frontmatter
+# ------------------------------------------------------------------------------
+$ponyCaveSkills = @(
+  "ponytail", "ponytail-review", "ponytail-audit", "ponytail-debt", "ponytail-help",
+  "caveman", "ultracave", "caveman-review", "caveman-commit", "caveman-compress", "caveman-help",
+  "investigate-first", "lean-build", "surgical-patch", "safe-refactor", "verify-and-stop"
+)
+$allPonyCaveSkillsOk = $true
+foreach ($sk in $ponyCaveSkills) {
+    $skPath = if (Test-Path (Join-Path $kitDir "skills\$sk\SKILL.md")) {
+        Join-Path $kitDir "skills\$sk\SKILL.md"
+    } elseif (Test-Path (Join-Path $TargetDir ".agents\skills\$sk\SKILL.md")) {
+        Join-Path $TargetDir ".agents\skills\$sk\SKILL.md"
+    } elseif (Test-Path (Join-Path $TargetDir ".agents\skills-pool\$sk\SKILL.md")) {
+        Join-Path $TargetDir ".agents\skills-pool\$sk\SKILL.md"
+    } else {
+        Join-Path $PSScriptRoot "skills\$sk\SKILL.md"
+    }
+    if (-not (Test-Path $skPath) -or ((Get-Content $skPath -Raw) -notmatch "name:\s*$sk")) {
+        $allPonyCaveSkillsOk = $false
+        break
+    }
+}
+
+Assert-Test -Name "Suíte completa Ponytail e Caveman ($($ponyCaveSkills.Count) skills) presente com frontmatter valido" `
+            -Condition $allPonyCaveSkillsOk `
+            -ErrorDetails "Uma ou mais skills de Ponytail/Caveman ausentes ou sem frontmatter valido"
+
+# ------------------------------------------------------------------------------
+# Teste 55: Subagentes Cavecrew e Protocolo Integrado Ponytail/Caveman
+# ------------------------------------------------------------------------------
+$cavecrewAgents = @("cavecrew-investigator.md", "cavecrew-builder.md", "cavecrew-reviewer.md")
+$cavecrewOk = $true
+foreach ($ca in $cavecrewAgents) {
+    $caPath = if (Test-Path (Join-Path $TargetDir ".agents\agents-pool\$ca")) {
+        Join-Path $TargetDir ".agents\agents-pool\$ca"
+    } elseif (Test-Path (Join-Path $TargetDir ".agents\agents\$ca")) {
+        Join-Path $TargetDir ".agents\agents\$ca"
+    } elseif (Test-Path (Join-Path $kitDir "subagents\$ca")) {
+        Join-Path $kitDir "subagents\$ca"
+    } else {
+        Join-Path $PSScriptRoot "subagents\$ca"
+    }
+    if (-not (Test-Path $caPath)) {
+        $cavecrewOk = $false
+        break
+    }
+    $caContent = Get-Content $caPath -Raw
+    if ($caContent -match "ANTIGRAVITY_TOKEN_PROTOCOL_START") {
+        if ($caContent -notmatch "ESCADA DE DECISÃO") {
+            $cavecrewOk = $false
+            break
+        }
+    } elseif ($caContent -notmatch "Voz ultraconcisa") {
+        $cavecrewOk = $false
+        break
+    }
+}
+
+Assert-Test -Name "Subagentes Cavecrew ($($cavecrewAgents.Count) agentes) integrados com protocolo Ponytail & Caveman" `
+            -Condition $cavecrewOk `
+            -ErrorDetails "Subagentes cavecrew ausentes ou sem protocolo de concisao"
+
+# ------------------------------------------------------------------------------
+# Teste 56: Rastreamento em Tempo Real de Modos (/caveman e /ponytail) no PreInvocation
+# ------------------------------------------------------------------------------
+$trackerOk = $false
+try {
+    $trackerRes = node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const { execSync } = require("child_process");
+    const preInvHook = process.argv[1];
+    const targetDir = process.argv[2];
+    const modesFile = path.join(targetDir, ".agents", ".cache", "modes.json");
+
+    try {
+      // Testar comando /caveman off
+      const payload1 = JSON.stringify({ prompt: "/caveman off" });
+      const out1 = execSync(`node "${preInvHook}"`, { input: payload1, encoding: "utf8" });
+      const res1 = JSON.parse(out1.trim());
+      const ok1 = res1.injectSteps && res1.injectSteps[0].ephemeralMessage.includes("CAVEMAN");
+
+      const modes1 = JSON.parse(fs.readFileSync(modesFile, "utf8"));
+      const ok2 = modes1.caveman === "off";
+
+      // Testar comando /ponytail ultra
+      const payload2 = JSON.stringify({ prompt: "/ponytail ultra" });
+      const out2 = execSync(`node "${preInvHook}"`, { input: payload2, encoding: "utf8" });
+      const res2 = JSON.parse(out2.trim());
+      const ok3 = res2.injectSteps && res2.injectSteps[0].ephemeralMessage.includes("PONYTAIL");
+
+      const modes2 = JSON.parse(fs.readFileSync(modesFile, "utf8"));
+      const ok4 = modes2.ponytail === "ultra";
+
+      // Restaurar defaults (full / on)
+      const payload3 = JSON.stringify({ prompt: "/ponytail full" });
+      execSync(`node "${preInvHook}"`, { input: payload3, encoding: "utf8" });
+      const payload4 = JSON.stringify({ prompt: "/caveman on" });
+      execSync(`node "${preInvHook}"`, { input: payload4, encoding: "utf8" });
+
+      if (ok1 && ok2 && ok3 && ok4) {
+        process.stdout.write("OK");
+      }
+    } catch {}
+    ' "$preInvocPath" "$TargetDir" 2>$null
+    if ($trackerRes -eq "OK") { $trackerOk = $true }
+} catch {}
+
+Assert-Test -Name "PreInvocation Hook intercepta comandos de modo (/caveman e /ponytail) com confirmacao efemera" `
+            -Condition $trackerOk `
+            -ErrorDetails "PreInvocation falhou ao rastrear modos /caveman ou /ponytail"
 
 # ------------------------------------------------------------------------------
 # Resumo Final

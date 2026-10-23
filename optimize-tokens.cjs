@@ -27,27 +27,32 @@ const PHASE_PROFILES = {
     'gsd-pattern-mapper',
     'gsd-assumptions-analyzer',
     'gsd-plan-checker',
-    'gsd-roadmapper'
+    'gsd-roadmapper',
+    'cavecrew-investigator'
   ],
   execution: [
     'gsd-executor',
     'gsd-debugger',
     'gsd-debug-session-manager',
     'gsd-code-reviewer',
-    'gsd-code-fixer'
+    'gsd-code-fixer',
+    'cavecrew-builder',
+    'cavecrew-reviewer'
   ],
   verification: [
     'gsd-verifier',
     'gsd-integration-checker',
     'gsd-doc-writer',
-    'gsd-mempalace-curator'
+    'gsd-mempalace-curator',
+    'cavecrew-reviewer'
   ],
   research: [
     'gsd-phase-researcher',
     'gsd-project-researcher',
     'gsd-research-synthesizer',
     'gsd-advisor-researcher',
-    'gsd-assumptions-analyzer'
+    'gsd-assumptions-analyzer',
+    'cavecrew-investigator'
   ]
 };
 
@@ -102,6 +107,18 @@ function syncDynamicAgentPool(targetDir = process.cwd(), requestedProfile = 'aut
   const isAgentFile = f => f.endsWith('.md') && !f.endsWith('.compact.md') && f.toLowerCase() !== 'readme.md';
 
   // 1. Garantir que todo agente existente esteja a salvo no pool permanente
+  const kitSubagents = path.resolve(__dirname, 'subagents');
+  if (fs.existsSync(kitSubagents)) {
+    try {
+      for (const sa of fs.readdirSync(kitSubagents).filter(isAgentFile)) {
+        const dest = path.join(poolDir, sa);
+        if (!fs.existsSync(dest)) {
+          fs.copyFileSync(path.join(kitSubagents, sa), dest);
+        }
+      }
+    } catch {}
+  }
+
   const existingActive = fs.readdirSync(agentsDir).filter(isAgentFile).sort();
   for (const f of existingActive) {
     const src = path.join(agentsDir, f);

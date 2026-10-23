@@ -581,8 +581,8 @@ function handleStop(payload) {
   }
 
   // Resposta padrão ao Antigravity CLI permitindo o término normal
-  const payload = JSON.stringify({ decision: "allow" }) + '\n';
-  const flushed = process.stdout.write(payload, () => process.exit(0));
+  const respPayload = JSON.stringify({ decision: "allow" }) + '\n';
+  const flushed = process.stdout.write(respPayload, () => process.exit(0));
   if (!flushed) {
     process.stdout.once('drain', () => process.exit(0));
   }

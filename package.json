@@ -1,7 +1,7 @@
 {
   "name": "gsd-agy-kit",
-  "version": "1.9.4",
-  "description": "Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens para GSD no Antigravity CLI",
+  "version": "2.0.0",
+  "description": "Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens com Ponytail Senior Dev e Caveman Terse Voice para GSD no Antigravity CLI",
   "main": "setup-ui.cjs",
   "bin": {
     "gsd-agy-kit": "./setup-ui.cjs"
@@ -22,6 +22,10 @@
     "gsd",
     "get-stuff-done",
     "token-optimization",
+    "ponytail",
+    "caveman",
+    "yagni",
+    "ste100",
     "mcp",
     "mempalace",
     "ast-grep",

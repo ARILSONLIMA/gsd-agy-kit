@@ -21,6 +21,8 @@ const LspEngine = require('./lib/lsp-engine.cjs');
 const ImpactEngine = require('./lib/impact-engine.cjs');
 const EnvSkeletonEngine = require('./lib/env-skeleton.cjs');
 const ErrorGuard = require('./lib/error-guard.cjs');
+const { buildCodebaseMap } = require('./lib/codebase-map.cjs');
+const { compressMemoryFile, compressCommandOutput } = require('./lib/caveman-shrink.cjs');
 const { spawnSync, spawn } = require('child_process');
 
 function resolveProjectRoot() {
@@ -390,6 +392,37 @@ const TOOLS_MANIFEST = [
         file_path: { type: 'string', description: 'Arquivo .env específico para inspecionar (padrão: auto-detecta .env / .env.example)' }
       }
     }
+  },
+  {
+    name: 'codebase_map',
+    description: 'Gera o mapa estrutural dos exports, classes, funções e structs existentes no repositório para promover o reuso de código (Ponytail Ladder).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        budget: { type: 'number', description: 'Orçamento máximo de caracteres (padrão: 2000)' }
+      }
+    }
+  },
+  {
+    name: 'ponytail_debt',
+    description: 'Mapeia todos os comentários de atalhos deliberados (shortcut:, TODO(gsd): e ponytail:) do repositório gerando um ledger estruturado.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filter: { type: 'string', description: 'Filtro ou palavra-chave opcional para a busca de débitos' }
+      }
+    }
+  },
+  {
+    name: 'caveman_shrink',
+    description: 'Comprime arquivos markdown de memória ou saídas longas de comandos removendo preenchimentos sem alterar blocos de código.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: 'Caminho do arquivo markdown para comprimir' },
+        text: { type: 'string', description: 'Texto ou saída de comando para comprimir' }
+      }
+    }
   }
 ];
 
@@ -403,6 +436,61 @@ function sendJson(msg) {
   } catch (err) {
     try { process.stderr.write(`[gsd-economy-mcp] Erro ao enviar JSON-RPC: ${err.message}\n`); } catch (_) {}
   }
+}
+
+function scanPonytailDebt(projectRoot, customFilter = '') {
+  let output = '';
+  try {
+    const grepPattern = customFilter ? customFilter : '(#|//|/\\*)\\s*(shortcut|TODO\\(gsd\\)|ponytail):';
+    output = spawnSync('git', ['grep', '-nE', grepPattern], {
+      cwd: projectRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5000
+    }).stdout || '';
+  } catch (err) {
+    output = '';
+  }
+
+  if (!output.trim()) {
+    return 'Nenhum atalho ou débito técnico registrado (livro-razão limpo).';
+  }
+
+  const lines = output.trim().split(/\r?\n/).filter(Boolean);
+  const items = [];
+  let noTriggerCount = 0;
+
+  for (const line of lines) {
+    const colonIdx1 = line.indexOf(':');
+    if (colonIdx1 === -1) continue;
+    const colonIdx2 = line.indexOf(':', colonIdx1 + 1);
+    if (colonIdx2 === -1) continue;
+
+    const file = line.slice(0, colonIdx1);
+    const lineNum = line.slice(colonIdx1 + 1, colonIdx2);
+    const text = line.slice(colonIdx2 + 1).trim();
+
+    const match = text.match(/(?:shortcut|ponytail|TODO\(gsd\)):\s*([^,]+)(?:,\s*(.+))?/i);
+    let note = text;
+    let hasTrigger = false;
+    if (match) {
+      const limit = (match[1] || '').trim();
+      const trigger = (match[2] || '').trim();
+      if (trigger) {
+        hasTrigger = true;
+        note = `limite: "${limit}" | gatilho: "${trigger}"`;
+      } else {
+        note = `limite: "${limit}" [sem-gatilho]`;
+      }
+    }
+    if (!hasTrigger) noTriggerCount++;
+
+    items.push(`  • ${file}:${lineNum} ➔ ${note}`);
+  }
+
+  const header = `📋 [Ponytail Debt Ledger - ${items.length} Atalhos Identificados]:\n`;
+  const footer = `\nTotal: ${items.length} atalhos (${noTriggerCount} sem gatilho de refatoração definido).`;
+  return header + items.join('\n') + footer;
 }
 
 async function handleToolCall(name, args) {
@@ -555,6 +643,33 @@ async function handleToolCall(name, args) {
       case 'env_skeleton': {
         const res = envSkeleton.inspect(args.file_path || args.path);
         outcome = { text: res.message, isError: Boolean(res.isError) };
+        break;
+      }
+      case 'codebase_map': {
+        const text = buildCodebaseMap(PROJECT_ROOT, args.budget || 2000) || 'Nenhum código-fonte relevante mapeado.';
+        outcome = { text, isError: false };
+        break;
+      }
+      case 'ponytail_debt': {
+        const text = scanPonytailDebt(PROJECT_ROOT, args.filter || '');
+        outcome = { text, isError: false };
+        break;
+      }
+      case 'caveman_shrink': {
+        if (args.file_path) {
+          try {
+            const res = compressMemoryFile(args.file_path, PROJECT_ROOT);
+            const text = `✅ [Caveman Shrink] ${res.filePath} comprimido (-${res.savedBytes} bytes / ${res.percent}%).\nBackup salvo em: ${res.backupPath}`;
+            outcome = { text, isError: false };
+          } catch (e) {
+            outcome = { text: `Erro ao comprimir arquivo: ${e.message}`, isError: true, stderr: e.message };
+          }
+        } else if (args.text) {
+          const text = compressCommandOutput(args.text);
+          outcome = { text, isError: false };
+        } else {
+          outcome = { text: 'Erro: informe file_path ou text para compressão.', isError: true };
+        }
         break;
       }
       default:
@@ -943,6 +1058,34 @@ async function handleCli(args) {
   if (cmd === 'env' || cmd === 'env-skeleton') {
     const filePath = args[1];
     const { text, isError } = await handleToolCall('env_skeleton', { file_path: filePath });
+    if (isError) { console.error(text); exitCli(1); }
+    console.log(text);
+    exitCli(0);
+  }
+
+  if (cmd === 'map' || cmd === 'codebase-map') {
+    const budget = args[1] ? Number(args[1]) : 2000;
+    const { text, isError } = await handleToolCall('codebase_map', { budget });
+    if (isError) { console.error(text); exitCli(1); }
+    console.log(text);
+    exitCli(0);
+  }
+
+  if (cmd === 'debt' || cmd === 'ponytail-debt') {
+    const filter = args[1];
+    const { text, isError } = await handleToolCall('ponytail_debt', { filter });
+    if (isError) { console.error(text); exitCli(1); }
+    console.log(text);
+    exitCli(0);
+  }
+
+  if (cmd === 'shrink' || cmd === 'caveman-shrink') {
+    const filePath = args[1];
+    if (!filePath) {
+      console.error(`Erro: informe o arquivo para comprimir. Ex: ${CLI_CMD} shrink "CLAUDE.md"`);
+      exitCli(1);
+    }
+    const { text, isError } = await handleToolCall('caveman_shrink', { file_path: filePath });
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);

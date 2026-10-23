@@ -25,7 +25,18 @@ const PROFILES = {
     'gsd-graphify',
     'gsd-tokens',
     'gsd-test',
-    'gsd-agy-update'
+    'gsd-agy-update',
+    'ponytail',
+    'ponytail-review',
+    'ponytail-audit',
+    'ponytail-debt',
+    'ponytail-help',
+    'caveman',
+    'ultracave',
+    'caveman-review',
+    'caveman-commit',
+    'caveman-compress',
+    'caveman-help'
   ],
   backend: [
     // Core loop
@@ -61,7 +72,23 @@ const PROFILES = {
     'gsd-graphify',
     'gsd-tokens',
     'gsd-test',
-    'gsd-agy-update'
+    'gsd-agy-update',
+    'ponytail',
+    'ponytail-review',
+    'ponytail-audit',
+    'ponytail-debt',
+    'ponytail-help',
+    'caveman',
+    'ultracave',
+    'caveman-review',
+    'caveman-commit',
+    'caveman-compress',
+    'caveman-help',
+    'investigate-first',
+    'lean-build',
+    'surgical-patch',
+    'safe-refactor',
+    'verify-and-stop'
   ]
 };
 
@@ -75,7 +102,18 @@ const GLOBAL_SKILLS = [
   'gsd-settings',
   'gsd-health',
   'gsd-fast',
-  'graphify'
+  'graphify',
+  'ponytail',
+  'ponytail-review',
+  'ponytail-audit',
+  'ponytail-debt',
+  'ponytail-help',
+  'caveman',
+  'ultracave',
+  'caveman-review',
+  'caveman-commit',
+  'caveman-compress',
+  'caveman-help'
 ];
 
 const PHASE_SKILLS = {
@@ -92,7 +130,9 @@ const PHASE_SKILLS = {
     'gsd-spec-phase',
     'gsd-mvp-phase',
     'gsd-explore',
-    'gsd-roadmapper'
+    'gsd-roadmapper',
+    'investigate-first',
+    'lean-build'
   ],
   execution: [
     'gsd-execute-phase',
@@ -101,7 +141,9 @@ const PHASE_SKILLS = {
     'gsd-add-tests',
     'gsd-workstreams',
     'gsd-pause-work',
-    'gsd-resume-work'
+    'gsd-resume-work',
+    'surgical-patch',
+    'safe-refactor'
   ],
   verification: [
     'gsd-verify-work',
@@ -109,13 +151,15 @@ const PHASE_SKILLS = {
     'gsd-audit-milestone',
     'gsd-audit-fix',
     'gsd-ship',
-    'gsd-cleanup'
+    'gsd-cleanup',
+    'verify-and-stop'
   ],
   research: [
     'gsd-explore',
     'gsd-spike',
     'gsd-stats',
-    'gsd-phase-researcher'
+    'gsd-phase-researcher',
+    'investigate-first'
   ]
 };
 

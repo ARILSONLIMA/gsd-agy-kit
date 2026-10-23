@@ -160,9 +160,22 @@ function main() {
     } catch {}
   }
 
-  const briefingText =
+  const mapPath = findLibModule('codebase-map.cjs');
+  let codebaseMapText = '';
+  if (mapPath) {
+    try {
+      const { buildCodebaseMap } = require(mapPath);
+      codebaseMapText = buildCodebaseMap(PROJECT_ROOT, 1800);
+    } catch {}
+  }
+
+  let briefingText =
     `🚀 [GSD Zero-Read Session Briefing] ${sections.join(' | ')}.\n` +
-    `💡 Protocolo Ativo: Use tools MCP (mempalace_recall, query_docs, view_skeleton, lsp_*, impact_analysis, env_skeleton) antes de abrir arquivos brutos.`;
+    `💡 Protocolo Ativo: Ponytail Senior Dev (reuso/YAGNI) & Caveman Terse (resposta direta). Use tools MCP e consulte o Codebase Map antes de criar código novo.`;
+
+  if (codebaseMapText) {
+    briefingText += `\n\n${codebaseMapText}`;
+  }
 
   process.stdout.write(
     JSON.stringify({

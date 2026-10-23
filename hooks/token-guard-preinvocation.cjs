@@ -382,19 +382,133 @@ function checkLoopAndBudgetAlert() {
   }
 }
 
-// Executa verificação de auto-cura, sincronização de fase e recolhimento JIT (TTL)
-checkAndAutoHeal();
-checkPhaseSync();
-checkJitTtlAndCleanup();
+const MODES_FILE = path.join(CACHE_DIR, 'modes.json');
 
-const loopAlertMsg = checkLoopAndBudgetAlert();
-const outMsg = loopAlertMsg
-  ? JSON.stringify({ injectSteps: [{ ephemeralMessage: loopAlertMsg }] }) + '\n'
-  : JSON.stringify({}) + '\n';
-
-const flushed = process.stdout.write(outMsg, () => process.exit(0));
-if (!flushed) {
-  process.stdout.once('drain', () => process.exit(0));
+function getModes() {
+  if (fs.existsSync(MODES_FILE)) {
+    try { return JSON.parse(fs.readFileSync(MODES_FILE, 'utf8')); } catch {}
+  }
+  return { caveman: 'on', ponytail: 'full' };
 }
-setTimeout(() => process.exit(0), 500).unref();
+
+function saveModes(modes) {
+  writeJsonAtomic(MODES_FILE, modes);
+}
+
+function processModeCommands(prompt) {
+  if (!prompt || typeof prompt !== 'string') return null;
+  const p = prompt.trim();
+  const modes = getModes();
+  let feedback = null;
+
+  const caveMatch = p.match(/(?:^|\s)\/caveman(?:\s+([a-z0-9_-]+))?/i) || p.match(/^caveman(?:\s+([a-z0-9_-]+))?/i);
+  if (caveMatch) {
+    const arg = (caveMatch[1] || '').toLowerCase();
+    if (arg === 'ultra' || arg === 'max') {
+      modes.caveman = 'ultra';
+      feedback = '🪨 [CAVEMAN] Modo alterado para ULTRA (máxima concisão em fragmentos).';
+    } else if (arg === 'off' || arg === 'desligar') {
+      modes.caveman = 'off';
+      feedback = '🪨 [CAVEMAN] Modo conciso desativado.';
+    } else if (arg === 'status') {
+      feedback = `🪨 [CAVEMAN] Status atual: ${modes.caveman.toUpperCase()}.`;
+    } else {
+      modes.caveman = 'on';
+      feedback = '🪨 [CAVEMAN] Modo conciso ATIVO (ASD-STE100 em pt-BR).';
+    }
+    saveModes(modes);
+  } else if (/(?:^|\s)\/ultracave\b/i.test(p) || /^ultracave\b/i.test(p)) {
+    modes.caveman = 'ultra';
+    feedback = '🪨 [CAVEMAN] Modo alterado para ULTRA (máxima concisão em fragmentos).';
+    saveModes(modes);
+  }
+
+  const ponyMatch = p.match(/(?:^|\s)\/ponytail(?:\s+([a-z0-9_-]+))?/i) || p.match(/^ponytail(?:\s+([a-z0-9_-]+))?/i);
+  if (ponyMatch) {
+    const arg = (ponyMatch[1] || '').toLowerCase();
+    if (arg === 'lite' || arg === 'leve') {
+      modes.ponytail = 'lite';
+      feedback = (feedback ? feedback + '\n' : '') + '🐴 [PONYTAIL] Nível alterado para LITE (soluções menores apontadas).';
+    } else if (arg === 'ultra' || arg === 'max') {
+      modes.ponytail = 'ultra';
+      feedback = (feedback ? feedback + '\n' : '') + '🐴 [PONYTAIL] Nível alterado para ULTRA (questionamento rigoroso de requisitos).';
+    } else if (arg === 'off' || arg === 'desligar') {
+      modes.ponytail = 'off';
+      feedback = (feedback ? feedback + '\n' : '') + '🐴 [PONYTAIL] Modo sênior dev desativado.';
+    } else if (arg === 'full' || arg === 'padrao') {
+      modes.ponytail = 'full';
+      feedback = (feedback ? feedback + '\n' : '') + '🐴 [PONYTAIL] Nível FULL ATIVO (Escada de Decisão e YAGNI estrito).';
+    } else {
+      feedback = (feedback ? feedback + '\n' : '') + `🐴 [PONYTAIL] Status atual: ${modes.ponytail.toUpperCase()}.`;
+    }
+    saveModes(modes);
+  }
+
+  return feedback;
+}
+
+function readStdin(maxWaitMs = 300) {
+  if (process.stdin.isTTY) return Promise.resolve('');
+  return new Promise((resolve) => {
+    let data = '';
+    let settled = false;
+    const cleanup = () => {
+      process.stdin.removeListener('data', onData);
+      process.stdin.removeListener('end', onEnd);
+      process.stdin.removeListener('error', onError);
+      try { process.stdin.pause(); } catch {}
+    };
+    const done = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      resolve(result);
+    };
+    const timer = setTimeout(() => done(data), maxWaitMs);
+    const onData = chunk => { data += chunk; };
+    const onEnd = () => done(data);
+    const onError = () => done('');
+
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', onData);
+    process.stdin.on('end', onEnd);
+    process.stdin.on('error', onError);
+    try { process.stdin.resume(); } catch { done(''); }
+  });
+}
+
+async function main() {
+  checkAndAutoHeal();
+  checkPhaseSync();
+  checkJitTtlAndCleanup();
+
+  const rawStdin = await readStdin(300);
+  let promptText = '';
+  if (rawStdin && rawStdin.trim()) {
+    try {
+      const parsed = JSON.parse(rawStdin);
+      promptText = parsed.prompt || parsed.lastUserMessage || parsed.message || '';
+    } catch {}
+  }
+
+  const modeFeedback = processModeCommands(promptText);
+  const loopAlertMsg = checkLoopAndBudgetAlert();
+
+  const messages = [];
+  if (modeFeedback) messages.push(modeFeedback);
+  if (loopAlertMsg) messages.push(loopAlertMsg);
+
+  const outMsg = messages.length > 0
+    ? JSON.stringify({ injectSteps: [{ ephemeralMessage: messages.join('\n\n') }] }) + '\n'
+    : JSON.stringify({}) + '\n';
+
+  const flushed = process.stdout.write(outMsg, () => process.exit(0));
+  if (!flushed) {
+    process.stdout.once('drain', () => process.exit(0));
+  }
+  setTimeout(() => process.exit(0), 500).unref();
+}
+
+main().catch(() => process.exit(0));
 

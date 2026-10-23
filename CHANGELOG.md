@@ -2,6 +2,33 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.0.0] - 2026-10-23
+- **Integração Nativa Ponytail (Senior Dev Mode & YAGNI Estrito):**
+  - **Motor Codebase Map (`lib/codebase-map.cjs`):** Varredura regex de alta performance em Node.js puro cobrindo mais de 20 stacks (TypeScript, JavaScript, Go, Python, Rust, Java, C#, PHP, Ruby, etc.) gerando mapa condensado de símbolos exportados respeitando orçamento rígido de 2.000 caracteres (~450 tokens).
+  - **Escada de Decisão Ponytail:** Protocolo injetado obrigatoriamente em todos os subagentes e sessões: (1) Reutilizar código existente -> (2) Standard Library -> (3) Recursos da plataforma/framework -> (4) Dependências já instaladas -> (5) Função utilitária de 1 linha -> (6) Mínimo código cirúrgico novo.
+  - **Livro-Razão de Atalhos e Débitos (`/ponytail-debt`):** Rastreamento de comentários `shortcut: <limite>, <quando refatorar>` e fallback `TODO(gsd):` via Git Grep e ferramenta MCP `ponytail_debt`.
+  - **Auditoria de Decisões Ponytail (`/ponytail-review`, `/ponytail-audit`):** Checklist de validação contra overengineering, abstrações prematuras e novas dependências desnecessárias.
+  - **Fechamento de Resposta Obrigatório:** Toda resposta técnica declara explicitamente o que foi deliberadamente omitido e riscos conhecidos.
+- **Integração Nativa Caveman (Voz Concisa ASD-STE100 & Shrink Compressor):**
+  - **Voz Concisa em Português Técnico (pt-BR):** Padrão direto e objetivo ([alvo] [ação] [motivo]), eliminando cumprimentos ocos, desculpas, cerimônias de encerramento e explicações não solicitadas.
+  - **Payload 100% Verbatim:** Códigos, diffs, comandos de terminal, caminhos de arquivo e identificadores preservados com crases exatas e sem simplificações.
+  - **Motor Caveman Shrink (`lib/caveman-shrink.cjs`):** Compressor em Node.js puro para arquivos de estado e memória (`.planning/`, `STATE.md`, logs), sanitizando cerimônias e compactando texto mantendo backup com hash e timestamp em `.agents/.cache/backups/`.
+  - **Suíte de Skills Caveman:** `/caveman`, `/ultracave`, `/caveman-review`, `/caveman-commit`, `/caveman-compress`, `/caveman-help`.
+  - **Padrões de Trabalho Cirúrgicos:** `/investigate-first`, `/lean-build`, `/surgical-patch`, `/safe-refactor`, `/verify-and-stop`.
+- **Subagentes Especializados Cavecrew:**
+  - `cavecrew-investigator`: Subagente estritamente read-only para localização rápida de símbolos e referências em tabela condensada.
+  - `cavecrew-builder`: Subagente de implementação enxuta (1-2 arquivos por vez) com recibo de diff e validação imediata.
+  - `cavecrew-reviewer`: Auditor de PR/diff focado em 1 linha por apontamento com severidade e risco.
+- **Rastreamento Dinâmico de Modos em Tempo Real:**
+  - `hooks/token-guard-preinvocation.cjs`: Intercepta comandos de modo no chat (`/caveman on|ultra|off`, `/ponytail full|lite|ultra|off`) e persiste o estado em `.agents/.cache/modes.json` retornando confirmação efêmera (`ephemeralMessage`) sem poluição de contexto.
+  - `hooks/token-guard-sessionstart.cjs`: Injeta o Codebase Map gerado pelo motor Ponytail no briefing Zero-Read na inicialização de cada sessão.
+- **Ferramental MCP & CLI Expandido:**
+  - Ferramentas MCP registradas: `codebase_map`, `ponytail_debt`, `caveman_shrink`.
+  - Comandos CLI diretos no MCP Server: `node mcp-server.cjs map`, `node mcp-server.cjs debt`, `node mcp-server.cjs shrink <arquivo>`.
+- **Instalador & Bateria de Testes (100% de Sucesso):**
+  - `setup-ui.cjs` & `setup.sh` & `setup.ps1`: Interface com Bento Dashboard atualizado exibindo badges `[Caveman Terse: ON]` e `[Ponytail Senior: FULL]`, cópia integral de catálogo de skills e subagentes.
+  - `test-kit.sh` & `test-kit.ps1`: Expandidos para 100 e 102 testes automatizados validando integralmente os novos motores, regras, ferramentas MCP, subagentes e rastreamento de modos.
+
 ## [1.9.4] - 2026-10-21
 - **Eliminação de Vazamentos de Abstração & Conformidade MCP:**
   - `mcp-server.cjs`: Sanitização estrita do schema MCP nas respostas de ferramentas (`tools/call`). Garantido que o campo `text` de cada bloco de retorno nunca seja `undefined` (mesmo quando a ferramenta retorna `result: null` ou texto vazio), prevenindo rejeição de schema e crashes de parsing nos clientes MCP do Antigravity CLI.

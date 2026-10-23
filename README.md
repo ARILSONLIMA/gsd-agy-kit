@@ -1,8 +1,65 @@
-# Antigravity GSD Kit v1.9.4 🚀
+# Antigravity GSD Kit v2.0.0 🚀
 
-> **Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens para GSD no Antigravity CLI**
+[![Release](https://img.shields.io/badge/release-v2.0.0-blue.svg)](CHANGELOG.md)
+[![Ponytail](https://img.shields.io/badge/Ponytail-Senior%20Dev%20Mode-darkgreen.svg)](#-ponytail--senior-dev-mode--yagni-estrito)
+[![Caveman](https://img.shields.io/badge/Caveman-Terse%20pt--BR-orange.svg)](#-caveman--voz-concisa-asd-ste100--shrink-compressor)
+[![Tests](https://img.shields.io/badge/tests-100%25%20passing%20(102%20tests)-brightgreen.svg)](#-bateria-de-testes-nativos-instantânea)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Este módulo transforma o ecossistema **GSD (Get Stuff Done)** para funcionar com **100% de compatibilidade** com o **Antigravity CLI**, garantindo a imposição estrita do protocolo de economia de tokens e proteção contra updates do GSD.
+> **Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens com Ponytail Senior Dev e Caveman Terse Voice para GSD no Antigravity CLI**
+
+Este módulo transforma o ecossistema **GSD (Get Stuff Done)** para funcionar com **100% de compatibilidade** com o **Antigravity CLI**, integrando nativamente os paradigmas **Ponytail** (desenvolvedor sênior pragmático, YAGNI estrito e reutilização) e **Caveman** (voz ultraconcisa em pt-BR padrão ASD-STE100, payload verbatim e corte drástico de tokens).
+
+---
+
+## 🐴 Ponytail & 🪨 Caveman — Motores Nativos Integrados
+
+A versão 2.0.0 traz integração nativa e profunda das abordagens **Ponytail** e **Caveman** em **todos os 35 subagentes GSD**, no **briefing de sessão** e via comandos universais de chat:
+
+### 🐴 Ponytail — Senior Dev Mode & YAGNI Estrito
+- **Escada de Decisão Obrigatória:** Em cada tarefa, o modelo é obrigado a descer a escada do menor esforço antes de escrever qualquer código novo:
+  1. `Reutilizar`: Buscar funções, utilitários e componentes existentes no projeto (via `codebase_map`).
+  2. `Standard Library`: Usar recursos nativos da linguagem/runtime.
+  3. `Plataforma / Framework`: Usar utilitários já presentes nas dependências do framework.
+  4. `Dependências Instaladas`: Usar bibliotecas já listadas no lockfile/manifesto.
+  5. `Função Utilitária de 1 Linha`: Escrever helper pontual simples.
+  6. `Mínimo Código Cirúrgico Novo`: Implementar estritamente o necessário (zero abstrações prematuras, zero herança complexa).
+- **Motor Codebase Map (`lib/codebase-map.cjs`):** Varredura regex de alta performance em Node.js puro cobrindo 20+ stacks (TS, JS, Go, Python, Rust, Java, C#, PHP, Ruby, etc.) gerando mapa condensado de símbolos exportados sob teto rígido de 2.000 caracteres (~450 tokens), injetado no Briefing Zero-Read.
+- **Rastreamento de Débito Técnico (`/ponytail-debt`):** Padrão de comentários no código `// shortcut: <limite>, <quando refatorar>` com auditoria via MCP `ponytail_debt`.
+- **Declaração Obrigatória de Omissões e Riscos:** Toda resposta técnica declara explicitamente o que foi deliberadamente omitido e riscos conhecidos.
+- **Comandos Slash:**
+  - `/ponytail full`: Modo sênior dev padrão ativo (escada + YAGNI estrito).
+  - `/ponytail ultra`: Nível sênior rigoroso (questionamento ativo de requisitos e YAGNI extremo).
+  - `/ponytail lite`: Nível suave apontando apenas soluções menores.
+  - `/ponytail off`: Desativa o modo sênior dev.
+  - `/ponytail-review`: Checklist de auditoria sênior contra overengineering.
+  - `/ponytail-audit`: Auditoria de PR/diff focando em simplicidade.
+  - `/ponytail-debt`: Inspeciona atalhos e débitos técnicos no código.
+
+### 🪨 Caveman — Voz Concisa ASD-STE100 & Shrink Compressor
+- **Voz Concisa em Português Técnico (pt-BR):** Resposta direta no formato `[alvo] [ação] [motivo]`. Zero cumprimentos ocos ("Olá! Certamente posso ajudar..."), desculpas ou cerimônias de encerramento ("Espero que ajude, se precisar de algo mais...").
+- **Payload 100% Verbatim:** Códigos, diffs, comandos de terminal, caminhos de arquivo e identificadores preservados com crases exatas e sem simplificações.
+- **Auto-Claridade:** Em caso de ambiguidade com mais de uma interpretação válida, suspende a concisão temporariamente para perguntar ao usuário com clareza.
+- **Motor Caveman Shrink (`lib/caveman-shrink.cjs`):** Compressor em Node.js puro para arquivos de estado e memória (`.planning/`, `STATE.md`, logs), sanitizando cerimônias e compactando texto mantendo backup com hash e timestamp em `.agents/.cache/backups/`.
+- **Comandos Slash:**
+  - `/caveman on`: Modo conciso padrão ativo (ASD-STE100 em pt-BR).
+  - `/caveman ultra` ou `/ultracave`: Modo fragmentos telegráficos para economia máxima.
+  - `/caveman off`: Desativa o modo conciso.
+  - `/caveman-review`: Análise crítica de código sem prolixidade.
+  - `/caveman-commit`: Geração de mensagens de commit concisas em formato Conventional Commits.
+  - `/caveman-compress`: Comprime arquivos de estado ou documentação local com backup.
+
+### 👥 Subagentes Especializados Cavecrew
+- `cavecrew-investigator`: Subagente estritamente read-only para localização rápida de símbolos e referências em tabela condensada `<caminho:linha> — <símbolo> — <nota>`.
+- `cavecrew-builder`: Subagente de implementação enxuta (1-2 arquivos por vez) com recibo de diff e validação imediata.
+- `cavecrew-reviewer`: Auditor de PR/diff focado em 1 linha por apontamento com severidade e risco.
+
+### ⚡ Padrões de Trabalho Cirúrgicos
+- `/investigate-first`: Localiza símbolos antes de sugerir ou editar código.
+- `/lean-build`: Constrói a menor solução funcional possível.
+- `/surgical-patch`: Aplica patches pontuais sem reescrita de arquivos.
+- `/safe-refactor`: Refatora código mantendo testes verdes e sem alterar comportamento externo.
+- `/verify-and-stop`: Valida a execução e conclui sem turnos residuais.
 
 ---
 
@@ -311,6 +368,11 @@ O validador testa e confirma 100% dos testes e regras de proteção:
 - ✅ **State Compactor:** validação estrutural e operacional de `compact-state.cjs`.
 - ✅ **JSON Stream Compact:** validação de filtragem e expurgo de valores nulos via `compact-json.cjs`.
 - ✅ **Output Sanitizer:** truncamento inteligente de saídas extensas no estilo Headroom com persistência integral de log.
+- ✅ **Motores Nativos Ponytail & Caveman:** operacionalidade de `codebase-map.cjs` (<= 2000 chars) e `caveman-shrink.cjs`.
+- ✅ **Ferramentas MCP & CLI:** comandos `map`, `debt` e `shrink` integrados no `mcp-server.cjs`.
+- ✅ **Suíte Completa Ponytail & Caveman:** integridade e frontmatter válido de 16 skills especializadas.
+- ✅ **Subagentes Cavecrew:** presença e protocolo de concisão em `cavecrew-investigator`, `builder` e `reviewer`.
+- ✅ **Rastreamento de Modos em Tempo Real:** interceptação e confirmação efêmera de `/caveman` e `/ponytail` no `PreInvocation`.
 
 ---
 

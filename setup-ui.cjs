@@ -167,9 +167,9 @@ function getWorkspaceStatus(targetDir) {
 function getKitVersion() {
   try {
     const pkgData = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-    return pkgData.version || '1.9.4';
+    return pkgData.version || '2.0.0';
   } catch (_) {
-    return '1.9.4';
+    return '2.0.0';
   }
 }
 
@@ -184,6 +184,7 @@ function renderHubBanner(targetDir) {
   console.log(`${C.bCyan}│${C.reset}   ${C.dim}Status:${C.reset}    ${statusBadge}  •  ${C.dim}Stack:${C.reset} ${C.bWhite}${status.stack}${C.reset}`);
   if (status.isInstalled) {
     console.log(`${C.bCyan}│${C.reset}   ${C.dim}Catálogo:${C.reset}  ${C.cyan}${status.activeSkills} skills ativas${C.reset} (${status.poolSkills} no pool) | ${C.cyan}${status.activeAgents} agentes${C.reset} (${status.poolAgents} no pool)`);
+    console.log(`${C.bCyan}│${C.reset}   ${C.dim}Motores:${C.reset}   ${C.bGreen}[Caveman Terse: ON]${C.reset}  •  ${C.bGreen}[Ponytail Senior: FULL]${C.reset}`);
     console.log(`${C.bCyan}│${C.reset}   ${C.dim}Economia:${C.reset}  ${C.bGreen}~${status.tokensSaved.toLocaleString('pt-BR')} tokens salvos por turno no pool${C.reset}`);
   } else {
     console.log(`${C.bCyan}│${C.reset}   ${C.yellow}O kit ainda não está instalado neste workspace.${C.reset}`);
@@ -322,22 +323,24 @@ function renderDashboard() {
   console.log(`\n${C.bCyan}╭─ 📊 Resumo de Instalação e Governança ─────────────────────────────────╮${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}                                                                        ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.bold}Status dos Componentes:${C.reset}                                              ${C.bCyan}│${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   • Subagentes GSD:    ${C.bGreen}✔ Normalizados${C.reset} (Antigravity Tools + Multi-LSP)  ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • Subagentes GSD:    ${C.bGreen}✔ Normalizados${C.reset} (Antigravity Tools + Cavecrew)    ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • Ponytail Engine:   ${C.bGreen}✔ Ativo${C.reset} (Escada de Decisão, YAGNI & Codebase Map) ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • Caveman Engine:    ${C.bGreen}✔ Ativo${C.reset} (Voz Concisa pt-BR & Shrink Compressor)  ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • Dynamic Pools:     ${C.bGreen}✔ Ativos${C.reset} (Agentes & Skills com ativação JIT)     ${C.bCyan}│${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   • Servidor MCP:      ${C.bGreen}✔ Ativo${C.reset} (mempalace, rag, lockfile, skeleton, lsp)${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • Servidor MCP:      ${C.bGreen}✔ Ativo${C.reset} (mempalace, rag, map, debt, shrink, lsp) ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • Memória Episódica: ${C.bGreen}✔ Ativa${C.reset} (.agents/memory/palace.db em SQLite)     ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • Hard Gates:        ${C.bGreen}✔ Ativos${C.reset} (.agents/hooks.json - Circuit Breaker)  ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • Auto-Cura (Git):   ${C.bGreen}✔ Instalado${C.reset} (post-merge, post-checkout, commit)   ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}                                                                        ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.bold}Otimização de Contexto:${C.reset}                                              ${C.bCyan}│${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   • Payload Removido:  ${C.bYellow}~370 KB${C.reset} de peso morto cortados do contexto      ${C.bCyan}│${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   • Economia por Turno:${C.bGreen}~18.000 tokens${C.reset} poupados no total                 ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • Payload Removido:  ${C.bYellow}~400 KB${C.reset} de peso morto cortados do contexto      ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • Economia por Turno:${C.bGreen}~22.000 tokens${C.reset} poupados no total                 ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}                                                                        ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   ${C.bold}Comandos & Ferramentas Úteis:${C.reset}                                       ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}/ponytail /ponytail-review /ponytail-audit /ponytail-debt${C.reset}          ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}/caveman /ultracave /caveman-review /caveman-commit /caveman-compress${C.reset}${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}lsp_diagnostics / definition${C.reset} Análise e navegação Multi-LSP Híbrido ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}mempalace_recall${C.reset}             Busca decisões passadas no SQLite     ${C.bCyan}│${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}query_docs${C.reset}                  Busca cirúrgica FTS5 em arquivos .md  ${C.bCyan}│${C.reset}`);
-  console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}check_dependency${C.reset}            Verifica lib sem ler lockfiles        ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}/gsd-tokens${C.reset}                  Telemetria de uso e cache de tokens   ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}/gsd-agy-update${C.reset}              Verifica versão, melhorias e atualiza ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}╰────────────────────────────────────────────────────────────────────────╯${C.reset}`);
@@ -609,6 +612,15 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
       run: async () => {
         const originalBackupDir = path.join(agentsDir, '.backup-original-gsd');
         const targetAgentsDir = path.join(agentsDir, 'agents');
+        const targetPoolDir = path.join(agentsDir, 'agents-pool');
+        if (!fs.existsSync(targetPoolDir)) fs.mkdirSync(targetPoolDir, { recursive: true });
+
+        // Copiar subagentes cirúrgicos do Cavecrew
+        const kitSubagents = path.join(kitDir, 'subagents');
+        if (fs.existsSync(kitSubagents)) {
+          copyFolderRecursive(kitSubagents, targetPoolDir);
+        }
+
         if (fs.existsSync(targetAgentsDir)) {
           if (!fs.existsSync(originalBackupDir)) {
             try { copyFolderRecursive(targetAgentsDir, originalBackupDir); } catch {}
@@ -639,12 +651,14 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
       title: 'Dynamic Skill Pool & Carregamento JIT (.agents/skills-pool/)',
       run: async () => {
         const skillsDir = path.join(agentsDir, 'skills');
-        for (const skName of ['gsd-tokens', 'gsd-test', 'gsd-agy-update']) {
-          const skSrc = path.join(kitDir, 'skills', skName);
-          if (fs.existsSync(skSrc)) {
-            const skDest = path.join(skillsDir, skName);
-            copyFolderRecursive(skSrc, skDest);
-          }
+        const poolDir = path.join(agentsDir, 'skills-pool');
+        if (!fs.existsSync(poolDir)) fs.mkdirSync(poolDir, { recursive: true });
+
+        // Copiar catálogo completo de skills nativas (incluindo Ponytail & Caveman)
+        const kitSkillsDir = path.join(kitDir, 'skills');
+        if (fs.existsSync(kitSkillsDir)) {
+          copyFolderRecursive(kitSkillsDir, poolDir);
+          copyFolderRecursive(kitSkillsDir, skillsDir);
         }
 
         const skillsMgr = path.join(kitDir, 'skills-manager.cjs');
@@ -733,6 +747,10 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         const kitSkillsDir = path.join(kitDir, 'skills');
         if (fs.existsSync(kitSkillsDir)) {
           copyFolderRecursive(kitSkillsDir, path.join(targetKitDir, 'skills'));
+        }
+        const kitSubagentsDir = path.join(kitDir, 'subagents');
+        if (fs.existsSync(kitSubagentsDir)) {
+          copyFolderRecursive(kitSubagentsDir, path.join(targetKitDir, 'subagents'));
         }
         // Instalar atalhos diretos em scripts/ para conveniência
         const targetScriptsDir = path.join(targetDir, 'scripts');

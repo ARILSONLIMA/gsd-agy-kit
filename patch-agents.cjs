@@ -131,15 +131,15 @@ function buildProtocolBlock(targetDir) {
     return [
       PROTOCOL_MARKER_START,
       '<token_efficiency_protocol priority="critical" mode="greenfield">',
-      `## PROTOCOLO OBRIGATÓRIO DE ECONOMIA DE TOKENS (GREENFIELD FAST-TRACK - ${stack.name.toUpperCase()})`,
-      'Projeto em fase inicial de construção (Greenfield). Siga o fluxo direto e enxuto:',
-      '1. SCAFFOLDING & CONTRATOS: Crie os arquivos estruturais e especificações diretamente sem varreduras forenses pesadas.',
-      '2. ESCRITA DE CÓDIGO: Use write_file/write_to_file para novos arquivos e edit_file/replace_file_content cirúrgico para modificações.',
-      '3. VALIDAÇÃO PÓS-EDIÇÃO: Imediatamente após editar ou criar código, valide sintaxe com node .agents/mcp-server.cjs lsp diagnostics ou o verificador rápido da linguagem.',
-      '4. INSPEÇÃO CIRÚRGICA: read_file/view_file sempre com StartLine e EndLine cirúrgicos (máximo de 100 linhas).',
-      '5. TESTES CONCENTRADOS: Execute apenas a suíte do módulo em desenvolvimento (sem flags verbosas -v).',
-      '6. MEMPALACE: Registre decisões arquiteturais chave com node .agents/mcp-server.cjs capture decisions "<tópico>" "<decisão>".',
-      '7. GUARDRAILS: Siga rigorosamente os guardrails de qualidade (.agents/rules/quality-guardrails.md).',
+      `## PROTOCOLO OBRIGATÓRIO: GREENFIELD FAST-TRACK (PONYTAIL + CAVEMAN - ${stack.name.toUpperCase()})`,
+      '1. ESCADA DE DECISÃO (PONYTAIL): Crie apenas o código estritamente necessário (YAGNI). Reutilize stdlib e dependências existentes. Proibido abstrações prematuras ou novas dependências sem necessidade absoluta.',
+      '2. VOZ CONCISA (CAVEMAN): Resposta direta primeiro ([alvo] [ação] [motivo]). Zero cerimônia, saudações ou encerramentos ocos. Payload de código, caminhos e comandos 100% literais. Conclua toda resposta técnica informando o que foi omitido e riscos conhecidos.',
+      '3. ESCRITA ATÔMICA & CIRÚRGICA: Novos arquivos via write_to_file atômico. Edições em arquivos existentes estritamente via replace_file_content cirúrgico.',
+      '4. VALIDAÇÃO PÓS-EDIÇÃO: Imediatamente após editar ou criar código, valide sintaxe com node .agents/mcp-server.cjs lsp diagnostics ou o verificador rápido da linguagem.',
+      '5. INSPEÇÃO CIRÚRGICA: read_file/view_file sempre com StartLine e EndLine cirúrgicos (máximo de 100 linhas).',
+      '6. TESTES CONCENTRADOS: Execute apenas a suíte do módulo em desenvolvimento (sem flags verbosas -v).',
+      '7. MEMPALACE: Registre decisões arquiteturais chave com node .agents/mcp-server.cjs capture decisions "<tópico>" "<decisão>".',
+      '8. ATALHOS DELIBERADOS: Registre atalhos de escopo no código exatamente como: // shortcut: <limite>, <quando refatorar>.',
       '',
       'REGRAS RÍGIDAS DE SEGURANÇA E CONTEXTO:',
       '- PROIBIDO: Usar read_file/view_file sem StartLine/EndLine em arquivos de código.',
@@ -155,19 +155,20 @@ function buildProtocolBlock(targetDir) {
   return [
     PROTOCOL_MARKER_START,
     '<token_efficiency_protocol priority="critical" mode="brownfield">',
-    `## PROTOCOLO OBRIGATÓRIO DE ECONOMIA DE TOKENS E DIAGNÓSTICO JIT (${stack.name.toUpperCase()})`,
-    'Ao analisar ou modificar código em base existente (Brownfield), você DEVE seguir o fluxo JIT sob demanda:',
-    '1. TEST-DRIVEN FIRST: Se houver suíte de testes, execute-a primeiro para capturar o stack trace e asserção exata da falha.',
-    '2. NAVEGAÇÃO JIT (SOB DEMANDA): Use view_skeleton (CLI: node .agents/mcp-server.cjs skeleton "<arquivo>") para ver números de linhas e assinaturas antes de ler código.',
+    `## PROTOCOLO OBRIGATÓRIO: PONYTAIL MINIMALISMO + CAVEMAN CONCISÃO (BROWNFIELD - ${stack.name.toUpperCase()})`,
+    '1. ESCADA DE DECISÃO (PONYTAIL): Pare no primeiro degrau: (1) Precisa existir? (2) Reutilize código existente via Codebase Map; (3) Stdlib/Plataforma; (4) Dependência já instalada; (5) Uma linha; (6) Menor diff funcional. Atalhos: // shortcut: <limite>, <quando refatorar>.',
+    '2. VOZ CONCISA (CAVEMAN): Resposta direta ([alvo] [ação] [motivo]). Zero preâmbulo, saudações ou desculpas. Código, comandos e caminhos byte-exact. Conclua respostas técnicas citando o que foi omitido e riscos conhecidos.',
+    '3. TEST-DRIVEN FIRST: Se houver suíte de testes, execute-a primeiro pontualmente para capturar o stack trace e asserção exata da falha.',
+    '4. NAVEGAÇÃO JIT (SOB DEMANDA): Use view_skeleton (node .agents/mcp-server.cjs skeleton "<arquivo>") para ver números de linhas e assinaturas antes de ler código.',
     '   - Em arquivos > 50 linhas, use view_skeleton antes de ler o código completo.',
     '   - Use graphify query "<pergunta>" apenas se o fluxo envolver múltiplos módulos desconhecidos.',
     `   - Use ${stack.lsp} para validar tipos/assinaturas e diagnósticos pós-edição.`,
     `   - Use ast-grep CLI (ast-grep run -p '<padrão>'${astLang}) para buscas sintáticas na AST.`,
     '   - mempalace_recall e query_docs: convoque sob demanda apenas quando relevante.',
-    '3. ESCRITA DE CÓDIGO: Crie arquivos 100% NOVOS via write_file/write_to_file atômico. Edite arquivos EXISTENTES estritamente via edit_file/replace_file_content cirúrgico.',
-    '4. VALIDAÇÃO PÓS-EDIÇÃO: Imediatamente após editar qualquer arquivo de código, valide a sintaxe com node .agents/mcp-server.cjs lsp diagnostics <arquivo> ou o validador rápido da linguagem (ex: node -c).',
-    '5. GUARDRAILS OBRIGATÓRIOS: Respeite .agents/rules/quality-guardrails.md (Zero N+1 SQL, coerção defensiva HTTP, transações atômicas).',
-    '6. INSPEÇÃO CIRÚRGICA: read_file/view_file sempre com StartLine e EndLine restritos (máximo 100 linhas).',
+    '5. ESCRITA DE CÓDIGO: Crie arquivos 100% NOVOS via write_file/write_to_file atômico. Edite arquivos EXISTENTES estritamente via edit_file/replace_file_content cirúrgico.',
+    '6. VALIDAÇÃO PÓS-EDIÇÃO: Imediatamente após editar qualquer arquivo de código, valide a sintaxe com node .agents/mcp-server.cjs lsp diagnostics <arquivo> ou o validador rápido da linguagem (ex: node -c).',
+    '7. GUARDRAILS OBRIGATÓRIOS: Respeite .agents/rules/quality-guardrails.md (Zero N+1 SQL, coerção defensiva HTTP, transações atômicas).',
+    '8. INSPEÇÃO CIRÚRGICA: read_file/view_file sempre com StartLine e EndLine restritos (máximo 100 linhas).',
     '',
     'REGRAS RÍGIDAS DE SEGURANÇA E CONTEXTO:',
     '- PROIBIDO: Encadeamento burocrático de ferramentas na fase de forense/diagnóstico.',
@@ -272,6 +273,20 @@ function runPatch(targetDir) {
   }
 
   const protocolBlock = buildProtocolBlock(targetDir || process.cwd());
+
+  // Garante que os subagentes cavecrew estejam no pool permanente
+  const kitSubagents = path.resolve(__dirname, 'subagents');
+  if (fs.existsSync(kitSubagents) && fs.existsSync(poolDir)) {
+    try {
+      for (const ca of fs.readdirSync(kitSubagents).filter(f => f.endsWith('.md'))) {
+        const src = path.join(kitSubagents, ca);
+        const dest = path.join(poolDir, ca);
+        if (!fs.existsSync(dest)) {
+          fs.copyFileSync(src, dest);
+        }
+      }
+    } catch {}
+  }
 
   const dirsToPatch = [agentsDir];
   if (fs.existsSync(poolDir)) dirsToPatch.push(poolDir);

@@ -428,19 +428,28 @@ for sName in "test-kit.sh" "test-kit.ps1"; do
 done
 echo -e "   \033[0;32mPacote completo do kit instalado nativamente em: ${TARGET_KIT_DIR}\033[0m"
 
-# 10. Copiar Skills Especializadas (.agents/skills/gsd-tokens, gsd-test e gsd-agy-update)
+# 10. Copiar Catálogo Completo de Skills e Subagentes Cavecrew
 SKILLS_DIR="${AGENTS_DIR}/skills"
-for skName in "gsd-tokens" "gsd-test" "gsd-agy-update"; do
-    SK_SRC="${KIT_DIR}/skills/${skName}"
-    if [ -d "${SK_SRC}" ]; then
-        SK_DEST="${SKILLS_DIR}/${skName}"
-        if [ "${SK_SRC}" != "${SK_DEST}" ]; then
-            mkdir -p "${SK_DEST}"
-            cp -rf "${SK_SRC}/"* "${SK_DEST}/"
-            echo -e "   \033[0;32mSkill /${skName} instalada em: ${SK_DEST}\033[0m"
-        fi
-    fi
-done
+SKILLS_POOL_DIR="${AGENTS_DIR}/skills-pool"
+mkdir -p "${SKILLS_DIR}"
+mkdir -p "${SKILLS_POOL_DIR}"
+
+if [ -d "${KIT_DIR}/skills" ]; then
+    cp -rf "${KIT_DIR}/skills/"* "${SKILLS_POOL_DIR}/"
+    cp -rf "${KIT_DIR}/skills/"* "${SKILLS_DIR}/"
+    mkdir -p "${TARGET_KIT_DIR}/skills"
+    cp -rf "${KIT_DIR}/skills/"* "${TARGET_KIT_DIR}/skills/"
+    echo -e "   \033[0;32mCatálogo de Skills (incluindo Ponytail & Caveman) instalado em: ${SKILLS_DIR}\033[0m"
+fi
+
+if [ -d "${KIT_DIR}/subagents" ]; then
+    AGENTS_POOL_DIR="${AGENTS_DIR}/agents-pool"
+    mkdir -p "${AGENTS_POOL_DIR}"
+    cp -rf "${KIT_DIR}/subagents/"* "${AGENTS_POOL_DIR}/"
+    mkdir -p "${TARGET_KIT_DIR}/subagents"
+    cp -rf "${KIT_DIR}/subagents/"* "${TARGET_KIT_DIR}/subagents/"
+    echo -e "   \033[0;32mSubagentes Cavecrew instalados no pool: ${AGENTS_POOL_DIR}\033[0m"
+fi
 
 # 10.1 Sincronizar Perfil de Skills conforme Front-End
 SKILLS_MGR="${KIT_DIR}/skills-manager.cjs"
