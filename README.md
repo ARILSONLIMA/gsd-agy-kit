@@ -116,11 +116,12 @@ O kit opera em 4 camadas complementares:
    - Bloqueia `ast-grep` com flags de reescrita em massa (`-r`, `--rewrite`).
    - Bloqueia `go test -v` em lote.
    - **Circuit Breaker Estrito por Stack:** Testa a saúde operacional de `ast-grep`, `graphify` e das ferramentas LSP/compiladores de cada linguagem detectada no projeto (`gopls`, `typescript-language-server`/`tsc`/`node`, `pyright`, `rust-analyzer`/`cargo`, `intelephense`/`php`, `clangd`/`clang++`, `jdtls`/`javac`, `csharp-ls`, `solargraph`) antes de permitir execuções de ferramentas.
-   - **JIT Auto-Promoter Reativo (Agentes & Skills):** Intercepta chamadas a `invoke_subagent` e leituras de skills via `view_file`, promovendo itens adormecidos do pool (`.agents/agents-pool/` e `.agents/skills-pool/`) para o catálogo ativo em tempo real (2ms), com busca case-insensitive para Linux/POSIX e renovação automática de TTL (5 turnos por acesso ativo).
+   - **JIT Auto-Promoter Reativo (Agentes & Skills):** Intercepta chamadas a `invoke_subagent` e leituras de skills via `view_file`/`read_file`, promovendo itens adormecidos do pool (`.agents/agents-pool/` e `.agents/skills-pool/`) para o catálogo ativo em tempo real (<2ms), com busca case-insensitive para Linux/POSIX e ciclo de vida cirúrgico com recolhimento automático no turno seguinte (TTL = 1 turno).
 
 4. **Motor de Otimização de Tokens & Dynamic Agent Pool (`optimize-tokens.cjs`):**
    - **Dynamic Agent Pool (`.agents/agents-pool/`):** Preserva 100% dos 35 subagentes únicos de forma segura fora do catálogo ativo.
-   - **Sincronização Inteligente por Fase:** Detecta automaticamente a fase do projeto em `.planning/STATE.md` (`planning`, `execution`, `verification`, `core`) e mantém **apenas 5 a 6 agentes ativos no prompt por vez**, reduzindo drasticamente o consumo de tokens.
+   - **Zero-Baseline Proporcional sob Demanda:** Em vez de carregar lotes estáticos no prompt, opera em **Zero-Baseline (0 subagentes ativos por padrão)**, mantendo os recursos no pool e promovendo-os cirurgicamente apenas quando requisitados via JIT.
+   - **Catálogo Sintético Ultra-leve:** Lista condensada (~200 tokens) em `rules/token-protocol.md` mapeando subagentes oficiais de governança do GSD (`gsd-planner`, `gsd-executor`, `gsd-verifier`, `gsd-doc-writer`), agentes Cavecrew (`cavecrew-builder`, `cavecrew-investigator`, `cavecrew-reviewer`) e skills principais.
    - **Menor Privilégio em Ferramentas:** Subagentes estritamente de análise e checagem recebem apenas ferramentas de leitura (`view_file`, `run_command`), eliminando schemas de escrita desnecessários no prompt.
    - **Progressive Disclosure para Regras:** Converte regras redundantes em `.agents/rules/` (`idioma.md` e `token-protocol.md`) em pontes com `trigger: model_decision`, evitando a injeção tripla das mesmas regras contidas em `GEMINI.md`.
    - **Estabilidade de Prompt Caching:** Ordenação alfabética estrita (`.sort()`) em todos os catálogos para garantir prefixos estáveis e maximizar Cache Hits no Gemini.
@@ -355,9 +356,9 @@ O validador testa e confirma 100% dos testes e regras de proteção:
 - ✅ **Hard Gate `write_to_file`:** bloqueio mecânico de sobrescrita de arquivos de código existentes com exceção segura para rascunhos em pastas efêmeras (`scratch/`, `temp/`).
 - ✅ **Hook PreInvocation:** auto-cura silenciosa instantânea e execução limpa sem banners repetidos.
 - ✅ **Otimização de tokens:** arquivamento de `.compact.md` e desduplicação de `.agents/GEMINI.md`.
-- ✅ **Dynamic Agent Pool:** preservação dos 35 agentes em `.agents/agents-pool/` e catálogo ativo enxuto consciente de fase (≤ 10 agentes).
-- ✅ **Dynamic Skill Pool & JIT:** preservação de 75+ skills em `.agents/skills-pool/` (Golden Master imutável), catálogo ativo enxuto consciente de fase e promoção instantânea de skills via `view_file`.
-- ✅ **JIT Auto-Promoter Reativo:** promoção instantânea com busca case-insensitive e renovação contínua de TTL (5 turnos).
+- ✅ **Dynamic Agent Pool & Zero-Baseline:** preservação dos 35 agentes em `.agents/agents-pool/` e catálogo ativo operando em Zero-Baseline (0 agentes ativos por padrão, ativados sob demanda JIT).
+- ✅ **Dynamic Skill Pool & Zero-Baseline:** preservação de 75+ skills em `.agents/skills-pool/` (Golden Master imutável), 0 skills ativas no prompt e promoção instantânea sob demanda via `view_file`/`read_file`.
+- ✅ **JIT Auto-Promoter Cirúrgico:** promoção instantânea com busca case-insensitive e recolhimento imediato no turno seguinte (TTL = 1 turno).
 - ✅ **Governança e Git Hooks:** integridade de `.agents/hooks.json` (com matchers para ferramentas e subagentes) e hooks `post-merge`/`post-checkout` em `.git/hooks/`.
 - ✅ **Telemetria de tokens:** operacionalidade do comando `/gsd-tokens` (`token-report.cjs`).
 - ✅ **Hard Stop de Pré-requisitos:** detecção estrita de `Node.js`, `ast-grep`, `graphify` e `gsd-core`.

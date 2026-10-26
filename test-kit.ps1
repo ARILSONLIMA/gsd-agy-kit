@@ -317,6 +317,25 @@ Assert-Test -Name "Hook PreToolUse bloqueia sobrescrita integral via write_file 
             -Condition ($resWriteFile.decision -eq "deny") `
             -ErrorDetails "Esperado 'deny', recebido '$($resWriteFile.decision)'"
 
+# 4.8: Sandbox Shield - Bloqueio de scenario.json e holdout
+$payloadScenario = '{"toolCall":{"name":"view_file","args":{"Path":"scenario.json"}}}'
+$resScenario = $payloadScenario | node $hookPath | ConvertFrom-Json
+Assert-Test -Name "Hook PreToolUse bloqueia leitura de scenario.json (Sandbox Shield)" `
+            -Condition ($resScenario.decision -eq "deny") `
+            -ErrorDetails "Esperado 'deny', recebido '$($resScenario.decision)'"
+
+$payloadHoldout = '{"toolCall":{"name":"read_file","args":{"Path":"~/.gsd-bench-holdout/suite.test.js"}}}'
+$resHoldout = $payloadHoldout | node $hookPath | ConvertFrom-Json
+Assert-Test -Name "Hook PreToolUse bloqueia leitura de suítes holdout externas (Sandbox Shield)" `
+            -Condition ($resHoldout.decision -eq "deny") `
+            -ErrorDetails "Esperado 'deny', recebido '$($resHoldout.decision)'"
+
+$payloadCmdHoldout = '{"toolCall":{"name":"run_command","args":{"CommandLine":"ls -la ~/.gsd-bench-holdout"}}}'
+$resCmdHoldout = $payloadCmdHoldout | node $hookPath | ConvertFrom-Json
+Assert-Test -Name "Hook PreToolUse bloqueia comandos shell direcionados a holdout (Sandbox Shield)" `
+            -Condition ($resCmdHoldout.decision -eq "deny") `
+            -ErrorDetails "Esperado 'deny', recebido '$($resCmdHoldout.decision)'"
+
 
 # ------------------------------------------------------------------------------
 # Teste 5: Hook PreInvocation (Execução Limpa e Auto-Cura)
@@ -352,9 +371,21 @@ Assert-Test -Name "Dynamic Agent Pool (.agents/agents-pool/) contem todos os age
             -ErrorDetails "Esperado >= 30 agentes no pool, encontrados $($poolFiles.Count)"
 
 $activeAgentsCount = (Get-ChildItem -Path $agentsDir -Filter *.md).Count
-Assert-Test -Name "Catalogo ativo (.agents/agents/) enxuto e consciente de fase ($activeAgentsCount agentes ativos)" `
-            -Condition ($activeAgentsCount -le 10) `
-            -ErrorDetails "Esperado <= 10 agentes ativos no catalogo enxuto, encontrados $activeAgentsCount"
+Assert-Test -Name "Catalogo ativo (.agents/agents/) em Zero-Baseline (0 agentes ativos por padrao)" `
+            -Condition ($activeAgentsCount -eq 0) `
+            -ErrorDetails "Esperado 0 agentes ativos no catalogo Zero-Baseline, encontrados $activeAgentsCount"
+
+$skillsActiveDir = Join-Path $TargetDir ".agents\skills"
+$skillsActiveFolders = if (Test-Path $skillsActiveDir) { (Get-ChildItem -Path $skillsActiveDir -Directory).Count } else { 0 }
+Assert-Test -Name "Catalogo de Skills (.agents/skills/) em Zero-Baseline (0 skills ativas por padrao)" `
+            -Condition ($skillsActiveFolders -eq 0) `
+            -ErrorDetails "Esperado 0 skills ativas no modo Zero-Baseline, encontradas $skillsActiveFolders"
+
+$rulesProtocol = Join-Path $TargetDir ".agents\rules\token-protocol.md"
+$hasCatalog = (Test-Path $rulesProtocol) -and ((Get-Content $rulesProtocol -Raw) -match "Catálogo Sintético de Subagentes & Skills")
+Assert-Test -Name "Catálogo Sintético presente nas regras (.agents/rules/token-protocol.md)" `
+            -Condition $hasCatalog `
+            -ErrorDetails "Catálogo Sintético ausente em token-protocol.md"
 
 # ------------------------------------------------------------------------------
 # Teste 7: JIT Auto-Promoter do Hook (Ativação Sob Demanda de Subagentes)
@@ -366,11 +397,18 @@ if (Test-Path $activeTempPath) { Remove-Item $activeTempPath -Force }
 $payloadJit = '{"toolCall":{"name":"invoke_subagent","args":{"Subagents":[{"TypeName":"' + $tempAgentName + '"}]}}}'
 $resJit = $payloadJit | node $hookPath | ConvertFrom-Json
 $jitPromoted = (Test-Path $activeTempPath)
-if (Test-Path $activeTempPath) { Remove-Item $activeTempPath -Force }
 
 Assert-Test -Name "Hook PreToolUse promove instantaneamente (JIT) subagente do pool sob demanda" `
             -Condition ($resJit.decision -eq "allow" -and $jitPromoted) `
             -ErrorDetails "Subagente nao foi promovido para $activeTempPath apos chamada invoke_subagent"
+
+# 7.1: Validar TTL = 1 (PreInvocation recolhe no turno subsequente)
+$preInvocPath = Join-Path $TargetDir ".agents\hooks\token-guard-preinvocation.cjs"
+node $preInvocPath | Out-Null
+$ttlCleaned = -not (Test-Path $activeTempPath)
+Assert-Test -Name "Hook PreInvocation recolhe subagente promovido apos 1 turno (TTL=1 cirurgico)" `
+            -Condition $ttlCleaned `
+            -ErrorDetails "Subagente promovido nao foi recolhido no turno subsequente"
 
 # 7.2: Promoção JIT via argumento direto TypeName (sem array Subagents)
 $tempDirectAgent = "gsd-code-fixer"
@@ -928,6 +966,16 @@ foreach ($rule in $expectedRules) {
 Assert-Test -Name "Regras canonicas em rules/ ($($expectedRules.Count) regras) presentes e validas" `
             -Condition $rulesAllOk `
             -ErrorDetails "Regras canonicas ausentes ou corrompidas em $rulesDir"
+
+$guardrailPath = Join-Path $rulesDir "quality-guardrails.md"
+if (-not (Test-Path $guardrailPath)) {
+    $guardrailPath = Join-Path $TargetDir ".agents\rules\quality-guardrails.md"
+}
+$guardrailContent = if (Test-Path $guardrailPath) { Get-Content $guardrailPath -Raw } else { "" }
+$guardrailOk = ($guardrailContent -match "Teto Estrito de Aninhamento") -and ($guardrailContent -match "Blindagem Aritmética")
+Assert-Test -Name "Regras de qualidade contêm guardrails de aninhamento <= 3 e blindagem aritmética" `
+            -Condition $guardrailOk `
+            -ErrorDetails "quality-guardrails.md sem diretivas de aninhamento ou blindagem aritmética"
 
 $canonicalSkills = @("gsd-tokens", "gsd-test", "gsd-agy-update")
 $skillOk = $true

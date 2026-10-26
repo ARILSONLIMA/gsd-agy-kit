@@ -159,7 +159,7 @@ function findCaseInsensitiveFile(dir, fileName) {
   }
 }
 
-function recordJitPromotion(type, name) {
+function recordJitPromotion(type, name, customTtl) {
   try {
     let data = { skills: {}, agents: {} };
     const promoFile = fs.existsSync(JIT_PROMOTIONS_FILE) ? JIT_PROMOTIONS_FILE : (fs.existsSync(JIT_PROMOTIONS_LEGACY) ? JIT_PROMOTIONS_LEGACY : null);
@@ -167,8 +167,9 @@ function recordJitPromotion(type, name) {
       try { data = JSON.parse(fs.readFileSync(promoFile, 'utf8')); } catch {}
     }
     if (!data[type]) data[type] = {};
-    // Renovação reativa de TTL: 5 turnos a cada acesso
-    data[type][name] = { promotedAt: Date.now(), turnsRemaining: 5 };
+    // Ativação cirúrgica de uso pontual: 1 turno por acesso (Zero-Baseline)
+    const ttl = typeof customTtl === 'number' ? customTtl : 1;
+    data[type][name] = { promotedAt: Date.now(), turnsRemaining: ttl };
     writeJsonAtomic(JIT_PROMOTIONS_FILE, data);
   } catch {}
 }
@@ -358,6 +359,19 @@ function recordTokenSaving(category, estimatedTokens = 500) {
         'deny',
         '🛑 SECRET SHIELD (PROTEÇÃO DE SEGREDOS E TOKENS): É proibido ler arquivos .env diretamente com view_file/read_file para evitar exposição de credenciais no contexto!\n' +
         'Utilize a ferramenta MCP "env_skeleton" para inspecionar variáveis de ambiente de forma segura.'
+      );
+    }
+
+    // Sandbox Shield Gate (Bloqueia vazamento/contaminação de scenario.json e holdout)
+    const isHoldoutPath = /(?:^|[\\/])(?:scenario\.json|\.gsd-bench-holdout|holdout(?:\/.*)?|__hidden_[a-zA-Z0-9_-]+)/i.test(target) ||
+      target.includes('.gsd-bench-holdout') ||
+      target.endsWith('/scenario.json') || target === 'scenario.json';
+    if (isHoldoutPath) {
+      recordTokenSaving('sandbox_shield', 500);
+      return respond(
+        'deny',
+        '🛑 SANDBOX SHIELD (ZERO-LEAKAGE): O acesso direto a arquivos de orquestração externa (scenario.json) e suítes holdout de benchmark é estritamente proibido.\n' +
+        'Concentre a análise exclusivamente nos arquivos locais do projeto (TASK.md, src/, docs/, tests/).'
       );
     }
 
@@ -580,6 +594,17 @@ function recordTokenSaving(category, estimatedTokens = 500) {
         'deny',
         '🛑 SECRET SHIELD (PROTEÇÃO DE SEGREDOS): Não despeje arquivos .env no console com cat/type/Get-Content/head!\n' +
         'Utilize a lente segura que mascara valores sensíveis: node .agents/mcp-server.cjs env (ou tool MCP env_skeleton).'
+      );
+    }
+
+    // 2.0.1 Sandbox Shield Gate para comandos direcionados a holdout ou scenario.json
+    const isHoldoutOrScenario = /(?:^|\s|[\\/"'])(\.gsd-bench-holdout|holdout(?:\/.*)?|scenario\.json|__hidden_[a-zA-Z0-9_-]+)(?:$|\s|[\\/"'])/i.test(cmd);
+    if (isHoldoutOrScenario) {
+      recordTokenSaving('sandbox_shield', 500);
+      return respond(
+        'deny',
+        '🛑 SANDBOX SHIELD (ZERO-LEAKAGE): Comandos direcionados a arquivos de holdout ou orquestração de benchmark (scenario.json) são estritamente proibidos!\n' +
+        'Concentre o trabalho apenas nos testes unitários e arquivos locais do projeto (ex: npm test).'
       );
     }
 

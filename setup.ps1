@@ -460,11 +460,11 @@ if (Test-Path $kitSubagentsSrc) {
     Write-Host "   Subagentes Cavecrew (investigator, builder, reviewer) instalados em: $agentsPoolDir" -ForegroundColor Green
 }
 
-# 10.1 Sincronizar Perfil de Skills conforme Front-End
+# 10.1 Sincronizar Perfil de Skills (Zero-Baseline sob Demanda JIT)
 $skillsMgr = Join-Path $kitDir "skills-manager.cjs"
 if (Test-Path $skillsMgr) {
-    $skillProfile = if ($HasFrontend) { "full" } else { "backend" }
-    Write-Host "`n🧩 [Skills Profile] Aplicando perfil '$skillProfile'..." -ForegroundColor Cyan
+    $skillProfile = "zero"
+    Write-Host "`n🧩 [Skills Profile] Aplicando perfil Zero-Baseline (JIT sob demanda)..." -ForegroundColor Cyan
     node $skillsMgr profile $skillProfile $TargetDir
 }
 

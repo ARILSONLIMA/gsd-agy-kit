@@ -451,15 +451,11 @@ if [ -d "${KIT_DIR}/subagents" ]; then
     echo -e "   \033[0;32mSubagentes Cavecrew instalados no pool: ${AGENTS_POOL_DIR}\033[0m"
 fi
 
-# 10.1 Sincronizar Perfil de Skills conforme Front-End
+# 10.1 Sincronizar Perfil de Skills (Zero-Baseline sob Demanda JIT)
 SKILLS_MGR="${KIT_DIR}/skills-manager.cjs"
 if [ -f "${SKILLS_MGR}" ]; then
-    if [ "${HAS_FRONTEND}" = "true" ]; then
-        SKILL_PROFILE="full"
-    else
-        SKILL_PROFILE="backend"
-    fi
-    echo -e "\n\033[0;36m🧩 [Skills Profile] Aplicando perfil '${SKILL_PROFILE}'...\033[0m"
+    SKILL_PROFILE="zero"
+    echo -e "\n\033[0;36m🧩 [Skills Profile] Aplicando perfil Zero-Baseline (JIT sob demanda)...\033[0m"
     node "${SKILLS_MGR}" profile "${SKILL_PROFILE}" "${TARGET_DIR}"
 fi
 

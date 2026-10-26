@@ -663,10 +663,10 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
 
         const skillsMgr = path.join(kitDir, 'skills-manager.cjs');
         if (fs.existsSync(skillsMgr)) {
-          const profile = hasFrontend ? 'full' : 'backend';
+          const profile = 'zero';
           try {
             spawnSync(process.execPath, [skillsMgr, 'profile', profile, targetDir], { stdio: 'ignore' });
-            spawnSync(process.execPath, [skillsMgr, 'sync', '', targetDir], { stdio: 'ignore' });
+            spawnSync(process.execPath, [skillsMgr, 'sync', 'zero', targetDir], { stdio: 'ignore' });
           } catch {}
         }
         await sleep(80);
@@ -1073,16 +1073,19 @@ async function runProfile(targetDir, profileChoice = '') {
   if (!chosen) {
     console.log(`\n${C.cyan}╭─ ⚡ Gerenciador de Perfis de Skills ────────────────────────────────────╮${C.reset}`);
     console.log(`${C.cyan}│${C.reset}                                                                        ${C.cyan}│${C.reset}`);
-    console.log(`${C.cyan}│${C.reset}   ${C.bGreen}[1] Backend${C.reset}   - 31 skills (Recomendado para APIs, workers e DB)       ${C.cyan}│${C.reset}`);
-    console.log(`${C.cyan}│${C.reset}   ${C.bWhite}[2] Core${C.reset}      - 12 skills (Super enxuto: planejar, executar, testar)  ${C.cyan}│${C.reset}`);
-    console.log(`${C.cyan}│${C.reset}   ${C.bCyan}[3] Fullstack${C.reset} - 75 skills (100% das skills ativas simultaneamente)      ${C.cyan}│${C.reset}`);
+    console.log(`${C.cyan}│${C.reset}   ${C.bYellow}[0] Zero-Baseline${C.reset} - 0 skills ativas (Máxima economia, JIT sob demanda)   ${C.cyan}│${C.reset}`);
+    console.log(`${C.cyan}│${C.reset}   ${C.bGreen}[1] Backend${C.reset}       - 31 skills (Recomendado para APIs, workers e DB)       ${C.cyan}│${C.reset}`);
+    console.log(`${C.cyan}│${C.reset}   ${C.bWhite}[2] Core${C.reset}          - 12 skills (Super enxuto: planejar, executar, testar)  ${C.cyan}│${C.reset}`);
+    console.log(`${C.cyan}│${C.reset}   ${C.bCyan}[3] Fullstack${C.reset}     - 75 skills (100% das skills ativas simultaneamente)      ${C.cyan}│${C.reset}`);
     console.log(`${C.cyan}│${C.reset}                                                                        ${C.cyan}│${C.reset}`);
     console.log(`${C.cyan}╰────────────────────────────────────────────────────────────────────────╯${C.reset}\n`);
 
-    const ans = await askPrompt(`   ${C.bold}Escolha o perfil [1-3, padrão 1]: ${C.reset}`);
-    if (ans === '2' || ans === 'core') chosen = 'core';
+    const ans = await askPrompt(`   ${C.bold}Escolha o perfil [0-3, padrão 0]: ${C.reset}`);
+    if (ans === '0' || ans === 'zero') chosen = 'zero';
+    else if (ans === '2' || ans === 'core') chosen = 'core';
     else if (ans === '3' || ans === 'full' || ans === 'fullstack') chosen = 'full';
-    else chosen = 'backend';
+    else if (ans === '1' || ans === 'backend') chosen = 'backend';
+    else chosen = 'zero';
   }
 
   spawnSync(process.execPath, [skillsMgr, 'profile', chosen, targetDir], { stdio: 'inherit' });

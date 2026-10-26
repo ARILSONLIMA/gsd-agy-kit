@@ -145,7 +145,7 @@ function checkPhaseSync() {
       if (optScript) {
         try {
           const { syncDynamicAgentPool } = require(optScript);
-          syncDynamicAgentPool(PROJECT_ROOT, currentPhase);
+          syncDynamicAgentPool(PROJECT_ROOT, 'zero');
         } catch {
           try { execSync(`node "${optScript}" "${PROJECT_ROOT}" --sync`, { stdio: 'ignore', timeout: 5000 }); } catch {}
         }
@@ -153,9 +153,9 @@ function checkPhaseSync() {
       if (skillsScript) {
         try {
           const { syncSkills } = require(skillsScript);
-          syncSkills(PROJECT_ROOT, currentPhase);
+          syncSkills(PROJECT_ROOT, 'zero');
         } catch {
-          try { execSync(`node "${skillsScript}" sync "${currentPhase}" "${PROJECT_ROOT}"`, { stdio: 'ignore', timeout: 5000 }); } catch {}
+          try { execSync(`node "${skillsScript}" sync "zero" "${PROJECT_ROOT}"`, { stdio: 'ignore', timeout: 5000 }); } catch {}
         }
       }
       if (compactScript) {

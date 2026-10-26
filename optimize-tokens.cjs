@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PHASE_PROFILES = {
+  zero: [],
   core: [
     'gsd-planner',
     'gsd-executor',
@@ -96,7 +97,7 @@ function getActiveJitAgents(targetDir) {
   return set;
 }
 
-function syncDynamicAgentPool(targetDir = process.cwd(), requestedProfile = 'auto') {
+function syncDynamicAgentPool(targetDir = process.cwd(), requestedProfile = 'zero') {
   const agentsDir = path.join(targetDir, '.agents', 'agents');
   const poolDir = path.join(targetDir, '.agents', 'agents-pool');
   const onDemandDir = path.join(targetDir, '.agents', 'agents-on-demand');
@@ -141,15 +142,18 @@ function syncDynamicAgentPool(targetDir = process.cwd(), requestedProfile = 'aut
 
   const allPoolFiles = fs.readdirSync(poolDir).filter(isAgentFile).sort();
 
-  // 2. Determinar o perfil ativo
-  let activeProfile = requestedProfile;
-  if (!activeProfile || activeProfile === 'auto') {
-    activeProfile = detectPhaseFromState(targetDir);
+  // 2. Determinar o perfil ativo (Padrão: Zero-Baseline com Ativação JIT Proporcional)
+  let activeProfile = (requestedProfile || 'zero').toLowerCase();
+  if (activeProfile === 'auto') {
+    activeProfile = 'zero';
   }
 
   let targetAgentFiles = [];
   if (activeProfile === 'all') {
     targetAgentFiles = allPoolFiles;
+  } else if (activeProfile === 'zero' || activeProfile === 'none') {
+    const jitSet = getActiveJitAgents(targetDir);
+    targetAgentFiles = Array.from(jitSet).sort();
   } else {
     const agentNames = PHASE_PROFILES[activeProfile] || PHASE_PROFILES.core;
     const jitSet = getActiveJitAgents(targetDir);
@@ -191,7 +195,7 @@ function syncDynamicAgentPool(targetDir = process.cwd(), requestedProfile = 'aut
   };
 }
 
-function runOptimization(targetDir = process.cwd(), requestedProfile = 'auto') {
+function runOptimization(targetDir = process.cwd(), requestedProfile = 'zero') {
   console.log('\n⚡ [Antigravity GSD Kit] Iniciando otimização agressiva de tokens...');
   let totalBytesSaved = 0;
 
@@ -224,8 +228,8 @@ function runOptimization(targetDir = process.cwd(), requestedProfile = 'auto') {
   // 2.1 Sincronizar Dynamic Skill Pool em conjunto
   try {
     const skillsMgr = require('./skills-manager.cjs');
-    const skillRes = skillsMgr.syncSkills(targetDir, requestedProfile === 'auto' ? null : requestedProfile);
-    console.log(`   ✅ Dynamic Skill Pool ativo: ${skillRes.activeCount} skills no prompt (fase: ${skillRes.phase.toUpperCase()}).`);
+    const skillRes = skillsMgr.syncSkills(targetDir, (requestedProfile === 'auto' || requestedProfile === 'zero') ? 'zero' : requestedProfile);
+    console.log(`   ✅ Dynamic Skill Pool ativo: ${skillRes.activeCount} skills no prompt (perfil: ${skillRes.phase.toUpperCase()}).`);
   } catch {}
 
   const normalizedTarget = path.resolve(targetDir).replace(/\\/g, '/');
@@ -353,14 +357,14 @@ function runOptimization(targetDir = process.cwd(), requestedProfile = 'auto') {
 if (require.main === module) {
   const args = process.argv.slice(2);
   let target = process.cwd();
-  let profile = 'auto';
+  let profile = 'zero';
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--profile' && args[i + 1]) {
       profile = args[i + 1];
       i++;
     } else if (args[i] === '--sync') {
-      profile = 'auto';
+      profile = 'zero';
     } else if (!args[i].startsWith('-')) {
       target = args[i];
     }

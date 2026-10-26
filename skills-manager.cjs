@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PROFILES = {
+  zero: [],
   core: [
     'gsd-plan-phase',
     'gsd-execute-phase',
@@ -257,6 +258,22 @@ function applyProfile(targetDir, profileName) {
   const profileLower = profileName.toLowerCase();
   const ALWAYS_ACTIVE = new Set(['gsd-tokens']);
 
+  if (profileLower === 'zero' || profileLower === 'none') {
+    // Zero-Baseline: remove all active skills and keep in pool
+    const active = fs.readdirSync(activeDir).filter(f => fs.statSync(path.join(activeDir, f)).isDirectory());
+    for (const s of active) {
+      const src = path.join(activeDir, s);
+      const dest = path.join(poolDir, s);
+      if (!fs.existsSync(dest)) {
+        copyFolderSync(src, dest);
+      }
+      fs.rmSync(src, { recursive: true, force: true });
+    }
+    console.log(`\n🎉 [Skills Manager] Perfil 'ZERO' (Zero-Baseline) aplicado. 0 skills ativas no prompt (todas preservadas no pool).`);
+    showStatus(targetDir);
+    return;
+  }
+
   if (profileLower === 'full' || profileLower === 'all') {
     // Restaura tudo do pool para active
     const poolSkills = fs.readdirSync(poolDir).filter(f => fs.statSync(path.join(poolDir, f)).isDirectory());
@@ -409,12 +426,18 @@ function getActiveJitSkills(targetDir) {
 
 function syncSkills(targetDir, explicitPhase) {
   ensurePool(targetDir);
-  const phase = (explicitPhase || detectPhaseFromState(targetDir)).toLowerCase();
+  const phase = (explicitPhase || 'zero').toLowerCase();
   const { activeDir, poolDir } = getPaths(targetDir);
 
-  const phaseList = PHASE_SKILLS[phase] || PHASE_SKILLS.core;
-  const jitSkills = getActiveJitSkills(targetDir);
-  const targetSet = new Set([...GLOBAL_SKILLS, ...phaseList, ...jitSkills]);
+  let targetSet;
+  if (phase === 'zero' || phase === 'none') {
+    const jitSkills = getActiveJitSkills(targetDir);
+    targetSet = new Set([...jitSkills]);
+  } else {
+    const phaseList = PHASE_SKILLS[phase] || PHASE_SKILLS.core;
+    const jitSkills = getActiveJitSkills(targetDir);
+    targetSet = new Set([...GLOBAL_SKILLS, ...phaseList, ...jitSkills]);
+  }
 
   // Preserva skills de projeto existentes
   const currentActive = fs.readdirSync(activeDir).filter(f => fs.statSync(path.join(activeDir, f)).isDirectory());
@@ -489,10 +512,10 @@ if (require.main === module) {
   }
 
   if (cmd === 'profile') {
-    applyProfile(targetDir, param || 'backend');
+    applyProfile(targetDir, param || 'zero');
   } else if (cmd === 'sync') {
-    const res = syncSkills(targetDir, param || null);
-    console.log(`\n⚡ [Skills Manager] Dynamic Skill Pool sincronizado com a fase '${res.phase.toUpperCase()}'!`);
+    const res = syncSkills(targetDir, param || 'zero');
+    console.log(`\n⚡ [Skills Manager] Dynamic Skill Pool sincronizado com o perfil '${res.phase.toUpperCase()}'!`);
     console.log(`   🟢 Skills Ativas: ${res.activeCount} | Promovidas: ${res.activated}\n`);
   } else if (cmd === 'enable' || cmd === 'promote') {
     enableSkill(targetDir, param);
@@ -503,7 +526,7 @@ if (require.main === module) {
   } else if (cmd === 'status' || cmd === 'list' || !cmd) {
     showStatus(targetDir);
   } else {
-    console.log('Uso: node skills-manager.cjs [sync [phase] [targetDir] | profile <core|backend|full> [targetDir] | enable <nome> [targetDir] | disable <nome> [targetDir] | status [targetDir]]');
+    console.log('Uso: node skills-manager.cjs [sync [phase] [targetDir] | profile <zero|core|backend|full> [targetDir] | enable <nome> [targetDir] | disable <nome> [targetDir] | status [targetDir]]');
   }
 }
 

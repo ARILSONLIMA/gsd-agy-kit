@@ -2,6 +2,25 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.1.0] - 2026-10-26
+- **Sandbox Shield (Zero-Leakage Anti-Contaminação de Benchmark):**
+  - Bloqueio determinístico de acesso a arquivos de orquestração externa (`scenario.json`) e diretórios de teste holdout (`.gsd-bench-holdout`, `holdout/`, `__hidden_`) em `view_file`, `read_file` e comandos de terminal no hook `token-guard-pretool.cjs`, eliminando contaminação de contexto.
+  - Categoria `sandbox_shield` adicionada ao rastreador de ROI de economia de tokens (`lib/token-savings.cjs`).
+- **Guardrails Estritos de Clean Code & Anti-Nesting (Anti-Code Smells):**
+  - Teto imperativo de aninhamento em no máximo 3 níveis com adoção obrigatória de *Early Return* / *Guard Clauses* em `rules/quality-guardrails.md`, eliminando aninhamento excessivo e zeramento de nota estática.
+  - Teto rígido de 40 linhas por método e complexidade ciclomática $\le 12$, decompondo laços e validações.
+- **Blindagem Aritmética e Edge Cases de Marcha Lenta (Zero NaN/Infinity - BUG-04):**
+  - Proteção obrigatória de divisores (`fuel > 0 ? dist / fuel : 0.0`) e retorno explícito de `0.0` para veículos parados consumindo combustível em marcha lenta (`idle_fuel_liters`), prevenindo regressões de divisão por zero.
+- **Protocolo Obrigatório de Documentação de Ambiguidades (`AMBIGUITIES.md`):**
+  - Template estruturado e checklist obrigatório em `rules/token-protocol.md` para registro nas Fases 1, 2 e 5 (Change Request), cobrindo fusos horários UTC, perda de sinal GPS e oscilações de boia/sensores em rampa.
+- **Zero-Baseline Dynamic Agent & Skill Pool (Sincronização Inteligente Proporcional & JIT Cirúrgico):**
+  - **Eliminação de Pré-Carregamento Estático:** O prompt não mais injeta lotes fixos de 5 a 7 subagentes e 20+ skills a cada turno, operando em **Zero-Baseline (0 subagentes e 0 skills ativos por padrão)**.
+  - **Catálogo Sintético Ultra-leve (`rules/token-protocol.md`):** Tabela condensada (~200 tokens) apresentando os subagentes oficiais de governança do GSD (`gsd-planner`, `gsd-executor`, `gsd-verifier`, `gsd-doc-writer`), os subagentes cirúrgicos do Cavecrew (`cavecrew-builder`, `cavecrew-investigator`, `cavecrew-reviewer`) e as skills centrais do fluxo.
+  - **Ativação JIT Cirúrgica (<2ms):** Ao invocar um subagente (`invoke_subagent`) ou consultar uma skill (`read_file`/`view_file`), o hook `PreToolUse` promove o recurso instantaneamente do pool (`.agents/agents-pool/` e `.agents/skills-pool/`) para o diretório ativo.
+  - **Ciclo de Vida de Turno Único (TTL = 1):** O hook `PreInvocation` recolhe os recursos promovidos de volta para seus pools permanentes logo no início do turno subsequente, restaurando o diretório ativo para zero e economizando ~18.000 tokens por turno ocioso.
+  - **Preservação da Governança Documental GSD:** Contratos de atualização de `STATE.md`, `ROADMAP.md` e geração de `*-SUMMARY.md` mantidos 100% íntegros através dos especialistas oficiais do GSD, com os agentes Cavecrew dedicados à agilidade e diffs cirúrgicos de código.
+  - **Bateria de Testes Expandida (107 testes com 100% de Sucesso):** Suítes `test-kit.sh` e `test-kit.ps1` expandidas para validar Zero-Baseline, retenção no pool, Sandbox Shield anti-contaminação e guardrails avançados.
+
 ## [2.0.0] - 2026-10-23
 - **Integração Nativa Ponytail (Senior Dev Mode & YAGNI Estrito):**
   - **Motor Codebase Map (`lib/codebase-map.cjs`):** Varredura regex de alta performance em Node.js puro cobrindo mais de 20 stacks (TypeScript, JavaScript, Go, Python, Rust, Java, C#, PHP, Ruby, etc.) gerando mapa condensado de símbolos exportados respeitando orçamento rígido de 2.000 caracteres (~450 tokens).

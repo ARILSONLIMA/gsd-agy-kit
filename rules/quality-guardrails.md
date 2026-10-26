@@ -64,10 +64,43 @@ description: Guardrails universais de qualidade, performance de banco (zero N+1)
 - Use exclusivamente bind parameters (`?` no SQLite/MySQL ou `$1` no PostgreSQL).
 - O **Security Stop Gate** do Kit interceptará e bloqueará a conclusão da sessão caso detecte qualquer concatenação de strings em SQL.
 
-## 8.1. Limites de Complexidade Ciclomática e Métodos Monolíticos
-- **Métodos Longos:** Funções com mais de **50 linhas de código** são consideradas *code smells*. Decomponha em funções auxiliares puras.
-- **Aninhamento Profundo:** Mantenha a profundidade de aninhamento abaixo de **4 níveis**. Use *guard clauses* (retorno antecipado) para achatar a estrutura do código.
-- **Complexidade Ciclomática:** Mantenha a complexidade de cada função abaixo de **15** (contagem de ramificações `if`, `for`, `case`, `&&`, `||`). Extraia sub-rotinas de decisão.
+## 8.1. Limites de Complexidade Ciclomática e Clean Code (Anti-Code Smells)
+- **Teto Estrito de Aninhamento (Máximo 3 Níveis):** Mantenha a profundidade máxima de aninhamento estritamente em **3 níveis** (o avaliador estático penaliza com nota zero funções com profundidade $\ge 4$).
+  - **Uso Obrigatório de Guard Clauses (Early Return):** Em vez de aninhar múltiplos blocos `if` dentro de loops ou try-catch, reverta a condição com `if (!cond) return;` ou `if (!cond) continue;` para achatar a estrutura.
+  - **Exemplo de Refatoração:**
+    ```javascript
+    // ❌ ERRADO (Nesting depth 4 - Dispara Code Smell):
+    for (const item of batch) {
+      if (item.valid) {
+        if (item.speed > 0) {
+          if (item.fuel < 10) { ... }
+        }
+      }
+    }
+    // ✅ CORRETO (Nesting depth <= 2 com Early Return):
+    for (const item of batch) {
+      if (!item.valid || item.speed <= 0 || item.fuel >= 10) continue;
+      // processa diretamente sem aninhamento
+    }
+    ```
+- **Teto de Linhas por Método (Máximo 40 Linhas Úteis):** Funções com mais de **50 linhas de código** disparam penalidade como *long method*. Mantenha funções abaixo de **40 linhas úteis**, decompondo validações, cálculos de métricas e persistência em funções auxiliares puras e isoladas.
+- **Complexidade Ciclomática (Máximo 12 Pontos):** Mantenha o total de ramificações (`if`, `for`, `while`, `case`, `catch`, `&&`, `||`, `?`) abaixo de **12** (o threshold estático reprova em 15). Extraia matrizes de lookup em objetos/Maps em vez de longas cadeias condicionais.
+
+## 8.2. Blindagem Aritmética, Divisão por Zero e Marcha Lenta (Zero NaN/Infinity)
+- **Proteção Obrigatória de Divisores:**
+  - Em qualquer cálculo de taxa, proporção, média ou eficiência (ex: `km/l`, `l/100km`, consumo horário, SLA):
+  - **SEMPRE** proteja o denominador contra zero ou valor nulo:
+    ```javascript
+    const kmPerLiter = (fuelConsumed > 0 && totalDistance > 0) 
+      ? Number((totalDistance / fuelConsumed).toFixed(2)) 
+      : 0.0;
+    ```
+- **Veículo Parado e Marcha Lenta (Idle Fuel):**
+  - Quando um veículo permanece parado (`totalDistance === 0` ou velocidade zero) com consumo de combustível registrado (`fuelConsumed > 0` em marcha lenta):
+    - O campo de eficiência `km_per_liter` **DEVE** retornar estritamente `0.0` (número float, nunca `NaN`, `null` ou `Infinity`).
+    - Registre o combustível consumido no campo dedicado de marcha lenta (`idle_fuel_liters`).
+- **Períodos Sem Telemetria ou Movimentação:**
+  - Consultas com período vazio ou sem dados devem retornar contratos consistentes com valores zerados (`total_distance_km: 0.0`, `fuel_consumed_liters: 0.0`, `km_per_liter: 0.0`), jamais propriedades omitidas, `undefined` ou `NaN`.
 
 ## 9. Máquinas de Estado e Ciclo de Vida (Auditoria Inicial)
 - Ao calcular tempos de SLA ou pausas baseadas em log de eventos (`ticket_history`), verifique se o registro já nasceu no estado de pausa.

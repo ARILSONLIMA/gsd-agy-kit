@@ -236,6 +236,22 @@ rm -f "${DUMMY_CODE_TARGET}" 2>/dev/null || true
 assert_test "Hook PreToolUse bloqueia sobrescrita integral via write_file em arquivo existente" \
 "$([ "$RESP_WRITE_FILE" = '"decision":"deny"' ] && echo 1 || echo 0)"
 
+# 4.2 Sandbox Shield - Bloqueio de orquestração externa e holdout
+PAYLOAD_SCENARIO='{"toolCall":{"name":"view_file","args":{"Path":"scenario.json"}}}'
+RESP_SCENARIO=$(printf '%s' "$PAYLOAD_SCENARIO" | node "$HOOK_PATH" 2>/dev/null | grep -o '"decision":"[^"]*"' || echo "")
+assert_test "Hook PreToolUse bloqueia leitura de scenario.json (Sandbox Shield)" \
+"$([ "$RESP_SCENARIO" = '"decision":"deny"' ] && echo 1 || echo 0)"
+
+PAYLOAD_HOLDOUT='{"toolCall":{"name":"read_file","args":{"Path":"~/.gsd-bench-holdout/suite.test.js"}}}'
+RESP_HOLDOUT=$(printf '%s' "$PAYLOAD_HOLDOUT" | node "$HOOK_PATH" 2>/dev/null | grep -o '"decision":"[^"]*"' || echo "")
+assert_test "Hook PreToolUse bloqueia leitura de suítes holdout externas (Sandbox Shield)" \
+"$([ "$RESP_HOLDOUT" = '"decision":"deny"' ] && echo 1 || echo 0)"
+
+PAYLOAD_CMD_HOLDOUT='{"toolCall":{"name":"run_command","args":{"CommandLine":"ls -la ~/.gsd-bench-holdout"}}}'
+RESP_CMD_HOLDOUT=$(printf '%s' "$PAYLOAD_CMD_HOLDOUT" | node "$HOOK_PATH" 2>/dev/null | grep -o '"decision":"[^"]*"' || echo "")
+assert_test "Hook PreToolUse bloqueia comandos shell direcionados a holdout (Sandbox Shield)" \
+"$([ "$RESP_CMD_HOLDOUT" = '"decision":"deny"' ] && echo 1 || echo 0)"
+
 # 5. PreInvocation Hook
 PRE_INVOC_PATH="${TARGET_DIR}/.agents/hooks/token-guard-preinvocation.cjs"
 RESP_PRE_INVOC=$(node "$PRE_INVOC_PATH" 2>/dev/null || echo "")
@@ -273,10 +289,24 @@ assert_test "Dynamic Agent Pool (.agents/agents-pool/) contem todos os agentes p
 
 ACTIVE_COUNT=$(find "${AGENTS_DIR}" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l || echo 0)
 ACTIVE_OK=0
-if [ "$ACTIVE_COUNT" -le 10 ]; then
+if [ "$ACTIVE_COUNT" -eq 0 ]; then
 ACTIVE_OK=1
 fi
-assert_test "Catalogo ativo (.agents/agents/) enxuto e consciente de fase (${ACTIVE_COUNT} agentes ativos)" "$ACTIVE_OK"
+assert_test "Catalogo ativo (.agents/agents/) em Zero-Baseline (0 agentes ativos por padrao)" "$ACTIVE_OK"
+
+SKILLS_ACTIVE_DIR="${TARGET_DIR}/.agents/skills"
+SKILLS_ACTIVE_COUNT=$(find "${SKILLS_ACTIVE_DIR}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l || echo 0)
+SKILLS_ZERO_OK=0
+if [ "$SKILLS_ACTIVE_COUNT" -eq 0 ]; then
+SKILLS_ZERO_OK=1
+fi
+assert_test "Catalogo de Skills (.agents/skills/) em Zero-Baseline (0 skills ativas por padrao)" "$SKILLS_ZERO_OK"
+
+CATALOG_OK=0
+if grep -q "Catálogo Sintético de Subagentes & Skills" "${TARGET_DIR}/.agents/rules/token-protocol.md" 2>/dev/null; then
+CATALOG_OK=1
+fi
+assert_test "Catálogo Sintético presente nas regras (.agents/rules/token-protocol.md)" "$CATALOG_OK"
 
 # 7. JIT Auto-Promoter do Hook
 TEMP_AGENT="gsd-ui-auditor"
@@ -286,9 +316,17 @@ printf '%s' "$PAYLOAD_JIT" | node "$HOOK_PATH" >/dev/null 2>&1 || true
 JIT_OK=0
 if [ -f "${AGENTS_DIR}/${TEMP_AGENT}.md" ]; then
 JIT_OK=1
-rm -f "${AGENTS_DIR}/${TEMP_AGENT}.md"
 fi
 assert_test "Hook PreToolUse promove instantaneamente (JIT) subagente do pool sob demanda" "$JIT_OK"
+
+# 7.1: Validar TTL = 1: PreInvocation recolhe o subagente no turno subsequente
+PRE_INVOC_PATH="${TARGET_DIR}/.agents/hooks/token-guard-preinvocation.cjs"
+node "$PRE_INVOC_PATH" >/dev/null 2>&1 || true
+TTL_OK=0
+if [ ! -f "${AGENTS_DIR}/${TEMP_AGENT}.md" ]; then
+TTL_OK=1
+fi
+assert_test "Hook PreInvocation recolhe subagente promovido apos 1 turno (TTL=1 cirurgico)" "$TTL_OK"
 
 TEMP_DIRECT_AGENT="gsd-code-fixer"
 rm -f "${AGENTS_DIR}/${TEMP_DIRECT_AGENT}.md"
@@ -762,6 +800,14 @@ break
 fi
 done
 assert_test "Regras canonicas em rules/ (${#RULES_FILES[@]} regras) presentes e validas" "$RULES_ALL_OK"
+
+GUARDRAILS_FILE="${RESOLVED_RULES_DIR}/quality-guardrails.md"
+[ ! -f "$GUARDRAILS_FILE" ] && GUARDRAILS_FILE="${TARGET_DIR}/.agents/rules/quality-guardrails.md"
+GUARDRAILS_ADVANCED_OK=0
+if grep -q "Teto Estrito de Aninhamento" "$GUARDRAILS_FILE" 2>/dev/null && grep -q "Blindagem Aritmética" "$GUARDRAILS_FILE" 2>/dev/null; then
+  GUARDRAILS_ADVANCED_OK=1
+fi
+assert_test "Regras de qualidade contêm guardrails de aninhamento <= 3 e blindagem aritmética" "$GUARDRAILS_ADVANCED_OK"
 
 CANONICAL_SKILLS=("gsd-tokens" "gsd-test" "gsd-agy-update")
 SKILL_OK=1
