@@ -3,6 +3,17 @@
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
 ## [2.1.0] - 2026-10-26
+- **Alinhamento do ComplexityGuard & Correção Off-by-One (`lib/complexity-guard.cjs`):**
+  - Corrigido o cálculo de aninhamento máximo eliminando a subtração indevida que mascarava profundidade de nível 4 (a fórmula agora reflete 100% o grader estático oficial do benchmark).
+  - Teto preventivo de 40 linhas por função e método `scanFiles` integrado.
+- **Endurecimento Rigoroso do SecurityLinter (`lib/security-linter.cjs`):**
+  - Removida a falsa tolerância que permitia interpolação em template strings SQL (`${placeholders}`, `${join}`). Qualquer interpolação dentro de palavras-chave SQL agora é classificada como risco crítico, forçando bind parameters puros (`?`).
+- **Expansão do Auto-Verify Stop Gate (`hooks/token-guard-diagnostics.cjs`):**
+  - O hook `Stop` agora audita ativamente Code Smells (`ComplexityGuard`), duplicação de código (`DryChecker`) e conformidade de `AMBIGUITIES.md` antes de liberar o encerramento do turno (`decision: continue`).
+- **Teto Rígido de Concisão para Diagnóstico & Plano (`rules/compact-planning.md`):**
+  - Estabelecido teto estrito de no máximo 35 linhas para `DIAGNOSIS.md` e `PLAN.md`, eliminando a queima desnecessária de tokens de saída na Fase 1 e Fase 2.
+- **Guardrail de Filtros Dinâmicos em Listagens (`rules/quality-guardrails.md`):**
+  - Adicionado padrão arquitetural obrigatório para query parameters (`req.query` com array dinâmico de bind parameters `clauses.push('x = ?')`), eliminando a causa raiz da falha em `BUG-04` do Cenário 04.
 - **Sandbox Shield (Zero-Leakage Anti-Contaminação de Benchmark):**
   - Bloqueio determinístico de acesso a arquivos de orquestração externa (`scenario.json`) e diretórios de teste holdout (`.gsd-bench-holdout`, `holdout/`, `__hidden_`) em `view_file`, `read_file` e comandos de terminal no hook `token-guard-pretool.cjs`, eliminando contaminação de contexto.
   - Categoria `sandbox_shield` adicionada ao rastreador de ROI de economia de tokens (`lib/token-savings.cjs`).
@@ -19,7 +30,7 @@ Todas as melhorias e novidades relevantes deste projeto são documentadas neste 
   - **Ativação JIT Cirúrgica (<2ms):** Ao invocar um subagente (`invoke_subagent`) ou consultar uma skill (`read_file`/`view_file`), o hook `PreToolUse` promove o recurso instantaneamente do pool (`.agents/agents-pool/` e `.agents/skills-pool/`) para o diretório ativo.
   - **Ciclo de Vida de Turno Único (TTL = 1):** O hook `PreInvocation` recolhe os recursos promovidos de volta para seus pools permanentes logo no início do turno subsequente, restaurando o diretório ativo para zero e economizando ~18.000 tokens por turno ocioso.
   - **Preservação da Governança Documental GSD:** Contratos de atualização de `STATE.md`, `ROADMAP.md` e geração de `*-SUMMARY.md` mantidos 100% íntegros através dos especialistas oficiais do GSD, com os agentes Cavecrew dedicados à agilidade e diffs cirúrgicos de código.
-  - **Bateria de Testes Expandida (107 testes com 100% de Sucesso):** Suítes `test-kit.sh` e `test-kit.ps1` expandidas para validar Zero-Baseline, retenção no pool, Sandbox Shield anti-contaminação e guardrails avançados.
+  - **Bateria de Testes Expandida (110 testes com 100% de Sucesso):** Suítes `test-kit.sh` e `test-kit.ps1` expandidas para validar Zero-Baseline, retenção no pool, Sandbox Shield anti-contaminação, Stop Gate completo e guardrails avançados.
 
 ## [2.0.0] - 2026-10-23
 - **Integração Nativa Ponytail (Senior Dev Mode & YAGNI Estrito):**

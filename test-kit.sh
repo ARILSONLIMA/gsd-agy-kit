@@ -809,6 +809,44 @@ if grep -q "Teto Estrito de Aninhamento" "$GUARDRAILS_FILE" 2>/dev/null && grep 
 fi
 assert_test "Regras de qualidade contêm guardrails de aninhamento <= 3 e blindagem aritmética" "$GUARDRAILS_ADVANCED_OK"
 
+PLANNING_RULE_FILE="${RESOLVED_RULES_DIR}/compact-planning.md"
+[ ! -f "$PLANNING_RULE_FILE" ] && PLANNING_RULE_FILE="${TARGET_DIR}/.agents/rules/compact-planning.md"
+PLANNING_RULE_OK=0
+if grep -q "Teto Rígido de Linhas: Máximo 35 Linhas" "$PLANNING_RULE_FILE" 2>/dev/null; then
+  PLANNING_RULE_OK=1
+fi
+assert_test "Diretrizes de planejamento contêm teto rígido de 35 linhas para DIAGNOSIS e PLAN" "$PLANNING_RULE_OK"
+
+COMPLEXITY_GUARD_TEST_PATH="${KIT_DIR}/lib/complexity-guard.cjs"
+[ ! -f "$COMPLEXITY_GUARD_TEST_PATH" ] && COMPLEXITY_GUARD_TEST_PATH="${SCRIPT_DIR}/lib/complexity-guard.cjs"
+COMPLEXITY_TEST_OK=0
+if node -e '
+  const CG = require(process.argv[1]);
+  const cg = new CG();
+  const code = "function test() { if (1) { for (let i=0; i<2; i++) { if (2) { console.log(1); } } } }";
+  const fns = cg.extractFunctions(code);
+  const fn = fns[0];
+  if (fn && fn.maxNesting >= 4) process.exit(0);
+  process.exit(1);
+' "$COMPLEXITY_GUARD_TEST_PATH" 2>/dev/null; then
+  COMPLEXITY_TEST_OK=1
+fi
+assert_test "ComplexityGuard detecta aninhamento profundo nivel >= 4 sem off-by-one" "$COMPLEXITY_TEST_OK"
+
+SECURITY_LINTER_TEST_PATH="${KIT_DIR}/lib/security-linter.cjs"
+[ ! -f "$SECURITY_LINTER_TEST_PATH" ] && SECURITY_LINTER_TEST_PATH="${SCRIPT_DIR}/lib/security-linter.cjs"
+SECURITY_LINTER_OK=0
+if node -e '
+  const SL = require(process.argv[1]);
+  const sl = new SL();
+  const issues = sl.scanSource("const q = `SELECT * FROM x WHERE id IN (${placeholders})`;");
+  if (issues.length > 0 && issues[0].type === "sql_template_interpolation") process.exit(0);
+  process.exit(1);
+' "$SECURITY_LINTER_TEST_PATH" 2>/dev/null; then
+  SECURITY_LINTER_OK=1
+fi
+assert_test "SecurityLinter intercepta qualquer interpolacao template em SQL sem excecao indevida" "$SECURITY_LINTER_OK"
+
 CANONICAL_SKILLS=("gsd-tokens" "gsd-test" "gsd-agy-update")
 SKILL_OK=1
 for sk in "${CANONICAL_SKILLS[@]}"; do

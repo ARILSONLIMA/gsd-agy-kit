@@ -977,6 +977,52 @@ Assert-Test -Name "Regras de qualidade contêm guardrails de aninhamento <= 3 e 
             -Condition $guardrailOk `
             -ErrorDetails "quality-guardrails.md sem diretivas de aninhamento ou blindagem aritmética"
 
+$planningRulePath = Join-Path $rulesDir "compact-planning.md"
+if (-not (Test-Path $planningRulePath)) {
+    $planningRulePath = Join-Path $TargetDir ".agents\rules\compact-planning.md"
+}
+$planningContent = if (Test-Path $planningRulePath) { Get-Content $planningRulePath -Raw } else { "" }
+$planningOk = $planningContent -match "Teto Rígido de Linhas: Máximo 35 Linhas"
+Assert-Test -Name "Diretrizes de planejamento contêm teto rígido de 35 linhas para DIAGNOSIS e PLAN" `
+            -Condition $planningOk `
+            -ErrorDetails "compact-planning.md sem teto rígido de 35 linhas"
+
+$compGuardTestPath = Join-Path $kitDir "lib\complexity-guard.cjs"
+if (-not (Test-Path $compGuardTestPath)) { $compGuardTestPath = Join-Path $PSScriptRoot "lib\complexity-guard.cjs" }
+$compTestScript = @"
+const CG = require(process.argv[1]);
+const cg = new CG();
+const code = "function test() { if (1) { for (let i=0; i<2; i++) { if (2) { console.log(1); } } } }";
+const fns = cg.extractFunctions(code);
+const fn = fns[0];
+if (fn && fn.maxNesting >= 4) process.exit(0);
+process.exit(1);
+"@
+$compExitCode = try {
+    $p = Start-Process node -ArgumentList @("-e", $compTestScript, $compGuardTestPath) -Wait -PassThru -NoNewWindow
+    $p.ExitCode
+} catch { 1 }
+Assert-Test -Name "ComplexityGuard detecta aninhamento profundo nivel >= 4 sem off-by-one" `
+            -Condition ($compExitCode -eq 0) `
+            -ErrorDetails "ComplexityGuard falhou em flaggar aninhamento nivel 4"
+
+$secLinterTestPath = Join-Path $kitDir "lib\security-linter.cjs"
+if (-not (Test-Path $secLinterTestPath)) { $secLinterTestPath = Join-Path $PSScriptRoot "lib\security-linter.cjs" }
+$secTestScript = @"
+const SL = require(process.argv[1]);
+const sl = new SL();
+const issues = sl.scanSource("const q = \`SELECT * FROM x WHERE id IN (\${placeholders})\`;");
+if (issues.length > 0 && issues[0].type === "sql_template_interpolation") process.exit(0);
+process.exit(1);
+"@
+$secExitCode = try {
+    $p = Start-Process node -ArgumentList @("-e", $secTestScript, $secLinterTestPath) -Wait -PassThru -NoNewWindow
+    $p.ExitCode
+} catch { 1 }
+Assert-Test -Name "SecurityLinter intercepta qualquer interpolacao template em SQL sem excecao indevida" `
+            -Condition ($secExitCode -eq 0) `
+            -ErrorDetails "SecurityLinter permitiu interpolacao em template string SQL"
+
 $canonicalSkills = @("gsd-tokens", "gsd-test", "gsd-agy-update")
 $skillOk = $true
 foreach ($sk in $canonicalSkills) {

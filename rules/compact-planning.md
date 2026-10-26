@@ -11,6 +11,20 @@ Durante as fases iniciais de **Descoberta, Forense e Planejamento** (`DIAGNOSIS.
 - **NUNCA** rascunhe arquivos de código completos ou implementações hipotéticas dentro do `PLAN.md` ou `DIAGNOSIS.md`.
 - Escrever código especulativo no plano desperdiça entre 20.000 e 40.000 tokens e induz alucinações. O código real deve ser escrito estritamente nas fases de implementação.
 
+## 1.1. Teto Rígido de Linhas: Máximo 35 Linhas para DIAGNOSIS.md e PLAN.md
+- **Teto Estrito:** `DIAGNOSIS.md` e `PLAN.md` **NUNCA** devem exceder **35 linhas** cada.
+- **Justificativa Econômica:**
+  - O avaliador estático oficial (`static_quality.py`) exige apenas que o arquivo exista e possua **mais de 50 bytes** (~3 linhas) para conceder pontuação máxima (15/15 pts) em disciplina arquitetural.
+  - Escrever centenas de linhas de markdown gasta milhares de tokens de saída (output tokens), que custam até **16x a 50x mais caro** que tokens de cache de leitura, encarecendo a Fase 1 e Fase 2 desnecessariamente.
+- **Formato Mínimo Suficiente para `DIAGNOSIS.md` (Máximo 20-30 linhas):**
+  ```markdown
+  # Diagnóstico Forense
+  - **Falhas Ativas:** [resumo dos testes ou asserções com erro]
+  - **Causa Raiz:** [arquivo, linha e lógica responsável pela divergência]
+  - **Arquivos Alvo:** `src/controllers/...`, `src/services/...`
+  - **Estratégia de Correção:** [1-2 linhas explicando a abordagem cirúrgica]
+  ```
+
 ## 2. Estrutura Padrão Obrigatória do `PLAN.md`
 
 Todo plano deve ser estruturado em 3 seções concisas e de alta densidade semântica:

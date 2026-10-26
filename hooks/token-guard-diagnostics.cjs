@@ -470,9 +470,63 @@ function checkAutoVerifyStopGate(terminationReason) {
             }
           } catch {}
         }
+
+        // 2.3 Verificação de Code Smells e Complexidade Ciclomática
+        const compMod = findLibModule('complexity-guard.cjs');
+        if (compMod) {
+          try {
+            const ComplexityGuard = require(compMod);
+            const guard = new ComplexityGuard({ maxLines: 40, maxNesting: 3, maxComplexity: 15 });
+            const smells = guard.scanFiles(recentFiles.map(r => r.file));
+            const criticalSmells = smells.filter(s => s.type === 'deep_nesting' || s.type === 'long_method');
+            if (criticalSmells.length > 0) {
+              const first = criticalSmells[0];
+              writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+              return (
+                `🛑 [CODE QUALITY GATE] Parada prematura interceptada: CODE SMELL detectado em ${path.basename(first.file)}:${first.line} (${first.function})!\n` +
+                `Tipo: ${first.type} - ${first.message}\n` +
+                `Refatore a função usando guard clauses (early return) para desaninhar e modularizar antes de concluir.`
+              );
+            }
+          } catch {}
+        }
+
+        // 2.4 Verificação de Duplicação de Código (DRY Checker)
+        const dryMod = findLibModule('dry-checker.cjs');
+        if (dryMod && recentFiles.length >= 2) {
+          try {
+            const DryChecker = require(dryMod);
+            const checker = new DryChecker(6);
+            const dups = checker.checkFiles(recentFiles.map(r => r.file));
+            if (dups.length >= 2) {
+              const first = dups[0];
+              writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+              return (
+                `🛑 [DRY QUALITY GATE] Parada prematura interceptada: ${dups.length} blocos de CÓDIGO DUPLICADO (>= 6 linhas) detectados entre os arquivos tocados!\n` +
+                `Locais: ${first.locations.map(l => path.basename(l.file) + ':' + l.line).join(' <-> ')}\n` +
+                `Trecho: ${first.snippet}\n` +
+                `Extraia a lógica repetida para uma função utilitária/helper compartilhado para evitar perda de pontos por duplicação.`
+              );
+            }
+          } catch {}
+        }
       }
       try { fs.unlinkSync(MODIFIED_FILES_PATH); } catch {}
     } catch {}
+  }
+
+  // 3. Verificação de Documentação de Ambiguidades (AMBIGUITIES.md) em tarefas com especificações
+  const hasTaskOrCr = fs.existsSync(path.join(PROJECT_ROOT, 'TASK.md')) || fs.existsSync(path.join(PROJECT_ROOT, 'CHANGE_REQUEST.md'));
+  if (hasTaskOrCr) {
+    const ambFile = path.join(PROJECT_ROOT, 'AMBIGUITIES.md');
+    const hasAmb = fs.existsSync(ambFile) && fs.statSync(ambFile).size >= 100;
+    if (!hasAmb) {
+      writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+      return (
+        '🛑 [AMBIGUITY GATE] Parada prematura interceptada: O arquivo AMBIGUITIES.md não foi documentado ou está vazio!\n' +
+        'O protocolo do projeto exige documentar as ambiguidades de requisitos (fusos UTC, marcha lenta, perda de GPS, filtros de ruído) e as decisões de engenharia adotadas antes de concluir a tarefa.'
+      );
+    }
   }
 
   return null;

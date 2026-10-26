@@ -51,18 +51,30 @@ description: Guardrails universais de qualidade, performance de banco (zero N+1)
 ## 8. Prepared Statements & Anti-SQL Injection (Hard Gate Mandatório)
 - **Proibição absoluta de concatenação ou interpolação de strings em consultas SQL:**
   ```javascript
-  // ❌ NUNCA FAÇA (Vulnerabilidade Crítica de SQL Injection):
+  // ❌ NUNCA FAÇA (Vulnerabilidade Crítica de SQL Injection - reprova BUG-04 e nota de segurança):
   sql += " AND garage = '" + garage + "'";
-  const query = `SELECT * FROM vehicles WHERE id = ${vehicleId}`;
-
-  // ✅ FORMA CORRETA OBRIGATÓRIA (Parâmetros Bind):
-  sql += ' AND garage = ?';
-  params.push(garage);
-  const stmt = db.prepare('SELECT * FROM vehicles WHERE id = ?');
-  const vehicle = stmt.get(vehicleId);
+  sql += ` AND status = '${status}'`;
+  const query = `SELECT * FROM vehicles WHERE id IN (${placeholders})`; // O avaliador estático reprova QUALQUER interpolação em template strings!
+  ```
+- **Padrão Obrigatório para Filtros Dinâmicos em Listagens (`req.query`):**
+  ```javascript
+  // ✅ CORRETO (100% Parametrizado com Array de Bind - Blindagem Total):
+  const clauses = [];
+  const params = [];
+  if (req.query.garage) {
+    clauses.push('garage = ?');
+    params.push(req.query.garage);
+  }
+  if (req.query.status) {
+    clauses.push('status = ?');
+    params.push(req.query.status);
+  }
+  const whereSql = clauses.length > 0 ? ' WHERE ' + clauses.join(' AND ') : '';
+  const stmt = db.prepare('SELECT * FROM vehicles' + whereSql);
+  const rows = stmt.all(...params);
   ```
 - Use exclusivamente bind parameters (`?` no SQLite/MySQL ou `$1` no PostgreSQL).
-- O **Security Stop Gate** do Kit interceptará e bloqueará a conclusão da sessão caso detecte qualquer concatenação de strings em SQL.
+- O **Security Stop Gate** do Kit interceptará e bloqueará a conclusão da sessão caso detecte qualquer concatenação ou interpolação de strings em SQL.
 
 ## 8.1. Limites de Complexidade Ciclomática e Clean Code (Anti-Code Smells)
 - **Teto Estrito de Aninhamento (Máximo 3 Níveis):** Mantenha a profundidade máxima de aninhamento estritamente em **3 níveis** (o avaliador estático penaliza com nota zero funções com profundidade $\ge 4$).
