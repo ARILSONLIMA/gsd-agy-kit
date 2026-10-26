@@ -167,9 +167,9 @@ function getWorkspaceStatus(targetDir) {
 function getKitVersion() {
   try {
     const pkgData = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-    return pkgData.version || '2.0.0';
+    return pkgData.version || '2.2.0';
   } catch (_) {
-    return '2.0.0';
+    return '2.2.0';
   }
 }
 

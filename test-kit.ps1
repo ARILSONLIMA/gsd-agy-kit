@@ -1006,6 +1006,41 @@ Assert-Test -Name "ComplexityGuard detecta aninhamento profundo nivel >= 4 sem o
             -Condition ($compExitCode -eq 0) `
             -ErrorDetails "ComplexityGuard falhou em flaggar aninhamento nivel 4"
 
+$compHighScript = @"
+const CG = require(process.argv[1]);
+const cg = new CG({ maxComplexity: 12 });
+const code = 'app.get("/test", async (req, res) => { if(1){}if(2){}if(3){}if(4){}if(5){}if(6){}if(7){}if(8){}if(9){}if(10){}if(11){}if(12){}if(13){} });';
+const fns = cg.extractFunctions(code);
+const fn = fns[0];
+if (fn) {
+    const kw = (fn.body.match(/\b(if|for|while|case|catch)\b/g) || []).length;
+    if (kw > 12) process.exit(0);
+}
+process.exit(1);
+"@
+$compHighExitCode = try {
+    $p = Start-Process node -ArgumentList @("-e", $compHighScript, $compGuardTestPath) -Wait -PassThru -NoNewWindow
+    $p.ExitCode
+} catch { 1 }
+Assert-Test -Name "ComplexityGuard detecta rotas anonimas e alta complexidade ciclomática > 12" `
+            -Condition ($compHighExitCode -eq 0) `
+            -ErrorDetails "ComplexityGuard falhou em flaggar rotas anonimas ou complexidade ciclomática"
+
+$tokenProtoPath = Join-Path $rulesDir "token-protocol.md"
+if (-not (Test-Path $tokenProtoPath)) {
+    $tokenProtoPath = Join-Path $TargetDir ".agents\rules\token-protocol.md"
+}
+$tokenProtoContent = if (Test-Path $tokenProtoPath) { Get-Content $tokenProtoPath -Raw } else { "" }
+$ambUniversalOk = ($tokenProtoContent -match "Os 4 Vetores Universais de Incerteza de Software") -and ($tokenProtoContent -match "Formato Obrigatório em Bloco Atômico")
+Assert-Test -Name "Protocolo de ambiguidades contém os 4 vetores universais e formato de bloco atômico" `
+            -Condition $ambUniversalOk `
+            -ErrorDetails "token-protocol.md sem os 4 vetores universais ou formato de bloco atômico"
+
+$guardrailWebOk = ($guardrailContent -match "Achatamento de Middlewares Web") -and ($guardrailContent -match "Anti-Magic Sampling Caps")
+Assert-Test -Name "Regras de qualidade contêm achatamento de middlewares web e anti-magic sampling caps" `
+            -Condition $guardrailWebOk `
+            -ErrorDetails "quality-guardrails.md sem diretivas de achatamento web ou anti-magic sampling caps"
+
 $secLinterTestPath = Join-Path $kitDir "lib\security-linter.cjs"
 if (-not (Test-Path $secLinterTestPath)) { $secLinterTestPath = Join-Path $PSScriptRoot "lib\security-linter.cjs" }
 $secTestScript = @"

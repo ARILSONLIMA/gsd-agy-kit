@@ -2,6 +2,26 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.2.0] - 2026-10-26
+- **Stop Gate Abrangente & Bloqueio de Alta Complexidade Ciclomática (`hooks/token-guard-diagnostics.cjs`):**
+  - O hook `Stop` agora audita e bloqueia paradas prematuras em funções com `high_complexity` > 12 (além de `deep_nesting` e `long_method`), prevenindo perdas de pontuação estática no benchmark.
+  - Fallback automático via `git status --porcelain` para garantir que qualquer arquivo `.js`/`.ts`/`.go`/`.py` modificado via bash, scripts ou subagentes passe pela auditoria antes do encerramento da sessão.
+- **ComplexityGuard Aprimorado para Callbacks e Rotas Web (`lib/complexity-guard.cjs`):**
+  - Teto preventivo de complexidade ajustado para 12 (com threshold estático de reprovação em 15).
+  - Parser regex expandido para extrair arrow callbacks inline em middlewares e rotas (`app.get('/...', async (req, res) => { ... })`) e funções anônimas.
+- **Guardrails Universais de Clean Code Web & Achatamento de Middlewares (`rules/quality-guardrails.md`):**
+  - Nova diretriz contra aninhamento acidental em frameworks web: proíbe callbacks aninhados com literais de objeto em respostas HTTP (`res.json({ error: ... })`), exigindo declaração de payloads em variáveis isoladas ou uso de early returns para manter aninhamento <= 3.
+  - Obrigação de refatoração cirúrgica em funções preexistentes tocadas para eliminar smells herdados da base original.
+- **Princípios Universais para Séries Temporais & Invariância de Repouso (`rules/quality-guardrails.md`):**
+  - *Anti-Magic Sampling Caps:* Proibição de descartes de amostras baseados em constantes mágicas (`dt <= 10`); agregação baseada no delta real de tempo entre eventos consecutivos.
+  - *Invariância de Estados de Repouso:* Se houver consumo de recursos sem produção útil, retorno obrigatório de `0.0` limpo para métricas de eficiência (nunca `NaN`/`Infinity`/`null`) e acúmulo no contador de tempo de repouso/espera.
+  - *Contratos Consistentes em Janelas Vazias:* Retorno garantido de campos agregados zerados explicitamente tipados (`0.0`).
+- **Protocolo de Ambiguidades em Bloco Atômico & 4 Vetores Universais (`rules/token-protocol.md`):**
+  - Estruturação mandatória de `AMBIGUITIES.md` em parágrafo único autossuficiente por ambiguidade (reunindo contexto, conflito e decisão no mesmo bloco), garantindo 100% de matching em parsers e linters automatizados.
+  - Alinhamento sobre os 4 Vetores Universais de Incerteza de Software: Temporal/Timezone, Borda/Divisões, Intermitência de Dados e Contratos de Payload.
+- **Bateria de Testes Expandida (113 testes com 100% de Sucesso):**
+  - Suítes `test-kit.sh` e `test-kit.ps1` expandidas com novas asserções cobrindo bloqueio de complexidade > 12, rotas anônimas, 4 vetores universais e regras web.
+
 ## [2.1.0] - 2026-10-26
 - **Alinhamento do ComplexityGuard & Correção Off-by-One (`lib/complexity-guard.cjs`):**
   - Corrigido o cálculo de aninhamento máximo eliminando a subtração indevida que mascarava profundidade de nível 4 (a fórmula agora reflete 100% o grader estático oficial do benchmark).

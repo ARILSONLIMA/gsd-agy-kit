@@ -833,6 +833,37 @@ if node -e '
 fi
 assert_test "ComplexityGuard detecta aninhamento profundo nivel >= 4 sem off-by-one" "$COMPLEXITY_TEST_OK"
 
+COMPLEXITY_HIGH_OK=0
+if node -e '
+  const CG = require(process.argv[1]);
+  const cg = new CG({ maxComplexity: 12 });
+  const code = "app.get(\"/test\", async (req, res) => { if(1){}if(2){}if(3){}if(4){}if(5){}if(6){}if(7){}if(8){}if(9){}if(10){}if(11){}if(12){}if(13){} });";
+  const fns = cg.extractFunctions(code);
+  const fn = fns[0];
+  if (fn) {
+    const kw = (fn.body.match(/\b(if|for|while|case|catch)\b/g) || []).length;
+    if (kw > 12) process.exit(0);
+  }
+  process.exit(1);
+' "$COMPLEXITY_GUARD_TEST_PATH" 2>/dev/null; then
+  COMPLEXITY_HIGH_OK=1
+fi
+assert_test "ComplexityGuard detecta rotas anonimas e alta complexidade ciclomática > 12" "$COMPLEXITY_HIGH_OK"
+
+AMBIGUITY_RULE_FILE="${RESOLVED_RULES_DIR}/token-protocol.md"
+[ ! -f "$AMBIGUITY_RULE_FILE" ] && AMBIGUITY_RULE_FILE="${TARGET_DIR}/.agents/rules/token-protocol.md"
+AMB_UNIVERSAL_OK=0
+if grep -q "Os 4 Vetores Universais de Incerteza de Software" "$AMBIGUITY_RULE_FILE" 2>/dev/null && grep -q "Formato Obrigatório em Bloco Atômico" "$AMBIGUITY_RULE_FILE" 2>/dev/null; then
+  AMB_UNIVERSAL_OK=1
+fi
+assert_test "Protocolo de ambiguidades contém os 4 vetores universais e formato de bloco atômico" "$AMB_UNIVERSAL_OK"
+
+GUARDRAILS_WEB_OK=0
+if grep -q "Achatamento de Middlewares Web" "$GUARDRAILS_FILE" 2>/dev/null && grep -q "Anti-Magic Sampling Caps" "$GUARDRAILS_FILE" 2>/dev/null; then
+  GUARDRAILS_WEB_OK=1
+fi
+assert_test "Regras de qualidade contêm achatamento de middlewares web e anti-magic sampling caps" "$GUARDRAILS_WEB_OK"
+
 SECURITY_LINTER_TEST_PATH="${KIT_DIR}/lib/security-linter.cjs"
 [ ! -f "$SECURITY_LINTER_TEST_PATH" ] && SECURITY_LINTER_TEST_PATH="${SCRIPT_DIR}/lib/security-linter.cjs"
 SECURITY_LINTER_OK=0

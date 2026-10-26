@@ -81,19 +81,18 @@ O ambiente opera em **Zero-Baseline** (0 subagentes e 0 skills ativos no prompt 
 - `gsd-tokens` | `gsd-test` | `gsd-agy-update`: Métricas de economia, execução de testes e updates.
 
 ## 9. Protocolo Obrigatório de Documentação de Ambiguidades (`AMBIGUITIES.md`)
-O agente deve auditar e registrar ambiguidades de especificação e regras de negócio no arquivo `AMBIGUITIES.md` durante a Fase 1 (Forensics), Fase 2 (Planning) e obrigatoriamente após receber Change Requests na Fase 5.
+O agente deve auditar e registrar ambiguidades de especificação e contratos técnicos no arquivo `AMBIGUITIES.md` durante a Fase 1 (Forensics), Fase 2 (Planning) e obrigatoriamente após receber Change Requests na Fase 5.
 
-### Formato Obrigatório por Ambiguidade:
+### Formato Obrigatório em Bloco Atômico (Parágrafo Único Autossuficiente):
+Para garantir máxima clareza, rastreabilidade e pontuação em avaliadores automatizados, **cada ambiguidade DEVE ser descrita em um parágrafo contínuo único e autossuficiente** sob o título, reunindo o conflito identificado, o impacto técnico e a premissa adotada:
+
 ```markdown
-### AMB-XX: [Título Descritivo da Ambiguidade]
-1. **Ambiguidade Identificada:** Descreva o conflito conceitual, termo vago ou omissão de contrato de dados entre documentação e requisitos.
-2. **Impacto no Sistema:** Detalhe o risco de divergência (ex: inconsistência de métricas analíticas, distorção temporal, exceções não tratadas).
-3. **Decisão de Engenharia Implementada:** Declare a premissa adotada no código-fonte para solucionar a indefinição de forma robusta e previsível.
+### AMB-01: [Contexto/Entidade] — [Conflito Técnico ou Omissão Identificada]
+Identificada indefinição em [módulo/fluxo] quanto a [descrever o conflito, termos vagos ou omissão de contrato]. Decisão de engenharia adotada: [declarar a premissa determinística implementada no código-fonte, cobrindo o tratamento de exceção, fallback ou política de normalização].
 ```
 
-### Checklist Essencial de Ambiguidades a Documentar:
-- **Fusos Horários e Carimbos Temporais:** Tratamento de horário local operacional (ex: São Paulo UTC-3) vs persistência UTC (ISO 8601 com sufixo `Z`).
-- **Estados Ociosos e Marcha Lenta:** Distância zero com motor ligado e consumo positivo: cálculo de eficiência km/l deve retornar 0.0 e classificar consumo em litros/hora ou marcha lenta.
-- **Falha de Sinal e Telemetria Parcial:** Perda de GPS com motor/ignição ativa: interpolação de pontos vs descarte de pacotes incompletos.
-- **Flutuações de Sensores (Janela Móvel):** Ruídos e oscilações em sensores de nível de tanque (boia) causados por rampas ou declives: tolerância percentual vs suavização por média/mediana móvel em janelas de tempo/amostras.
-- **Contratos de Payload REST:** Valores nulos vs ausentes em requisições parciais (PATCH/PUT).
+### Os 4 Vetores Universais de Incerteza de Software a Auditar:
+1. **Vetor Temporal e Fusos Horários:** Conflito entre fuso local operacional vs persistência canônica UTC (ISO 8601 com sufixo `Z`), normalização de datas para `new Date()` e agregações em janelas temporais móveis.
+2. **Vetor de Borda, Divisões e Estados Inativos:** Divisão por zero em indicadores de taxa/eficiência quando volume ou produção for nulo (retorno estrito de `0.0`), e contabilidade de consumo de recursos durante períodos ociosos, de espera ou repouso.
+3. **Vetor de Intermitência de Entrada e Sinais:** Falhas de comunicação, perda de sinal ou pacotes parciais (política de descarte vs interpolação), e suavização de ruídos em séries de dados (filtro por média ou mediana em janelas de tempo/amostras).
+4. **Vetor de Contratos de Payload e APIs:** Diferenciação de propriedades nulas, strings vazias e campos omitidos em requisições parciais (PATCH vs PUT) e valores padrão de retorno em consultas sem dados.

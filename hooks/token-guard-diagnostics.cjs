@@ -425,91 +425,123 @@ function checkAutoVerifyStopGate(terminationReason) {
   }
 
   // 2. Verificar diagnósticos sintáticos/LSP e Segurança nos arquivos de código editados na sessão
+  let recentFiles = [];
   if (fs.existsSync(MODIFIED_FILES_PATH)) {
     try {
       const modifiedList = JSON.parse(fs.readFileSync(MODIFIED_FILES_PATH, 'utf8')) || [];
-      const recentFiles = modifiedList
+      recentFiles = modifiedList
         .filter(item => item && item.file && (now - Number(item.timestamp || 0)) < 300000 && fs.existsSync(item.file))
         .slice(-5);
+    } catch {}
+  }
 
-      if (recentFiles.length > 0) {
-        // 2.1 Verificação LSP de Sintaxe
-        const lspMod = findLibModule('lsp-engine.cjs');
-        if (lspMod) {
-          const LspEngine = require(lspMod);
-          const lsp = new LspEngine(PROJECT_ROOT);
-          for (const item of recentFiles) {
-            const diag = lsp.diagnostics({ file_path: item.file });
-            if (diag && (diag.isError || diag.hasDiagnostics)) {
-              writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
-              return (
-                `🛑 [AUTO-VERIFY GATE] Parada prematura interceptada: erro de sintaxe/compilação detectado em ${path.basename(item.file)}:\n` +
-                `${diag.text}\nCorrija o erro antes de finalizar o turno.`
-              );
-            }
+  // 2.0 Fallback Git: assegura que arquivos tocados via bash/git ou subagentes também sejam auditados
+  if (recentFiles.length < 5) {
+    try {
+      const { execSync } = require('child_process');
+      const gitOut = execSync('git status --porcelain 2>/dev/null', { cwd: PROJECT_ROOT, timeout: 2000, encoding: 'utf8' }) || '';
+      const gitLines = gitOut.split('\n');
+      const knownPaths = new Set(recentFiles.map(r => r.file));
+      for (const line of gitLines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const filePathRel = trimmed.slice(2).trim().replace(/^"|"$/g, '');
+        if (/\.(go|ts|tsx|js|jsx|cjs|mjs|py|java|c|cpp|rs|cs|php|rb)$/i.test(filePathRel)) {
+          const fullPath = path.resolve(PROJECT_ROOT, filePathRel);
+          if (fs.existsSync(fullPath) && !knownPaths.has(fullPath)) {
+            recentFiles.push({ file: fullPath, timestamp: now });
+            knownPaths.add(fullPath);
+            if (recentFiles.length >= 5) break;
           }
         }
+      }
+    } catch {}
+  }
 
-        // 2.2 Verificação de Segurança (Anti-SQL Injection Gate)
-        const secMod = findLibModule('security-linter.cjs');
-        if (secMod) {
-          try {
-            const SecurityLinter = require(secMod);
-            const linter = new SecurityLinter(PROJECT_ROOT);
-            const secIssues = linter.scanFiles(recentFiles.map(r => r.file));
-            const criticalSql = secIssues.filter(i => i.severity === 'CRITICAL');
-            if (criticalSql.length > 0) {
-              const first = criticalSql[0];
-              writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
-              return (
-                `🛑 [SECURITY GATE] Parada prematura interceptada: VULNERABILIDADE DE SQL INJECTION detectada em ${path.basename(first.file)}:${first.line}!\n` +
-                `Trecho: ${first.snippet}\n` +
-                `Diagnóstico: ${first.message}\n` +
-                `Substitua a concatenação/interpolação de string por parâmetro bind '?' antes de concluir.`
-              );
-            }
-          } catch {}
+  if (recentFiles.length > 0) {
+    try {
+      // 2.1 Verificação LSP de Sintaxe
+      const lspMod = findLibModule('lsp-engine.cjs');
+      if (lspMod) {
+        const LspEngine = require(lspMod);
+        const lsp = new LspEngine(PROJECT_ROOT);
+        for (const item of recentFiles) {
+          const diag = lsp.diagnostics({ file_path: item.file });
+          if (diag && (diag.isError || diag.hasDiagnostics)) {
+            writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+            return (
+              `🛑 [AUTO-VERIFY GATE] Parada prematura interceptada: erro de sintaxe/compilação detectado em ${path.basename(item.file)}:\n` +
+              `${diag.text}\nCorrija o erro antes de finalizar o turno.`
+            );
+          }
         }
+      }
 
-        // 2.3 Verificação de Code Smells e Complexidade Ciclomática
-        const compMod = findLibModule('complexity-guard.cjs');
-        if (compMod) {
-          try {
-            const ComplexityGuard = require(compMod);
-            const guard = new ComplexityGuard({ maxLines: 40, maxNesting: 3, maxComplexity: 15 });
-            const smells = guard.scanFiles(recentFiles.map(r => r.file));
-            const criticalSmells = smells.filter(s => s.type === 'deep_nesting' || s.type === 'long_method');
-            if (criticalSmells.length > 0) {
-              const first = criticalSmells[0];
-              writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
-              return (
-                `🛑 [CODE QUALITY GATE] Parada prematura interceptada: CODE SMELL detectado em ${path.basename(first.file)}:${first.line} (${first.function})!\n` +
-                `Tipo: ${first.type} - ${first.message}\n` +
-                `Refatore a função usando guard clauses (early return) para desaninhar e modularizar antes de concluir.`
-              );
-            }
-          } catch {}
-        }
+      // 2.2 Verificação de Segurança (Anti-SQL Injection Gate)
+      const secMod = findLibModule('security-linter.cjs');
+      if (secMod) {
+        try {
+          const SecurityLinter = require(secMod);
+          const linter = new SecurityLinter(PROJECT_ROOT);
+          const secIssues = linter.scanFiles(recentFiles.map(r => r.file));
+          const criticalSql = secIssues.filter(i => i.severity === 'CRITICAL');
+          if (criticalSql.length > 0) {
+            const first = criticalSql[0];
+            writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+            return (
+              `🛑 [SECURITY GATE] Parada prematura interceptada: VULNERABILIDADE DE SQL INJECTION detectada em ${path.basename(first.file)}:${first.line}!\n` +
+              `Trecho: ${first.snippet}\n` +
+              `Diagnóstico: ${first.message}\n` +
+              `Substitua a concatenação/interpolação de string por parâmetro bind '?' antes de concluir.`
+            );
+          }
+        } catch {}
+      }
 
-        // 2.4 Verificação de Duplicação de Código (DRY Checker)
-        const dryMod = findLibModule('dry-checker.cjs');
-        if (dryMod && recentFiles.length >= 2) {
-          try {
-            const DryChecker = require(dryMod);
-            const checker = new DryChecker(6);
-            const dups = checker.checkFiles(recentFiles.map(r => r.file));
-            if (dups.length >= 2) {
-              const first = dups[0];
-              writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
-              return (
-                `🛑 [DRY QUALITY GATE] Parada prematura interceptada: ${dups.length} blocos de CÓDIGO DUPLICADO (>= 6 linhas) detectados entre os arquivos tocados!\n` +
-                `Locais: ${first.locations.map(l => path.basename(l.file) + ':' + l.line).join(' <-> ')}\n` +
-                `Trecho: ${first.snippet}\n` +
-                `Extraia a lógica repetida para uma função utilitária/helper compartilhado para evitar perda de pontos por duplicação.`
-              );
+      // 2.3 Verificação de Code Smells e Complexidade Ciclomática (Thresholds Estritos)
+      const compMod = findLibModule('complexity-guard.cjs');
+      if (compMod) {
+        try {
+          const ComplexityGuard = require(compMod);
+          const guard = new ComplexityGuard({ maxLines: 40, maxNesting: 3, maxComplexity: 12 });
+          const smells = guard.scanFiles(recentFiles.map(r => r.file));
+          const criticalSmells = smells.filter(s => s.type === 'deep_nesting' || s.type === 'long_method' || s.type === 'high_complexity');
+          if (criticalSmells.length > 0) {
+            const first = criticalSmells[0];
+            writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+            let advice = 'Refatore a função usando guard clauses (early return) para desaninhar e modularizar antes de concluir.';
+            if (first.type === 'high_complexity') {
+              advice = 'Extraia sub-rotinas de decisão e utilize dicionários/Maps de despacho em vez de longas cadeias condicionais.';
+            } else if (first.type === 'long_method') {
+              advice = 'Decomponha a função em sub-rotinas puras e helpers menores com responsabilidade única.';
             }
-          } catch {}
-        }
+            return (
+              `🛑 [CODE QUALITY GATE] Parada prematura interceptada: CODE SMELL detectado em ${path.basename(first.file)}:${first.line} (${first.function})!\n` +
+              `Tipo: ${first.type} - ${first.message}\n` +
+              advice
+            );
+          }
+        } catch {}
+      }
+
+      // 2.4 Verificação de Duplicação de Código (DRY Checker)
+      const dryMod = findLibModule('dry-checker.cjs');
+      if (dryMod && recentFiles.length >= 2) {
+        try {
+          const DryChecker = require(dryMod);
+          const checker = new DryChecker(6);
+          const dups = checker.checkFiles(recentFiles.map(r => r.file));
+          if (dups.length >= 2) {
+            const first = dups[0];
+            writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+            return (
+              `🛑 [DRY QUALITY GATE] Parada prematura interceptada: ${dups.length} blocos de CÓDIGO DUPLICADO (>= 6 linhas) detectados entre os arquivos tocados!\n` +
+              `Locais: ${first.locations.map(l => path.basename(l.file) + ':' + l.line).join(' <-> ')}\n` +
+              `Trecho: ${first.snippet}\n` +
+              `Extraia a lógica repetida para uma função utilitária/helper compartilhado para evitar perda de pontos por duplicação.`
+            );
+          }
+        } catch {}
       }
       try { fs.unlinkSync(MODIFIED_FILES_PATH); } catch {}
     } catch {}
@@ -524,7 +556,7 @@ function checkAutoVerifyStopGate(terminationReason) {
       writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
       return (
         '🛑 [AMBIGUITY GATE] Parada prematura interceptada: O arquivo AMBIGUITIES.md não foi documentado ou está vazio!\n' +
-        'O protocolo do projeto exige documentar as ambiguidades de requisitos (fusos UTC, marcha lenta, perda de GPS, filtros de ruído) e as decisões de engenharia adotadas antes de concluir a tarefa.'
+        'O protocolo do projeto exige documentar as ambiguidades de requisitos nos 4 vetores universais (Temporal/Timezone, Borda/Divisões, Intermitência de Entrada e Contratos de Payload) em blocos atômicos antes de concluir a tarefa.'
       );
     }
   }
