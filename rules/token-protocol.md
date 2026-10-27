@@ -34,7 +34,7 @@ Antes de criar qualquer linha de código ou abstração, adote a primeira opçã
   - `lsp_*` (`node .agents/mcp-server.cjs lsp <diagnostics|definition|references|hover>`): Resolva tipos, contratos e diagnósticos de compilação.
 - **Localização de Símbolos e Chamadas:** Para rastrear onde uma função, método ou rota é utilizada, convoque SEMPRE `lsp_references` ou `ast_query` (`ast-grep run -p '<padrão>'`). NUNCA faça varreduras com `grep -rn` massivo nem abra múltiplos arquivos inteiros com `view_file`.
 - **Proibido Encadeamento Cego:** Nunca convoque ferramentas em sequência burocrática fixa. Acione apenas a ferramenta relevante para a hipótese investigada.
-- **`read_file` / `view_file` Cirúrgico:** Restrito a arquivos de código com `StartLine` e `EndLine` (máximo 100 linhas por bloco).
+- **`read_file` / `view_file` Cirúrgico vs `gsd-read-strip`:** Restrito a arquivos de código com `StartLine` e `EndLine` (máximo 100 linhas por bloco). Durante a Fase 3 (Implementação/TDD), para reler ou revisar arquivos de código existentes com mais de 40 linhas, use OBRIGATORIAMENTE `gsd_read_strip` (`node .agents/mcp-server.cjs strip "<arquivo>"` ou tool MCP `gsd_read_strip`) para ler sem o desperdício de comentários e docstrings. É terminantemente proibido reabrir arquivos inteiros repetidamente via `view_file`.
 
 ## 3. Criação Atômica de Arquivos Novos vs Diffs Cirúrgicos
 - **Arquivos NOVOS:** Devem ser criados de forma atômica e integral em uma única chamada `write_file` / `write_to_file` (zero churn).
@@ -51,33 +51,21 @@ Antes de criar qualquer linha de código ou abstração, adote a primeira opçã
 - Ao validar uma solução de bug ou decisão arquitetural: `node .agents/mcp-server.cjs capture <decisions|problems> "<tópico>" "<conteúdo>"`.
 - Circuit Breaker: `ast-grep`, `graphify` e o verificador da linguagem devem estar operacionais para garantir a blindagem do repositório.
 
-## 7. Fase de Verificação Enxuta (Frugal Verification Protocol)
-- Em fases ou instruções de verificação (`Verification`, `npm test`, validação final de testes):
-  - Execute estritamente o comando de teste focado.
-  - Se todos os testes passarem (100% verde), encerre o turno de forma concisa e direta, SEM convocar leituras adicionais, queries no banco ou ferramentas auxiliares redundantes.
-  - Invoque inspeção de código ou ferramentas MCP apenas se houver falhas ativas remanescentes a serem corrigidas.
+## 7. Fase de Verificação Unificada em 1 Turno (Frugal Verification Protocol)
+- Em fases ou instruções de verificação (`Phase 4: Verification`, `npm test`, validação final):
+  - Execute OBRIGATORIAMENTE o verificador unificado em 1 turno: `node .agents/mcp-server.cjs verify` (ou tool MCP `quick_verify` ou `./scripts/verify.sh`).
+  - O verificador valida sintaxe (`node --check`), code smells/complexidade e roda os testes simultaneamente, retornando um JSON compacto.
+  - Se o status for `PASS`, encerre a fase imediatamente sem turnos manuais adicionais de `find`, `grep` ou leituras redundantes.
+  - Se houver falhas, atue cirurgicamente apenas sobre os erros e arquivos apontados no JSON.
 
-## 8. Descoberta & Ativação Autônoma de Skills (Agentic Skill Retrieval)
-O ambiente opera em **Zero-Baseline** (0 subagentes e 0 skills ativos no prompt por padrão para máxima economia de contexto). O agente possui **autonomia total** para diagnosticar o código e puxar sob demanda o conhecimento técnico que julgar necessário, sem viés ou amarras de fases engessadas:
-
-### Como Descobrir e Ativar Skills Autonomamente:
-1. **Via MCP Tool:** Invoque a ferramenta `skill_search({ query: "<problema ou intenção>", activate: true })`.
-2. **Via Linha de Comando:** Execute `node .agents/mcp-server.cjs skill search "<termo>"` ou `${CLI_CMD} skill activate "<nome>"`.
-3. **Via Leitura Direta:** Executar `read_file` em `.agents/skills/<nome>/SKILL.md` ou `.agents/skills-pool/<nome>/SKILL.md` ativa a skill instantaneamente via hook JIT com TTL sustentável de 5 turnos (auto-renovado a cada acesso).
-
-### Principais Clusters Especializados no Pool Permanente:
-- **Governança & Fases GSD:** `gsd-plan-phase`, `gsd-execute-phase`, `gsd-verify-work`, `gsd-progress`.
-- **Senior Dev & YAGNI:** `ponytail`, `ponytail-review`, `ponytail-debt`, `ponytail-audit`.
-- **Modo Cirúrgico Terse:** `caveman`, `ultracave`, `caveman-review`.
-- **Refatoração Segura & Patches:** `safe-refactor`, `surgical-patch`, `investigate-first`, `lean-build`.
-- **Diagnóstico & Testes:** `gsd-debug`, `gsd-test`, `gsd-add-tests`, `gsd-tokens`.
-
-### Subagentes Cirúrgicos sob Demanda (`invoke_subagent`):
-- **Governança Documental:** `gsd-planner`, `gsd-executor`, `gsd-verifier`, `gsd-debugger`, `gsd-code-reviewer`, `gsd-doc-writer`.
-- **Cavecrew Cirúrgicos:** `cavecrew-builder` (código conciso), `cavecrew-investigator` (varredura read-only), `cavecrew-reviewer` (revisão rápida).
+## 8. Descoberta & Ativação Autônoma de Skills (JIT)
+O ambiente opera em **Zero-Baseline** (0 skills ativas por padrão). O agente ativa conhecimento técnico sob demanda:
+- **Via MCP / CLI:** `skill_search({ query: "<termo>", activate: true })` ou `node .agents/mcp-server.cjs skill activate "<nome>"`.
+- **Via Leitura Direta:** Executar `read_file` em `.agents/skills-pool/<nome>/SKILL.md` ativa a skill via hook JIT (TTL: 5 turnos).
+- **Clusters no Pool:** `gsd-*` (fases), `ponytail-*` (YAGNI/debt), `caveman-*` (conciso), `safe-refactor`/`surgical-patch` (patches).
 
 ## 9. Protocolo Obrigatório de Documentação de Ambiguidades (`AMBIGUITIES.md`)
-O agente deve auditar e registrar ambiguidades de especificação e contratos técnicos no arquivo `AMBIGUITIES.md` durante a Fase 1 (Forensics), Fase 2 (Planning) e obrigatoriamente após receber Change Requests na Fase 5.
+O agente deve auditar e registrar obrigatoriamente no mínimo 3 ambiguidades no arquivo `AMBIGUITIES.md` ao final da Fase 1 (Forensics) antes de avançar para o planejamento em `PLAN.md`, e atualizar após receber Change Requests na Fase 5. O Stop Gate interceptará a parada se o arquivo contiver menos de 3 blocos atômicos (`### AMB-`) ou menos de 250 bytes.
 
 ### Formato Obrigatório em Bloco Atômico (Parágrafo Único Autossuficiente):
 Para garantir máxima clareza, rastreabilidade e pontuação em avaliadores automatizados, **cada ambiguidade DEVE ser descrita em um parágrafo contínuo único e autossuficiente** sob o título, reunindo o conflito identificado, o impacto técnico e a premissa adotada:

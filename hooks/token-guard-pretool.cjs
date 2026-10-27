@@ -363,15 +363,16 @@ function recordTokenSaving(category, estimatedTokens = 500) {
       );
     }
 
-    // Sandbox Shield Gate (Bloqueia vazamento/contaminação de scenario.json e holdout)
-    const isHoldoutPath = /(?:^|[\\/])(?:scenario\.json|\.gsd-bench-holdout|holdout(?:\/.*)?|__hidden_[a-zA-Z0-9_-]+)/i.test(target) ||
+    // Sandbox Shield Gate (Bloqueia vazamento/contaminação de scenario.json, cold_start e holdout)
+    const isHoldoutPath = /(?:^|[\\/])(?:scenario\.json|\.gsd-bench-holdout|\.benchmark_cold_start\.json|holdout(?:\/.*)?|__hidden_[a-zA-Z0-9_-]+)/i.test(target) ||
       target.includes('.gsd-bench-holdout') ||
-      target.endsWith('/scenario.json') || target === 'scenario.json';
+      target.endsWith('/scenario.json') || target === 'scenario.json' ||
+      target.endsWith('.benchmark_cold_start.json');
     if (isHoldoutPath) {
       recordTokenSaving('sandbox_shield', 500);
       return respond(
         'deny',
-        '🛑 SANDBOX SHIELD (ZERO-LEAKAGE): O acesso direto a arquivos de orquestração externa (scenario.json) e suítes holdout de benchmark é estritamente proibido.\n' +
+        '🛑 SANDBOX SHIELD (ZERO-LEAKAGE): O acesso direto a arquivos de orquestração interna, benchmarks e suítes de teste ocultas é estritamente proibido.\n' +
         'Concentre a análise exclusivamente nos arquivos locais do projeto (TASK.md, src/, docs/, tests/).'
       );
     }
@@ -601,13 +602,13 @@ function recordTokenSaving(category, estimatedTokens = 500) {
       );
     }
 
-    // 2.0.1 Sandbox Shield Gate para comandos direcionados a holdout ou scenario.json
-    const isHoldoutOrScenario = /(?:^|\s|[\\/"'])(\.gsd-bench-holdout|holdout(?:\/.*)?|scenario\.json|__hidden_[a-zA-Z0-9_-]+)(?:$|\s|[\\/"'])/i.test(cmd);
+    // 2.0.1 Sandbox Shield Gate para comandos direcionados a holdout, cold_start ou scenario.json
+    const isHoldoutOrScenario = /(?:^|\s|[\\/"'])(\.gsd-bench-holdout|\.benchmark_cold_start\.json|holdout(?:\/.*)?|scenario\.json|__hidden_[a-zA-Z0-9_-]+)(?:$|\s|[\\/"'])/i.test(cmd);
     if (isHoldoutOrScenario) {
       recordTokenSaving('sandbox_shield', 500);
       return respond(
         'deny',
-        '🛑 SANDBOX SHIELD (ZERO-LEAKAGE): Comandos direcionados a arquivos de holdout ou orquestração de benchmark (scenario.json) são estritamente proibidos!\n' +
+        '🛑 SANDBOX SHIELD (ZERO-LEAKAGE): Comandos direcionados a arquivos de orquestração interna de benchmark ou suítes ocultas são estritamente proibidos!\n' +
         'Concentre o trabalho apenas nos testes unitários e arquivos locais do projeto (ex: npm test).'
       );
     }

@@ -330,10 +330,12 @@ if [ -d "${KIT_DIR}/lib" ]; then
     cp -rf "${KIT_DIR}/lib/"* "${AGENTS_DIR}/lib/"
 fi
 
-if [ -f "${KIT_DIR}/mcp-server.cjs" ]; then
-    cp -f "${KIT_DIR}/mcp-server.cjs" "${AGENTS_DIR}/mcp-server.cjs"
-    chmod +x "${AGENTS_DIR}/mcp-server.cjs" 2>/dev/null || true
-fi
+for sc in "mcp-server.cjs" "gsd-read-strip.cjs" "verify.cjs"; do
+    if [ -f "${KIT_DIR}/${sc}" ]; then
+        cp -f "${KIT_DIR}/${sc}" "${AGENTS_DIR}/${sc}"
+        chmod +x "${AGENTS_DIR}/${sc}" 2>/dev/null || true
+    fi
+done
 
 # Registrar .agents/mcp_config.json
 MCP_JSON="${AGENTS_DIR}/mcp_config.json"
@@ -409,7 +411,7 @@ if [ -d "${KIT_DIR}/rules" ]; then
     cp -rf "${KIT_DIR}/rules/"* "${TARGET_KIT_DIR}/rules/"
 fi
 
-KIT_SCRIPTS=("test-kit.sh" "test-kit.ps1" "setup-ui.cjs" "setup.sh" "setup.ps1" "install.sh" "install.ps1" "package.json" "CHANGELOG.md" "uninstall.sh" "uninstall.ps1" "skills-profile.sh" "skills-profile.ps1" "optimize-tokens.sh" "optimize-tokens.ps1" "sanitize-command.ps1" "token-report.cjs" "gsd-update.cjs" "gsd-state-summary.cjs" "gsd-graphify-update.cjs" "patch-agents.cjs" "optimize-tokens.cjs" "skills-manager.cjs" "compact-state.cjs" "compact-json.cjs" "sanitize-output.cjs" "shrink-prompts.cjs" "gsd-outline.cjs" "mcp-server.cjs")
+KIT_SCRIPTS=("test-kit.sh" "test-kit.ps1" "setup-ui.cjs" "setup.sh" "setup.ps1" "install.sh" "install.ps1" "package.json" "CHANGELOG.md" "uninstall.sh" "uninstall.ps1" "skills-profile.sh" "skills-profile.ps1" "optimize-tokens.sh" "optimize-tokens.ps1" "sanitize-command.ps1" "token-report.cjs" "gsd-update.cjs" "gsd-state-summary.cjs" "gsd-graphify-update.cjs" "patch-agents.cjs" "optimize-tokens.cjs" "skills-manager.cjs" "compact-state.cjs" "compact-json.cjs" "sanitize-output.cjs" "shrink-prompts.cjs" "gsd-outline.cjs" "mcp-server.cjs" "gsd-read-strip.cjs" "verify.cjs")
 for sName in "${KIT_SCRIPTS[@]}"; do
     src="${KIT_DIR}/${sName}"
     if [ -f "${src}" ]; then

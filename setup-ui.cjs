@@ -688,7 +688,8 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           "token-report.cjs", "gsd-update.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs",
           "patch-agents.cjs", "optimize-tokens.cjs", "skills-manager.cjs",
           "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs",
-          "gsd-outline.cjs", "shrink-prompts.cjs", "mcp-server.cjs"
+          "gsd-outline.cjs", "shrink-prompts.cjs", "mcp-server.cjs",
+          "gsd-read-strip.cjs", "verify.cjs"
         ];
         for (const sName of kitScripts) {
           const src = path.join(kitDir, sName);
@@ -724,12 +725,14 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           copyFolderRecursive(kitLibDir, path.join(targetKitDir, 'lib'));
           copyFolderRecursive(kitLibDir, path.join(agentsDir, 'lib'));
         }
-        // Copiar mcp-server.cjs para a raiz de .agents também para execução direta
-        const mcpServerSrc = path.join(kitDir, 'mcp-server.cjs');
-        if (fs.existsSync(mcpServerSrc)) {
-          const destMcp = path.join(agentsDir, 'mcp-server.cjs');
-          fs.copyFileSync(mcpServerSrc, destMcp);
-          try { fs.chmodSync(destMcp, 0o755); } catch {}
+        // Copiar mcp-server.cjs, gsd-read-strip.cjs e verify.cjs para a raiz de .agents também para execução direta
+        for (const rootScript of ['mcp-server.cjs', 'gsd-read-strip.cjs', 'verify.cjs']) {
+          const scSrc = path.join(kitDir, rootScript);
+          if (fs.existsSync(scSrc)) {
+            const destSc = path.join(agentsDir, rootScript);
+            fs.copyFileSync(scSrc, destSc);
+            try { fs.chmodSync(destSc, 0o755); } catch {}
+          }
         }
         // Copiar blindagem de índices (.graphifyignore e .astgrepignore)
         for (const ign of ['.graphifyignore', '.astgrepignore']) {
@@ -764,6 +767,13 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
               try { fs.chmodSync(dest, 0o755); } catch {}
             }
           }
+        }
+        // Atalho verify.sh em scripts/
+        const verifySrc = path.join(kitDir, 'scripts', 'verify.sh');
+        if (fs.existsSync(verifySrc)) {
+          const verifyDest = path.join(targetScriptsDir, 'verify.sh');
+          fs.copyFileSync(verifySrc, verifyDest);
+          try { fs.chmodSync(verifyDest, 0o755); } catch {}
         }
         await sleep(60);
       }

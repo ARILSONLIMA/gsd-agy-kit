@@ -203,7 +203,7 @@ async function runAstQuery({ pattern, lang, path: targetPath = '.', limit = 10 }
   }
 }
 
-const TOOLS_MANIFEST = [
+const ALL_TOOLS_MANIFEST = [
   {
     name: 'mempalace_recall',
     description: 'Recupera decisões de arquitetura, soluções de bugs passados e marcos salvos no MemPalace (memória episódica em SQLite) para evitar amnésia e re-leitura de arquivos históricos.',
@@ -436,8 +436,53 @@ const TOOLS_MANIFEST = [
       },
       required: ['query']
     }
+  },
+  {
+    name: 'gsd_read_strip',
+    description: 'Lê arquivo de código removendo comentários e docstrings longas para economizar tokens de contexto na Fase 3.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Caminho do arquivo a ser lido sem comentários' }
+      },
+      required: ['path']
+    }
+  },
+  {
+    name: 'quick_verify',
+    description: 'Executa verificação unificada em 1 turno (sintaxe node --check, complexidade estática e suíte de testes npm test).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Diretório do projeto (opcional)' }
+      }
+    }
+  },
+  {
+    name: 'gsd_outline',
+    description: 'Extrai o esqueleto estrutural (assinaturas, classes, tipos e métodos com linhas) sem carregar o corpo do arquivo.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: 'Caminho do arquivo de código' }
+      },
+      required: ['file_path']
+    }
   }
 ];
+
+const DEFAULT_TOOLS_MANIFEST = [
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'lsp_diagnostics'),
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'gsd_outline'),
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'gsd_read_strip'),
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'quick_verify'),
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'env_skeleton'),
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'codebase_map'),
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'ponytail_debt'),
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'caveman_shrink')
+].filter(Boolean);
+
+const TOOLS_MANIFEST = DEFAULT_TOOLS_MANIFEST;
 
 function sendJson(msg) {
   try {
@@ -713,6 +758,38 @@ async function handleToolCall(name, args) {
         outcome = { text: txt.trim(), isError: false };
         break;
       }
+      case 'gsd_read_strip': {
+        const readStrip = require('./gsd-read-strip.cjs');
+        try {
+          const res = readStrip.stripFile(args.path || args.file_path);
+          outcome = {
+            text: `=== STRIPPED: ${res.filename} (${res.cleanLines} linhas limpas, economizou ~${res.savedPct}% tokens) ===\n\n${res.content}`,
+            isError: false
+          };
+        } catch (e) {
+          outcome = { text: `Erro ao ler com gsd-read-strip: ${e.message}`, isError: true, stderr: e.message };
+        }
+        break;
+      }
+      case 'quick_verify': {
+        const verifyRunner = require('./verify.cjs');
+        try {
+          const res = verifyRunner.runFullVerification(args.path || PROJECT_ROOT);
+          outcome = {
+            text: JSON.stringify(res, null, 2),
+            isError: !res.ready_to_complete
+          };
+        } catch (e) {
+          outcome = { text: `Erro na verificação unificada: ${e.message}`, isError: true, stderr: e.message };
+        }
+        break;
+      }
+      case 'gsd_outline': {
+        const filePath = args.file_path || args.path;
+        const text = skeletonEngine.getOutline(filePath);
+        outcome = { text, isError: false };
+        break;
+      }
       default:
         outcome = {
           text: `Ferramenta desconhecida: "${name}"`,
@@ -774,11 +851,12 @@ async function handleMessage(msg) {
       break;
     }
     case 'tools/list': {
+      const showAll = process.env.GSD_MCP_FULL_TOOLS === '1' || process.env.GSD_MCP_ALL === '1';
       sendJson({
         jsonrpc: '2.0',
         id,
         result: {
-          tools: TOOLS_MANIFEST
+          tools: showAll ? ALL_TOOLS_MANIFEST : DEFAULT_TOOLS_MANIFEST
         }
       });
       break;
@@ -1173,6 +1251,26 @@ async function handleCli(args) {
 
     console.error(`Uso: ${CLI_CMD} skill <search <query> [--activate] | activate <nome> | list>`);
     exitCli(1);
+  }
+
+  if (cmd === 'strip' || cmd === 'read-strip') {
+    const target = args[1];
+    if (!target) {
+      console.error(`Erro: informe o caminho do arquivo. Ex: ${CLI_CMD} strip "src/server.js"`);
+      exitCli(1);
+    }
+    const { text, isError } = await handleToolCall('gsd_read_strip', { path: target });
+    if (isError) { console.error(text); exitCli(1); }
+    console.log(text);
+    exitCli(0);
+  }
+
+  if (cmd === 'verify' || cmd === 'quick-verify') {
+    const target = args[1] || PROJECT_ROOT;
+    const { text, isError } = await handleToolCall('quick_verify', { path: target });
+    if (isError) { console.error(text); exitCli(1); }
+    console.log(text);
+    exitCli(0);
   }
 
   console.error(`Comando desconhecido: "${cmd}". Execute "${CLI_CMD} help" para ver as opções.`);

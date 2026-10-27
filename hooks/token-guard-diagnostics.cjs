@@ -556,12 +556,24 @@ function checkAutoVerifyStopGate(terminationReason) {
   const hasTaskOrCr = fs.existsSync(path.join(PROJECT_ROOT, 'TASK.md')) || fs.existsSync(path.join(PROJECT_ROOT, 'CHANGE_REQUEST.md'));
   if (hasTaskOrCr) {
     const ambFile = path.join(PROJECT_ROOT, 'AMBIGUITIES.md');
-    const hasAmb = fs.existsSync(ambFile) && fs.statSync(ambFile).size >= 100;
-    if (!hasAmb) {
+    let validAmb = false;
+    if (fs.existsSync(ambFile)) {
+      const content = fs.readFileSync(ambFile, 'utf8');
+      const matches = content.match(/###\s+AMB-\d+/gi) || (content.match(/AMB-\d+/gi) || []);
+      if (content.length >= 250 && matches.length >= 3) {
+        validAmb = true;
+      }
+    }
+    if (!validAmb) {
       recordStopGateInterception(gateState, now);
       return (
-        '🛑 [AMBIGUITY GATE] Parada prematura interceptada: O arquivo AMBIGUITIES.md não foi documentado ou está vazio!\n' +
-        'O protocolo do projeto exige documentar as ambiguidades de requisitos nos 4 vetores universais (Temporal/Timezone, Borda/Divisões, Intermitência de Entrada e Contratos de Payload) em blocos atômicos antes de concluir a tarefa.'
+        '🛑 [AMBIGUITY GATE] Parada prematura interceptada: O arquivo AMBIGUITIES.md está incompleto!\n' +
+        'O protocolo exige mapear e documentar pelo menos 3 ambiguidades em blocos atômicos nos 4 vetores universais de incerteza:\n' +
+        '1. Temporal/Timezone (ISO UTC vs local)\n' +
+        '2. Limites/Divisões (zero, nulos, fallback 0.0)\n' +
+        '3. Intermitência de Sinais/Falhas (descarte vs média)\n' +
+        '4. Contratos de Payload/APIs (parcial vs total).\n' +
+        'Documente cada uma no formato: "### AMB-XX: [Contexto] — [Conflito e Premissa Adotada]".'
       );
     }
   }
