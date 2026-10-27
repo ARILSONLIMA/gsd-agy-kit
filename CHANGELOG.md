@@ -2,6 +2,15 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.3.0] - 2026-10-27
+- **Agentic Skill Retrieval (Descoberta & Ativação Autônoma sob Demanda):**
+  - **Eliminação do Viés Determinístico de Fases:** O agente agora opera com total autonomia e sem imposição humana de skills pré-selecionadas por fase, mantendo o baseline inicial em 0 skills ativas em `.agents/skills/` (máxima economia de contexto) enquanto preserva 93 skills no pool.
+  - **Nova Tool MCP e CLI Dispatcher `skill_search` (`mcp-server.cjs` e `skills-manager.cjs`):** Permite à IA consultar e ranquear skills especializadas por sintoma técnico, intenção ou termo arquitetural (ex: "deadlock concorrência", "refatoração", "auditoria uat", "segurança"), com normalização semântica, suporte a sinônimos (pt/en) e parsing de frontmatter YAML multiline.
+  - **Comandos Ergonômicos CLI no Servidor MCP:** Adicionados atalhos diretos `node .agents/mcp-server.cjs skill <search <query> [--activate] | activate <nome> | list>` e no `skills-manager.cjs search <termo>`.
+  - **Sustentabilidade de Execução com TTL de 5 Turnos e Auto-Renovação (`hooks/token-guard-pretool.cjs`):** O JIT Auto-Promoter agora concede 5 turnos de permanência para skills promovidas (em vez de expirar imediatamente no turno seguinte), com renovação automática a cada novo acesso.
+  - **Protocolo Canônico Atualizado (`rules/token-protocol.md`):** Seção 8 reescrita para orientar a postura autônoma de descoberta e auto-ativação sem overhead de catálogo estático no prompt.
+  - **Bateria de Testes Expandida (114 testes com 100% de Sucesso):** Novas asserções de teste automatizadas em `test-kit.sh` e `test-kit.ps1` validando a busca semântica, auto-promoção JIT e idempotência do catálogo.
+
 ## [2.2.1] - 2026-10-27
 - **Eliminação do Loop Infinito no Auto-Verify Stop Gate (`hooks/token-guard-diagnostics.cjs`):**
   - Removida a deleção incondicional de `stop-verify-gate.json` ao executar testes com sucesso (`npm test`). Anteriormente, cada passagem de teste limpava a memória de tentativas, fazendo com que o agente fosse interceptado repetidamente em múltiplos ciclos de refatoração desnecessários.

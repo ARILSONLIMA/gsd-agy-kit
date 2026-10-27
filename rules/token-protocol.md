@@ -57,28 +57,24 @@ Antes de criar qualquer linha de código ou abstração, adote a primeira opçã
   - Se todos os testes passarem (100% verde), encerre o turno de forma concisa e direta, SEM convocar leituras adicionais, queries no banco ou ferramentas auxiliares redundantes.
   - Invoque inspeção de código ou ferramentas MCP apenas se houver falhas ativas remanescentes a serem corrigidas.
 
-## 8. Catálogo Sintético de Subagentes & Skills (Zero-Baseline JIT)
-O ambiente opera em **Zero-Baseline** (0 subagentes e 0 skills ativos no prompt por padrão). Todos os recursos permanecem preservados no pool permanente e são ativados pontualmente (<2ms) via JIT com TTL cirúrgico de 1 turno.
+## 8. Descoberta & Ativação Autônoma de Skills (Agentic Skill Retrieval)
+O ambiente opera em **Zero-Baseline** (0 subagentes e 0 skills ativos no prompt por padrão para máxima economia de contexto). O agente possui **autonomia total** para diagnosticar o código e puxar sob demanda o conhecimento técnico que julgar necessário, sem viés ou amarras de fases engessadas:
 
-### Subagentes de Governança Documental GSD (`invoke_subagent`):
-- `gsd-planner`: Planejamento formal, fatiamento vertical e atualização de `STATE.md` e `ROADMAP.md`.
-- `gsd-executor`: Execução de fases com geração obrigatória de `*-SUMMARY.md` e atualização de estado.
-- `gsd-verifier`: Execução de critérios UAT e encerramento oficial de fase no `STATE.md`.
-- `gsd-doc-writer`: Sincronização de documentação canônica, diagramas e arquitetura.
-- `gsd-debugger`: Sessões isoladas de investigação forense e reprodução de erros.
-- `gsd-code-reviewer`: Revisão estrita de conformidade com guardrails e clean code.
-- `gsd-phase-researcher`: Investigação prévia de tecnologias, contratos e spikes.
+### Como Descobrir e Ativar Skills Autonomamente:
+1. **Via MCP Tool:** Invoque a ferramenta `skill_search({ query: "<problema ou intenção>", activate: true })`.
+2. **Via Linha de Comando:** Execute `node .agents/mcp-server.cjs skill search "<termo>"` ou `${CLI_CMD} skill activate "<nome>"`.
+3. **Via Leitura Direta:** Executar `read_file` em `.agents/skills/<nome>/SKILL.md` ou `.agents/skills-pool/<nome>/SKILL.md` ativa a skill instantaneamente via hook JIT com TTL sustentável de 5 turnos (auto-renovado a cada acesso).
 
-### Subagentes Cirúrgicos Cavecrew (`invoke_subagent`):
-- `cavecrew-builder`: Implementação de código ultraconcisa (1-2 arquivos) com recibo de diff.
-- `cavecrew-investigator`: Varredura read-only rápida de símbolos, rotas e referências.
-- `cavecrew-reviewer`: Revisão rápida e concisa pós-edição sem prolixidade.
+### Principais Clusters Especializados no Pool Permanente:
+- **Governança & Fases GSD:** `gsd-plan-phase`, `gsd-execute-phase`, `gsd-verify-work`, `gsd-progress`.
+- **Senior Dev & YAGNI:** `ponytail`, `ponytail-review`, `ponytail-debt`, `ponytail-audit`.
+- **Modo Cirúrgico Terse:** `caveman`, `ultracave`, `caveman-review`.
+- **Refatoração Segura & Patches:** `safe-refactor`, `surgical-patch`, `investigate-first`, `lean-build`.
+- **Diagnóstico & Testes:** `gsd-debug`, `gsd-test`, `gsd-add-tests`, `gsd-tokens`.
 
-### Skills do Fluxo (`read_file` em `.agents/skills/<nome>/SKILL.md`):
-- `gsd-plan-phase` | `gsd-execute-phase` | `gsd-verify-work` | `gsd-progress`: Governança de fases GSD.
-- `ponytail` | `ponytail-review` | `ponytail-debt`: Auditoria de simplicidade, YAGNI e reuso.
-- `caveman` | `ultracave` | `caveman-review`: Modo de resposta cirúrgica e sem floreios.
-- `gsd-tokens` | `gsd-test` | `gsd-agy-update`: Métricas de economia, execução de testes e updates.
+### Subagentes Cirúrgicos sob Demanda (`invoke_subagent`):
+- **Governança Documental:** `gsd-planner`, `gsd-executor`, `gsd-verifier`, `gsd-debugger`, `gsd-code-reviewer`, `gsd-doc-writer`.
+- **Cavecrew Cirúrgicos:** `cavecrew-builder` (código conciso), `cavecrew-investigator` (varredura read-only), `cavecrew-reviewer` (revisão rápida).
 
 ## 9. Protocolo Obrigatório de Documentação de Ambiguidades (`AMBIGUITIES.md`)
 O agente deve auditar e registrar ambiguidades de especificação e contratos técnicos no arquivo `AMBIGUITIES.md` durante a Fase 1 (Forensics), Fase 2 (Planning) e obrigatoriamente após receber Change Requests na Fase 5.

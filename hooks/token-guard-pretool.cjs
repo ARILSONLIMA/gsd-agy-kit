@@ -167,8 +167,9 @@ function recordJitPromotion(type, name, customTtl) {
       try { data = JSON.parse(fs.readFileSync(promoFile, 'utf8')); } catch {}
     }
     if (!data[type]) data[type] = {};
-    // Ativação cirúrgica de uso pontual: 1 turno por acesso (Zero-Baseline)
-    const ttl = typeof customTtl === 'number' ? customTtl : 1;
+    // Sustentabilidade de execução: 5 turnos para skills (com auto-renovação), 1 turno para subagentes pontuais
+    const defaultTtl = type === 'skills' ? 5 : 1;
+    const ttl = typeof customTtl === 'number' ? customTtl : defaultTtl;
     data[type][name] = { promotedAt: Date.now(), turnsRemaining: ttl };
     writeJsonAtomic(JIT_PROMOTIONS_FILE, data);
   } catch {}
@@ -389,11 +390,14 @@ function recordTokenSaving(category, estimatedTokens = 500) {
       if (!fs.existsSync(activeSkillDir)) {
         if (fs.existsSync(poolSkillDir)) {
           try { copyFolderRecursive(poolSkillDir, activeSkillDir); } catch {}
-          recordJitPromotion('skills', skillName);
+          recordJitPromotion('skills', skillName, 5);
         } else if (fs.existsSync(archiveSkillDir)) {
           try { copyFolderRecursive(archiveSkillDir, activeSkillDir); } catch {}
-          recordJitPromotion('skills', skillName);
+          recordJitPromotion('skills', skillName, 5);
         }
+      } else {
+        // Renova o TTL por mais 5 turnos a cada acesso subsequente
+        recordJitPromotion('skills', skillName, 5);
       }
 
       if (folderType === 'skills-pool' || folderType === 'skills-archive') {

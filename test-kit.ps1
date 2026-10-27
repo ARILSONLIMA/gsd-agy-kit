@@ -37,7 +37,9 @@ if (-not $TargetDir) {
     if (Test-Path $TargetDir) {
         $TargetDir = (Resolve-Path $TargetDir).Path
     }
-    if ($kitDir.EndsWith("\.agents\kit") -or $kitDir.EndsWith("/.agents/kit")) {
+    if (Test-Path (Join-Path $kitDir "mcp-server.cjs")) {
+        # Repo checkout em teste
+    } elseif ($kitDir.EndsWith("\.agents\kit") -or $kitDir.EndsWith("/.agents/kit")) {
         # Executando instalado
     } elseif (Test-Path (Join-Path $TargetDir ".agents\kit")) {
         $kitDir = Join-Path $TargetDir ".agents\kit"
@@ -382,7 +384,7 @@ Assert-Test -Name "Catalogo de Skills (.agents/skills/) em Zero-Baseline (0 skil
             -ErrorDetails "Esperado 0 skills ativas no modo Zero-Baseline, encontradas $skillsActiveFolders"
 
 $rulesProtocol = Join-Path $TargetDir ".agents\rules\token-protocol.md"
-$hasCatalog = (Test-Path $rulesProtocol) -and ((Get-Content $rulesProtocol -Raw) -match "Catálogo Sintético de Subagentes & Skills")
+$hasCatalog = (Test-Path $rulesProtocol) -and ((Get-Content $rulesProtocol -Raw) -match "(Catálogo Sintético|Agentic Skill Retrieval|Descoberta & Ativação Autônoma)")
 Assert-Test -Name "Catálogo Sintético presente nas regras (.agents/rules/token-protocol.md)" `
             -Condition $hasCatalog `
             -ErrorDetails "Catálogo Sintético ausente em token-protocol.md"
@@ -512,6 +514,7 @@ if (Test-Path $activeTempSkill) { Remove-Item $activeTempSkill -Recurse -Force }
 $payloadSkillJit = '{"toolCall":{"name":"view_file","args":{"AbsolutePath":"' + ($poolTempSkill -replace '\\', '/') + '/SKILL.md"}}}'
 $resSkillJit = $payloadSkillJit | node $hookPath | ConvertFrom-Json
 $skillPromoted = (Test-Path $activeTempSkill)
+if (Test-Path $activeTempSkill) { Remove-Item $activeTempSkill -Recurse -Force -ErrorAction SilentlyContinue }
 
 Assert-Test -Name "Hook PreToolUse promove instantaneamente (JIT) skill do pool sob demanda e redireciona caminho" `
             -Condition ($resSkillJit.decision -eq "allow" -and $skillPromoted -and ($resSkillJit.overwrite.AbsolutePath -match "skills")) `
@@ -1140,6 +1143,26 @@ try {
 Assert-Test -Name "Servidor MCP Dual-Mode atende chamadas diretas de CLI (tools e skeleton)" `
             -Condition $mcpCliOk `
             -ErrorDetails "mcp-server.cjs falhou ao responder aos comandos CLI 'tools' ou 'skeleton'"
+
+# ------------------------------------------------------------------------------
+# Teste Agentic Skill Retrieval (skill_search & activate via CLI e MCP)
+# ------------------------------------------------------------------------------
+$agenticOk = $false
+try {
+    $tempActiveSkill = Join-Path $activeSkillsDir "ponytail-debt"
+    if (Test-Path $tempActiveSkill) { Remove-Item -Path $tempActiveSkill -Recurse -Force -ErrorAction SilentlyContinue }
+    $env:PROJECT_ROOT = $targetDir
+    $searchOut = node $mcpBinPath skill search "refatoracao" 2>$null
+    $activateOut = node $mcpBinPath skill activate "ponytail-debt" 2>$null
+    if ($searchOut -match "Skill Retrieval" -and (Test-Path $tempActiveSkill)) {
+        $agenticOk = $true
+    }
+    if (Test-Path $tempActiveSkill) { Remove-Item -Path $tempActiveSkill -Recurse -Force -ErrorAction SilentlyContinue }
+} catch {}
+
+Assert-Test -Name "Agentic Skill Retrieval (skill_search & activate) localiza por intenção e auto-promove JIT" `
+            -Condition $agenticOk `
+            -ErrorDetails "Falha no motor de busca semântica de skills ou na ativação JIT via mcp-server.cjs"
 
 # ------------------------------------------------------------------------------
 # Teste ast_query via MCP Server CLI

@@ -423,6 +423,19 @@ const TOOLS_MANIFEST = [
         text: { type: 'string', description: 'Texto ou saída de comando para comprimir' }
       }
     }
+  },
+  {
+    name: 'skill_search',
+    description: 'Localiza e avalia autonomamente skills no pool (.agents/skills-pool/) com base em sintomas técnicos, intenção ou desafio arquitetural (ex: "refatorar complexidade", "deadlock concorrência", "segurança", "auditoria uat"). Suporta auto-ativação JIT imediata sem viés de fases.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Problema, intenção ou termo técnico para buscar skills relevantes' },
+        activate: { type: 'boolean', description: 'Se true, promove imediatamente a skill encontrada para .agents/skills/ tornando-a ativa' },
+        limit: { type: 'number', description: 'Quantidade máxima de resultados (padrão: 3)' }
+      },
+      required: ['query']
+    }
   }
 ];
 
@@ -670,6 +683,34 @@ async function handleToolCall(name, args) {
         } else {
           outcome = { text: 'Erro: informe file_path ou text para compressão.', isError: true };
         }
+        break;
+      }
+      case 'skill_search': {
+        const skillsMgr = require('./skills-manager.cjs');
+        const matches = skillsMgr.searchSkills(PROJECT_ROOT, args.query, {
+          limit: args.limit || 3,
+          activate: Boolean(args.activate)
+        });
+        if (matches.length === 0) {
+          outcome = {
+            text: `ℹ️ Nenhuma skill especializada encontrada para o termo "${args.query}". O agente pode prosseguir com implementação autônoma em clean code.`,
+            isError: false
+          };
+          break;
+        }
+        let txt = `🔍 [Skill Retrieval] Encontradas ${matches.length} skill(s) relevantes no pool para "${args.query}":\n`;
+        for (const m of matches) {
+          const status = m.isActive ? '🟢 ATIVA' : '📦 NO POOL (sob demanda)';
+          txt += `\n• ${m.name} [${status}] (Score: ${m.score})\n`;
+          txt += `  Descrição: ${m.description}\n`;
+          txt += `  Caminho: ${m.canonicalPath}\n`;
+          if (args.activate) {
+            txt += `  ⚡ Auto-promovida para .agents/skills/${m.name} (TTL: 5 turnos).\n`;
+          } else if (!m.isActive) {
+            txt += `  💡 Para ativar: leia o caminho com read_file ou execute: ${CLI_CMD} skill activate "${m.name}"\n`;
+          }
+        }
+        outcome = { text: txt.trim(), isError: false };
         break;
       }
       default:
@@ -1091,6 +1132,49 @@ async function handleCli(args) {
     exitCli(0);
   }
 
+  if (cmd === 'skill') {
+    const subCmd = (args[1] || '').toLowerCase();
+    const param = args[2] || '';
+    const skillsMgr = require('./skills-manager.cjs');
+
+    if (subCmd === 'search' || subCmd === 'find') {
+      if (!param) {
+        console.error(`Erro: informe o termo de busca. Ex: ${CLI_CMD} skill search "concorrência"`);
+        exitCli(1);
+      }
+      const shouldActivate = args.includes('--activate') || args.includes('-a');
+      const limitArg = args.find(a => /^\d+$/.test(a));
+      const limit = limitArg ? parseInt(limitArg, 10) : 3;
+      const { text, isError } = await handleToolCall('skill_search', { query: param, activate: shouldActivate, limit });
+      if (isError) { console.error(text); exitCli(1); }
+      console.log(text);
+      exitCli(0);
+    }
+
+    if (subCmd === 'activate' || subCmd === 'enable' || subCmd === 'promote') {
+      if (!param) {
+        console.error(`Erro: informe o nome da skill. Ex: ${CLI_CMD} skill activate "ponytail-debt"`);
+        exitCli(1);
+      }
+      const ok = skillsMgr.promoteSkill(PROJECT_ROOT, param, 5);
+      if (ok) {
+        console.log(`✅ Skill "${param}" ativada em .agents/skills/${param} (TTL: 5 turnos).`);
+        exitCli(0);
+      } else {
+        console.error(`❌ Skill "${param}" não encontrada no pool (.agents/skills-pool/).`);
+        exitCli(1);
+      }
+    }
+
+    if (subCmd === 'list' || subCmd === 'status' || !subCmd) {
+      skillsMgr.showStatus(PROJECT_ROOT);
+      exitCli(0);
+    }
+
+    console.error(`Uso: ${CLI_CMD} skill <search <query> [--activate] | activate <nome> | list>`);
+    exitCli(1);
+  }
+
   console.error(`Comando desconhecido: "${cmd}". Execute "${CLI_CMD} help" para ver as opções.`);
   exitCli(1);
 }
@@ -1115,6 +1199,12 @@ Uso CLI direto (via run_command):
   ${CLI_CMD} lsp health
   ${CLI_CMD} impact "<símbolo_ou_arquivo>" [arquivo] [limit]
   ${CLI_CMD} env [caminho_env]
+  ${CLI_CMD} map [budget]
+  ${CLI_CMD} debt [filtro]
+  ${CLI_CMD} shrink <arquivo>
+  ${CLI_CMD} skill search "<query>" [--activate]
+  ${CLI_CMD} skill activate "<nome>"
+  ${CLI_CMD} skill list
   ${CLI_CMD} test-isolate [runner]
   ${CLI_CMD} checkpoint <create|list|rollback> [arg]
   ${CLI_CMD} errors [--clear]

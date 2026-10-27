@@ -43,7 +43,9 @@ echo -e "\n\033[0;31m🛑 [Erro] Diretório alvo não encontrado: ${TARGET_DIR}\
 exit 1
 fi
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
-if [[ "$SCRIPT_DIR" == *"/.agents/kit" ]]; then
+if [ -f "${SCRIPT_DIR}/mcp-server.cjs" ]; then
+KIT_DIR="${SCRIPT_DIR}"
+elif [[ "$SCRIPT_DIR" == *"/.agents/kit" ]]; then
 KIT_DIR="${SCRIPT_DIR}"
 elif [ -d "${TARGET_DIR}/.agents/kit" ]; then
 KIT_DIR="${TARGET_DIR}/.agents/kit"
@@ -303,7 +305,7 @@ fi
 assert_test "Catalogo de Skills (.agents/skills/) em Zero-Baseline (0 skills ativas por padrao)" "$SKILLS_ZERO_OK"
 
 CATALOG_OK=0
-if grep -q "Catálogo Sintético de Subagentes & Skills" "${TARGET_DIR}/.agents/rules/token-protocol.md" 2>/dev/null; then
+if grep -E -q "(Catálogo Sintético|Agentic Skill Retrieval|Descoberta & Ativação Autônoma)" "${TARGET_DIR}/.agents/rules/token-protocol.md" 2>/dev/null; then
 CATALOG_OK=1
 fi
 assert_test "Catálogo Sintético presente nas regras (.agents/rules/token-protocol.md)" "$CATALOG_OK"
@@ -415,6 +417,7 @@ rm -rf "${ACTIVE_SKILLS_DIR}/gsd-spike" 2>/dev/null || true
 PAYLOAD_SKILL_JIT="{\"toolCall\":{\"name\":\"view_file\",\"args\":{\"AbsolutePath\":\"${SKILLS_POOL_DIR}/gsd-spike/SKILL.md\"}}}"
 RES_SKILL_JIT=$(echo "${PAYLOAD_SKILL_JIT}" | node "${HOOK_PATH}" 2>/dev/null || echo "{}")
 [ -d "${ACTIVE_SKILLS_DIR}/gsd-spike" ] && SKILL_JIT_OK=1 || SKILL_JIT_OK=0
+rm -rf "${ACTIVE_SKILLS_DIR}/gsd-spike" 2>/dev/null || true
 assert_test "Hook PreToolUse promove instantaneamente (JIT) skill do pool sob demanda" "$SKILL_JIT_OK"
 
 # ------------------------------------------------------------------------------
@@ -1046,6 +1049,19 @@ if [[ "$MCP_CLI_OUT" == *"mempalace_recall"* ]] && [[ "$MCP_SKEL_OUT" == *"Skele
 MCP_CLI_OK=1
 fi
 assert_test "Servidor MCP Dual-Mode atende chamadas diretas de CLI (tools e skeleton)" "$MCP_CLI_OK"
+
+# ------------------------------------------------------------------------------
+# Teste 34.1: Agentic Skill Retrieval (skill_search & activate via CLI e MCP)
+# ------------------------------------------------------------------------------
+rm -rf "${ACTIVE_SKILLS_DIR}/ponytail-debt" 2>/dev/null || true
+SKILL_SEARCH_OUT=$(PROJECT_ROOT="${TARGET_DIR}" timeout 5s node "${MCP_BIN}" skill search "refatoracao" 2>/dev/null || echo "")
+SKILL_ACTIVATE_OUT=$(PROJECT_ROOT="${TARGET_DIR}" timeout 5s node "${MCP_BIN}" skill activate "ponytail-debt" 2>/dev/null || echo "")
+AGENTIC_RETRIEVAL_OK=0
+if [[ "$SKILL_SEARCH_OUT" == *"Skill Retrieval"* ]] && [ -d "${ACTIVE_SKILLS_DIR}/ponytail-debt" ]; then
+AGENTIC_RETRIEVAL_OK=1
+fi
+rm -rf "${ACTIVE_SKILLS_DIR}/ponytail-debt" 2>/dev/null || true
+assert_test "Agentic Skill Retrieval (skill_search & activate) localiza por intenção e auto-promove JIT" "$AGENTIC_RETRIEVAL_OK"
 
 # ------------------------------------------------------------------------------
 # Teste 35: MCP Server CLI ast_query

@@ -474,17 +474,190 @@ function syncSkills(targetDir, explicitPhase) {
   return { phase, activeCount: finalActive.length, activated };
 }
 
-function promoteSkill(targetDir, skillName) {
-  const { activeDir, poolDir } = getPaths(targetDir);
+function promoteSkill(targetDir, skillName, customTtl = 5) {
+  const { activeDir, poolDir, legacyArchiveDir } = getPaths(targetDir);
   const activePath = path.join(activeDir, skillName);
   const poolPath = path.join(poolDir, skillName);
+  const legacyPath = path.join(legacyArchiveDir, skillName);
 
-  if (fs.existsSync(activePath)) return true;
-  if (fs.existsSync(poolPath)) {
+  let success = false;
+  if (fs.existsSync(activePath)) {
+    success = true;
+  } else if (fs.existsSync(poolPath)) {
     copyFolderSync(poolPath, activePath);
-    return true;
+    success = true;
+  } else if (fs.existsSync(legacyPath)) {
+    copyFolderSync(legacyPath, activePath);
+    success = true;
   }
-  return false;
+
+  if (success) {
+    try {
+      const cacheDir = path.join(targetDir, '.agents', '.cache');
+      if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+      const jitFile = path.join(cacheDir, 'jit-promotions.json');
+      let data = { skills: {}, agents: {} };
+      if (fs.existsSync(jitFile)) {
+        try { data = JSON.parse(fs.readFileSync(jitFile, 'utf8')); } catch {}
+      }
+      if (!data.skills) data.skills = {};
+      data.skills[skillName] = { promotedAt: Date.now(), turnsRemaining: customTtl };
+      fs.writeFileSync(jitFile, JSON.stringify(data, null, 2), 'utf8');
+    } catch {}
+  }
+
+  return success;
+}
+
+function normalizeStr(str = '') {
+  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+const STEM_SYNONYMS = {
+  refatorar: ['refactor', 'refator', 'clean'],
+  refatoracao: ['refactor', 'refator', 'clean'],
+  refatoracoes: ['refactor', 'refator'],
+  refactoring: ['refactor', 'refator'],
+  revisao: ['review', 'revis'],
+  revisar: ['review', 'revis'],
+  testes: ['test'],
+  testar: ['test'],
+  planejar: ['plan'],
+  planejamento: ['plan'],
+  executar: ['execute'],
+  execucao: ['execute'],
+  verificar: ['verify', 'uat'],
+  verificacao: ['verify', 'uat'],
+  seguranca: ['security', 'shield', 'auth'],
+  auditar: ['audit'],
+  auditoria: ['audit'],
+  concorrencia: ['concurrency', 'race', 'async', 'thread'],
+  deadlock: ['concurrency', 'race', 'debug', 'lock'],
+  otimizacao: ['optimize', 'fast', 'perf', 'shrink', 'tokens'],
+  otimizar: ['optimize', 'fast', 'perf', 'shrink', 'tokens'],
+  desempenho: ['performance', 'fast', 'optimize'],
+  limpar: ['clean', 'cleanup'],
+  limpeza: ['clean', 'cleanup'],
+  debito: ['debt', 'yagni', 'shortcut'],
+  divida: ['debt', 'yagni', 'shortcut'],
+  preguicoso: ['ponytail', 'lazy'],
+  simples: ['ponytail', 'yagni', 'caveman'],
+  simplicidade: ['ponytail', 'yagni', 'caveman']
+};
+
+function searchSkills(targetDir = process.cwd(), query = '', options = {}) {
+  ensurePool(targetDir);
+  const { activeDir, poolDir, legacyArchiveDir } = getPaths(targetDir);
+  const limit = typeof options.limit === 'number' ? options.limit : 3;
+  const autoActivate = Boolean(options.activate || options.autoActivate);
+
+  const rawClean = (query || '').trim();
+  if (!rawClean) return [];
+
+  const cleanQuery = normalizeStr(rawClean);
+  const stopwords = new Set(['e', 'de', 'do', 'da', 'em', 'para', 'com', 'o', 'a', 'os', 'as', 'um', 'uma', 'no', 'na', 'nos', 'nas', 'por', 'the', 'and', 'or', 'for', 'to', 'in', 'on', 'with', 'a', 'an', 'is', 'it']);
+  const rawTokens = cleanQuery.split(/[\s,;:._\-\/]+/).filter(t => t.length > 1 && !stopwords.has(t));
+  if (rawTokens.length === 0) rawTokens.push(cleanQuery);
+
+  // Expande com sinônimos
+  const expandedTokens = new Set(rawTokens);
+  for (const t of rawTokens) {
+    if (STEM_SYNONYMS[t]) {
+      for (const syn of STEM_SYNONYMS[t]) {
+        expandedTokens.add(syn);
+      }
+    }
+  }
+
+  const candidateDirs = new Set();
+  const searchBases = [poolDir, activeDir, legacyArchiveDir];
+  for (const b of searchBases) {
+    if (fs.existsSync(b)) {
+      try {
+        const entries = fs.readdirSync(b);
+        for (const e of entries) {
+          const fullPath = path.join(b, e);
+          if (fs.statSync(fullPath).isDirectory()) {
+            candidateDirs.add(e);
+          }
+        }
+      } catch {}
+    }
+  }
+
+  const results = [];
+  for (const skillName of candidateDirs) {
+    let skillMdPath = path.join(poolDir, skillName, 'SKILL.md');
+    if (!fs.existsSync(skillMdPath)) {
+      skillMdPath = path.join(activeDir, skillName, 'SKILL.md');
+    }
+    if (!fs.existsSync(skillMdPath) && fs.existsSync(path.join(legacyArchiveDir, skillName, 'SKILL.md'))) {
+      skillMdPath = path.join(legacyArchiveDir, skillName, 'SKILL.md');
+    }
+    if (!fs.existsSync(skillMdPath)) continue;
+
+    let content = '';
+    try {
+      content = fs.readFileSync(skillMdPath, 'utf8');
+    } catch {
+      continue;
+    }
+
+    let description = '';
+    const fmMatch = content.match(/^---\s*([\s\S]*?)\s*---/);
+    if (fmMatch) {
+      const descBlockMatch = fmMatch[1].match(/description:\s*(?:[>|]\s*\n([\s\S]*?)(?=\n[a-zA-Z0-9_-]+:|$)|([^\n\r]+))/i);
+      if (descBlockMatch) {
+        if (descBlockMatch[1]) {
+          description = descBlockMatch[1].split('\n').map(l => l.trim()).filter(Boolean).join(' ');
+        } else if (descBlockMatch[2]) {
+          description = descBlockMatch[2].trim();
+        }
+      }
+    }
+    if (!description) {
+      const lines = content.replace(/^#+\s*/gm, '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('---'));
+      description = (lines[0] || skillName).slice(0, 160);
+    }
+
+    const normName = normalizeStr(skillName);
+    const normDesc = normalizeStr(description);
+    const normContent = normalizeStr(content.slice(0, 2000));
+
+    let score = 0;
+    if (normName === cleanQuery) score += 100;
+    if (normName.includes(cleanQuery)) score += 60;
+    if (normDesc.includes(cleanQuery)) score += 40;
+
+    for (const token of expandedTokens) {
+      if (normName.includes(token)) score += 30;
+      if (normDesc.includes(token)) score += 20;
+      if (normContent.includes(token)) score += 5;
+    }
+
+    if (score > 0) {
+      const isActive = fs.existsSync(path.join(activeDir, skillName));
+      results.push({
+        name: skillName,
+        description,
+        score,
+        isActive,
+        canonicalPath: path.join('.agents', 'skills-pool', skillName, 'SKILL.md').replace(/\\/g, '/')
+      });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  const top = results.slice(0, limit);
+
+  if (autoActivate && top.length > 0) {
+    for (const item of top) {
+      promoteSkill(targetDir, item.name);
+      item.isActive = true;
+    }
+  }
+
+  return top;
 }
 
 // CLI Routing
@@ -505,6 +678,9 @@ if (require.main === module) {
       param = args[1] || '';
       targetDir = process.cwd();
     }
+  } else if (cmd === 'search' || cmd === 'find') {
+    param = args[1] || '';
+    targetDir = args[2] || process.cwd();
   } else if (cmd === 'status' || cmd === 'list' || !cmd) {
     targetDir = args[1] || process.cwd();
   } else {
@@ -517,6 +693,19 @@ if (require.main === module) {
     const res = syncSkills(targetDir, param || 'zero');
     console.log(`\n⚡ [Skills Manager] Dynamic Skill Pool sincronizado com o perfil '${res.phase.toUpperCase()}'!`);
     console.log(`   🟢 Skills Ativas: ${res.activeCount} | Promovidas: ${res.activated}\n`);
+  } else if (cmd === 'search' || cmd === 'find') {
+    const matches = searchSkills(targetDir, param, { limit: 5 });
+    if (matches.length === 0) {
+      console.log(`\nℹ️ [Skills Manager] Nenhuma skill encontrada para "${param}".\n`);
+    } else {
+      console.log(`\n🔍 [Skills Manager] Encontradas ${matches.length} skill(s) no pool para "${param}":`);
+      for (const m of matches) {
+        const tag = m.isActive ? '\x1b[32m[ATIVA]\x1b[0m' : '\x1b[33m[NO POOL]\x1b[0m';
+        console.log(`  • \x1b[36m${m.name}\x1b[0m ${tag} (Score: ${m.score})`);
+        console.log(`    ${m.description}`);
+        console.log(`    ${m.canonicalPath}\n`);
+      }
+    }
   } else if (cmd === 'enable' || cmd === 'promote') {
     enableSkill(targetDir, param);
     showStatus(targetDir);
@@ -526,7 +715,7 @@ if (require.main === module) {
   } else if (cmd === 'status' || cmd === 'list' || !cmd) {
     showStatus(targetDir);
   } else {
-    console.log('Uso: node skills-manager.cjs [sync [phase] [targetDir] | profile <zero|core|backend|full> [targetDir] | enable <nome> [targetDir] | disable <nome> [targetDir] | status [targetDir]]');
+    console.log('Uso: node skills-manager.cjs [search <termo> [targetDir] | sync [phase] [targetDir] | profile <zero|core|backend|full> [targetDir] | enable <nome> [targetDir] | disable <nome> [targetDir] | status [targetDir]]');
   }
 }
 
@@ -538,6 +727,7 @@ module.exports = {
   listSkills,
   syncSkills,
   promoteSkill,
+  searchSkills,
   GLOBAL_SKILLS,
   PHASE_SKILLS
 };
