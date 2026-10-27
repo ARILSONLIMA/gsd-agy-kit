@@ -468,18 +468,53 @@ const ALL_TOOLS_MANIFEST = [
       },
       required: ['file_path']
     }
+  },
+  {
+    name: 'tool_catalog',
+    description: 'Consulta o catálogo sob demanda de todas as ferramentas disponíveis no ecossistema GSD (LSP, AST, MemPalace, RAG, Codebase Map, etc.). Retorna parâmetros e instruções de uso.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Filtro opcional por nome ou finalidade (ex: "lsp", "banco", "leitura", "memória")' }
+      }
+    }
+  },
+  {
+    name: 'mcp_exec',
+    description: 'Gateway universal para executar qualquer ferramenta do ecossistema GSD sob demanda (consulte tool_catalog para ver ferramentas disponíveis e argumentos).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tool: { type: 'string', description: 'Nome da ferramenta a executar (ex: "lsp_diagnostics", "gsd_read_strip", "ast_query", "mempalace_recall", "codebase_map")' },
+        arguments: { type: 'object', description: 'Objeto JSON com os argumentos da ferramenta' }
+      },
+      required: ['tool']
+    }
   }
 ];
 
+function formatToolCatalog(query) {
+  let tools = ALL_TOOLS_MANIFEST;
+  if (query && typeof query === 'string') {
+    const q = query.toLowerCase().trim();
+    tools = tools.filter(t => t.name.toLowerCase().includes(q) || (t.description && t.description.toLowerCase().includes(q)));
+  }
+  let out = `🛠️ Catálogo de Ferramentas GSD (${tools.length} disponíveis):\n\n`;
+  for (const t of tools) {
+    const props = t.inputSchema?.properties ? Object.keys(t.inputSchema.properties).join(', ') : 'nenhum';
+    const req = t.inputSchema?.required ? ` (Obrigatórios: ${t.inputSchema.required.join(', ')})` : '';
+    out += `• **${t.name}**: ${t.description}\n  Parâmetros: { ${props} }${req}\n\n`;
+  }
+  out += `Para executar qualquer ferramenta via Gateway: use mcp_exec({ tool: "<nome>", arguments: { ... } }) ou invoque a ferramenta diretamente pelo nome.`;
+  return out.trim();
+}
+
 const DEFAULT_TOOLS_MANIFEST = [
-  ALL_TOOLS_MANIFEST.find(t => t.name === 'lsp_diagnostics'),
-  ALL_TOOLS_MANIFEST.find(t => t.name === 'gsd_outline'),
-  ALL_TOOLS_MANIFEST.find(t => t.name === 'gsd_read_strip'),
   ALL_TOOLS_MANIFEST.find(t => t.name === 'quick_verify'),
-  ALL_TOOLS_MANIFEST.find(t => t.name === 'env_skeleton'),
-  ALL_TOOLS_MANIFEST.find(t => t.name === 'codebase_map'),
-  ALL_TOOLS_MANIFEST.find(t => t.name === 'ponytail_debt'),
-  ALL_TOOLS_MANIFEST.find(t => t.name === 'caveman_shrink')
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'tool_catalog'),
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'mcp_exec'),
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'lsp_diagnostics'),
+  ALL_TOOLS_MANIFEST.find(t => t.name === 'gsd_read_strip')
 ].filter(Boolean);
 
 const TOOLS_MANIFEST = DEFAULT_TOOLS_MANIFEST;
@@ -788,6 +823,21 @@ async function handleToolCall(name, args) {
         const filePath = args.file_path || args.path;
         const text = skeletonEngine.getOutline(filePath);
         outcome = { text, isError: false };
+        break;
+      }
+      case 'tool_catalog': {
+        const text = formatToolCatalog(args.query);
+        outcome = { text, isError: false };
+        break;
+      }
+      case 'mcp_exec': {
+        const targetTool = args.tool || args.name;
+        if (!targetTool) {
+          outcome = { text: 'Erro: informe o nome da ferramenta a executar no parâmetro "tool". Consulte tool_catalog para ver as opções.', isError: true };
+          break;
+        }
+        const targetArgs = args.arguments || args.args || {};
+        outcome = await handleToolCall(targetTool, targetArgs);
         break;
       }
       default:
@@ -1268,6 +1318,30 @@ async function handleCli(args) {
   if (cmd === 'verify' || cmd === 'quick-verify') {
     const target = args[1] || PROJECT_ROOT;
     const { text, isError } = await handleToolCall('quick_verify', { path: target });
+    if (isError) { console.error(text); exitCli(1); }
+    console.log(text);
+    exitCli(0);
+  }
+
+  if (cmd === 'catalog') {
+    const query = args[1] || '';
+    const { text, isError } = await handleToolCall('tool_catalog', { query });
+    if (isError) { console.error(text); exitCli(1); }
+    console.log(text);
+    exitCli(0);
+  }
+
+  if (cmd === 'exec') {
+    const targetTool = args[1];
+    if (!targetTool) {
+      console.error(`Erro: informe a ferramenta. Ex: ${CLI_CMD} exec lsp_diagnostics '{"file_path":"..."}'`);
+      exitCli(1);
+    }
+    let targetArgs = {};
+    if (args[2]) {
+      try { targetArgs = JSON.parse(args[2]); } catch { targetArgs = { path: args[2] }; }
+    }
+    const { text, isError } = await handleToolCall('mcp_exec', { tool: targetTool, arguments: targetArgs });
     if (isError) { console.error(text); exitCli(1); }
     console.log(text);
     exitCli(0);

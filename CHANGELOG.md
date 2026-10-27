@@ -2,6 +2,25 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.4.0] - 2026-10-27
+- **Meta-Tool Gateway Dinâmico & Zero-Overhead de Schemas (`mcp-server.cjs`):**
+  - **Eliminação de Bloat de Schemas no Prompt:** O manifesto padrão do MCP agora expõe apenas ferramentas essenciais e o Gateway Universal (`quick_verify`, `tool_catalog`, `mcp_exec`, `lsp_diagnostics`, `gsd_read_strip`), cortando o overhead de schemas de ~4.500 tokens para ~250 tokens por turno.
+  - **Catálogo sob Demanda (`tool_catalog`):** Permite à IA consultar descrições e parâmetros de todas as 20 ferramentas do ecossistema sem pagar o custo de mantê-las ativas no prompt permanentemente.
+  - **Gateway de Execução (`mcp_exec`):** Executa qualquer ferramenta do ecossistema GSD sob demanda (`ast_query`, `mempalace_recall`, `codebase_map`, `env_skeleton`, `lsp_definition`, etc.) através de um canal único e determinístico.
+- **Runner Unificado de Verificação em 1 Turno (`verify.cjs` & `scripts/verify.sh`):**
+  - Execução simultânea de checagem sintática (`node --check`), code smells de Fowler (aninhamento $\le 3$, tamanho $\le 48$, complexidade $\le 14$, zero concatenação SQL) e testes automatizados (`npm test`) em menos de 1 segundo.
+  - Nova ferramenta MCP `quick_verify` e comando CLI `node .agents/mcp-server.cjs verify`.
+- **Inspetor Cirúrgico de Código sem Comentários (`gsd-read-strip.cjs`):**
+  - Remove comentários, docstrings extensas e linhas em branco preservando 100% da lógica e sintaxe, poupando 20% a 30% de tokens de contexto em revisões na Fase 3.
+  - Nova ferramenta MCP `gsd_read_strip` e comando CLI `node .agents/mcp-server.cjs strip <arquivo>`.
+- **Checklist Ativo de Ambiguidades com Gate dos 4 Vetores (`hooks/token-guard-diagnostics.cjs`):**
+  - Stop gate calibrado para exigir documentação substantiva ($\ge 250$ bytes e $\ge 3$ blocos atômicos `### AMB-`) cobrindo os 4 vetores universais de incerteza (Temporal/UTC, Limites/Divisões, Intermitência e Contratos de Payload) antes de liberar o avanço da Fase 1.
+- **Blindagem Estrita contra Contaminação de Contexto (`hooks/token-guard-pretool.cjs`):**
+  - Sanitização de respostas de recusa do Sandbox Shield eliminando qualquer eco de strings ou caminhos proibidos de benchmark nos transcripts do agente.
+  - Bloqueio estrito de leitura de `.benchmark_cold_start.json`.
+- **Compactação e Consolidação do Pacote de Regras (`rules/`):**
+  - Redução do volume de regras de 5.433 palavras (~7.062 tokens) para 2.787 palavras (~3.623 tokens), cortando 49% do overhead de prompt fixo em todos os turnos.
+
 ## [2.3.0] - 2026-10-27
 - **Agentic Skill Retrieval (Descoberta & Ativação Autônoma sob Demanda):**
   - **Eliminação do Viés Determinístico de Fases:** O agente agora opera com total autonomia e sem imposição humana de skills pré-selecionadas por fase, mantendo o baseline inicial em 0 skills ativas em `.agents/skills/` (máxima economia de contexto) enquanto preserva 93 skills no pool.
