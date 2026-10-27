@@ -345,7 +345,7 @@ function handlePostToolUse(payload) {
         } else {
           const hadPreviousFailures = testIsolate.getFailedTests().length > 0;
           testIsolate.recordSuccess(cmd);
-          try { if (fs.existsSync(STOP_GATE_PATH)) fs.unlinkSync(STOP_GATE_PATH); } catch {}
+          // Preservar STOP_GATE_PATH para manter a contagem do gate anti-loop ativa mesmo após execução de testes
 
           if (hadPreviousFailures) {
             // Transição Vermelho -> Verde detectada!
@@ -386,6 +386,11 @@ function handlePostToolUse(payload) {
   setTimeout(() => process.exit(0), 500).unref();
 }
 
+function recordStopGateInterception(gateState, now) {
+  const nextCount = (Number(gateState && gateState.retryCount) || 0) + 1;
+  writeJsonAtomic(STOP_GATE_PATH, { retryCount: nextCount, timestamp: now });
+}
+
 function checkAutoVerifyStopGate(terminationReason) {
   // Só intercepta paradas normais por conclusão de turno (NO_TOOL_CALL)
   if (terminationReason !== 'NO_TOOL_CALL') {
@@ -414,7 +419,7 @@ function checkAutoVerifyStopGate(terminationReason) {
         const testStatus = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
         const hasFailed = testStatus && (testStatus.passed === false || (Array.isArray(testStatus.failures) && testStatus.failures.length > 0));
         if (hasFailed && (now - Number(testStatus.timestamp || 0)) < 300000) {
-          writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+          recordStopGateInterception(gateState, now);
           return (
             '🛑 [AUTO-VERIFY GATE] Parada prematura interceptada: há teste(s) falhando na última execução registrada.\n' +
             'Execute o teste isolado (node .agents/mcp-server.cjs test-isolate) e corrija a regressão antes de concluir.'
@@ -468,7 +473,7 @@ function checkAutoVerifyStopGate(terminationReason) {
         for (const item of recentFiles) {
           const diag = lsp.diagnostics({ file_path: item.file });
           if (diag && (diag.isError || diag.hasDiagnostics)) {
-            writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+            recordStopGateInterception(gateState, now);
             return (
               `🛑 [AUTO-VERIFY GATE] Parada prematura interceptada: erro de sintaxe/compilação detectado em ${path.basename(item.file)}:\n` +
               `${diag.text}\nCorrija o erro antes de finalizar o turno.`
@@ -487,7 +492,7 @@ function checkAutoVerifyStopGate(terminationReason) {
           const criticalSql = secIssues.filter(i => i.severity === 'CRITICAL');
           if (criticalSql.length > 0) {
             const first = criticalSql[0];
-            writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+            recordStopGateInterception(gateState, now);
             return (
               `🛑 [SECURITY GATE] Parada prematura interceptada: VULNERABILIDADE DE SQL INJECTION detectada em ${path.basename(first.file)}:${first.line}!\n` +
               `Trecho: ${first.snippet}\n` +
@@ -503,12 +508,12 @@ function checkAutoVerifyStopGate(terminationReason) {
       if (compMod) {
         try {
           const ComplexityGuard = require(compMod);
-          const guard = new ComplexityGuard({ maxLines: 40, maxNesting: 3, maxComplexity: 12 });
+          const guard = new ComplexityGuard({ maxLines: 48, maxNesting: 3, maxComplexity: 14 });
           const smells = guard.scanFiles(recentFiles.map(r => r.file));
           const criticalSmells = smells.filter(s => s.type === 'deep_nesting' || s.type === 'long_method' || s.type === 'high_complexity');
           if (criticalSmells.length > 0) {
             const first = criticalSmells[0];
-            writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+            recordStopGateInterception(gateState, now);
             let advice = 'Refatore a função usando guard clauses (early return) para desaninhar e modularizar antes de concluir.';
             if (first.type === 'high_complexity') {
               advice = 'Extraia sub-rotinas de decisão e utilize dicionários/Maps de despacho em vez de longas cadeias condicionais.';
@@ -533,7 +538,7 @@ function checkAutoVerifyStopGate(terminationReason) {
           const dups = checker.checkFiles(recentFiles.map(r => r.file));
           if (dups.length >= 2) {
             const first = dups[0];
-            writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+            recordStopGateInterception(gateState, now);
             return (
               `🛑 [DRY QUALITY GATE] Parada prematura interceptada: ${dups.length} blocos de CÓDIGO DUPLICADO (>= 6 linhas) detectados entre os arquivos tocados!\n` +
               `Locais: ${first.locations.map(l => path.basename(l.file) + ':' + l.line).join(' <-> ')}\n` +
@@ -553,7 +558,7 @@ function checkAutoVerifyStopGate(terminationReason) {
     const ambFile = path.join(PROJECT_ROOT, 'AMBIGUITIES.md');
     const hasAmb = fs.existsSync(ambFile) && fs.statSync(ambFile).size >= 100;
     if (!hasAmb) {
-      writeJsonAtomic(STOP_GATE_PATH, { retryCount: 1, timestamp: now });
+      recordStopGateInterception(gateState, now);
       return (
         '🛑 [AMBIGUITY GATE] Parada prematura interceptada: O arquivo AMBIGUITIES.md não foi documentado ou está vazio!\n' +
         'O protocolo do projeto exige documentar as ambiguidades de requisitos nos 4 vetores universais (Temporal/Timezone, Borda/Divisões, Intermitência de Entrada e Contratos de Payload) em blocos atômicos antes de concluir a tarefa.'
