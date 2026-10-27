@@ -269,7 +269,7 @@ $hooksConfig = @{
         )
         "PostToolUse" = @(
             @{
-                "matcher" = "*"
+                "matcher" = "edit_file|replace_file_content|multi_replace_file_content|write_file|write_to_file|Write|write|run_command|bash|shell|call_mcp_tool"
                 "hooks" = @(
                     @{
                         "type" = "command"
@@ -339,9 +339,11 @@ if (Test-Path $kitLibDir) {
     Copy-Item -Path "$kitLibDir\*" -Destination $agentsLibDir -Recurse -Force
 }
 
-$mcpServerSrc = Join-Path $kitDir "mcp-server.cjs"
-if (Test-Path $mcpServerSrc) {
-    Copy-Item -Path $mcpServerSrc -Destination (Join-Path $agentsDir "mcp-server.cjs") -Force
+foreach ($sc in @("mcp-server.cjs", "gsd-read-strip.cjs", "verify.cjs")) {
+    $scSrc = Join-Path $kitDir $sc
+    if (Test-Path $scSrc) {
+        Copy-Item -Path $scSrc -Destination (Join-Path $agentsDir $sc) -Force
+    }
 }
 
 # Registrar .agents/mcp_config.json
@@ -357,7 +359,7 @@ $mcpConfig = @{
 $mcpJsonContent = $mcpConfig | ConvertTo-Json -Depth 5
 Set-Content -Path $mcpJsonPath -Value $mcpJsonContent -Encoding utf8
 
-# Plugin .agents/plugins/gsd-economy/
+# Plugin .agents/plugins/gsd-economy/ via wrapper leve
 $pluginDir = Join-Path $agentsDir "plugins\gsd-economy"
 New-Item -ItemType Directory -Path $pluginDir -Force | Out-Null
 $pluginManifest = @{
@@ -367,12 +369,7 @@ $pluginManifest = @{
 } | ConvertTo-Json -Depth 3
 Set-Content -Path (Join-Path $pluginDir "plugin.json") -Value $pluginManifest -Encoding utf8
 Copy-Item -Path $mcpJsonPath -Destination (Join-Path $pluginDir "mcp_config.json") -Force
-if (Test-Path $mcpServerSrc) {
-    Copy-Item -Path $mcpServerSrc -Destination (Join-Path $pluginDir "mcp-server.cjs") -Force
-}
-if (Test-Path $kitLibDir) {
-    Copy-Item -Path "$kitLibDir\*" -Destination (Join-Path $pluginDir "lib") -Recurse -Force
-}
+Set-Content -Path (Join-Path $pluginDir "mcp-server.cjs") -Value "#!/usr/bin/env node`n'use strict';`nrequire('../../mcp-server.cjs');`n" -Encoding utf8
 
 # Gerar .agents/plugins.json para registro explícito no Antigravity
 $pluginsJsonPath = Join-Path $agentsDir "plugins.json"
@@ -396,17 +393,14 @@ if (Get-Command agy -ErrorAction SilentlyContinue) {
     } catch {}
 }
 
-# 9. Instalar Pacote Completo e Utilitários Nativos (.agents/kit/ e scripts/)
+# 9. Instalar Pacote Completo e Utilitários Nativos (.agents/kit/)
 $targetKitDir = Join-Path $agentsDir "kit"
 New-Item -ItemType Directory -Path $targetKitDir -Force | Out-Null
-$targetScriptsDir = Join-Path $TargetDir "scripts"
-New-Item -ItemType Directory -Path $targetScriptsDir -Force | Out-Null
 
 if (Test-Path $kitLibDir) {
-    Copy-Item -Path "$kitLibDir\*" -Destination (Join-Path $targetKitDir "lib") -Recurse -Force
-    $targetScriptsLibDir = Join-Path $targetScriptsDir "lib"
-    New-Item -ItemType Directory -Path $targetScriptsLibDir -Force | Out-Null
-    Copy-Item -Path "$kitLibDir\*" -Destination $targetScriptsLibDir -Recurse -Force
+    $targetKitLib = Join-Path $targetKitDir "lib"
+    New-Item -ItemType Directory -Path $targetKitLib -Force | Out-Null
+    Copy-Item -Path "$kitLibDir\*" -Destination $targetKitLib -Recurse -Force
 }
 
 $kitRulesSrc = Join-Path $kitDir "rules"
@@ -416,19 +410,11 @@ if (Test-Path $kitRulesSrc) {
     Copy-Item -Path "$kitRulesSrc\*" -Destination $targetKitRules -Recurse -Force
 }
 
-$kitScripts = @("test-kit.ps1", "test-kit.sh", "setup-ui.cjs", "setup.ps1", "setup.sh", "install.ps1", "install.sh", "package.json", "CHANGELOG.md", "uninstall.ps1", "uninstall.sh", "skills-profile.ps1", "skills-profile.sh", "optimize-tokens.ps1", "optimize-tokens.sh", "sanitize-command.ps1", "token-report.cjs", "gsd-update.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs", "patch-agents.cjs", "optimize-tokens.cjs", "skills-manager.cjs", "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs", "shrink-prompts.cjs", "gsd-outline.cjs", "mcp-server.cjs")
+$kitScripts = @("test-kit.ps1", "test-kit.sh", "setup-ui.cjs", "setup.ps1", "setup.sh", "install.ps1", "install.sh", "package.json", "uninstall.ps1", "uninstall.sh", "skills-profile.ps1", "skills-profile.sh", "optimize-tokens.ps1", "optimize-tokens.sh", "sanitize-command.ps1", "token-report.cjs", "gsd-update.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs", "patch-agents.cjs", "optimize-tokens.cjs", "skills-manager.cjs", "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs", "shrink-prompts.cjs", "gsd-outline.cjs", "mcp-server.cjs", "gsd-read-strip.cjs", "verify.cjs")
 foreach ($sName in $kitScripts) {
     $src = Join-Path $kitDir $sName
     if (Test-Path $src) {
         Copy-Item -Path $src -Destination (Join-Path $targetKitDir $sName) -Force
-    }
-}
-
-# Atalhos diretos em scripts/ para conveniência no terminal
-foreach ($sName in @("test-kit.ps1", "test-kit.sh")) {
-    $src = Join-Path $targetKitDir $sName
-    if (Test-Path $src) {
-        Copy-Item -Path $src -Destination (Join-Path $targetScriptsDir $sName) -Force
     }
 }
 Write-Host "   Pacote completo do kit instalado nativamente em: $targetKitDir" -ForegroundColor Green
@@ -443,9 +429,6 @@ $kitSkillsSrc = Join-Path $kitDir "skills"
 if (Test-Path $kitSkillsSrc) {
     Copy-Item -Path "$kitSkillsSrc\*" -Destination $skillsPoolDir -Recurse -Force
     Copy-Item -Path "$kitSkillsSrc\*" -Destination $skillsDir -Recurse -Force
-    $targetKitSkills = Join-Path $targetKitDir "skills"
-    New-Item -ItemType Directory -Path $targetKitSkills -Force | Out-Null
-    Copy-Item -Path "$kitSkillsSrc\*" -Destination $targetKitSkills -Recurse -Force
     Write-Host "   Catálogo de Skills (incluindo Ponytail & Caveman) instalado em: $skillsDir" -ForegroundColor Green
 }
 
@@ -454,9 +437,6 @@ if (Test-Path $kitSubagentsSrc) {
     $agentsPoolDir = Join-Path $agentsDir "agents-pool"
     New-Item -ItemType Directory -Path $agentsPoolDir -Force | Out-Null
     Copy-Item -Path "$kitSubagentsSrc\*" -Destination $agentsPoolDir -Recurse -Force
-    $targetKitSubagents = Join-Path $targetKitDir "subagents"
-    New-Item -ItemType Directory -Path $targetKitSubagents -Force | Out-Null
-    Copy-Item -Path "$kitSubagentsSrc\*" -Destination $targetKitSubagents -Recurse -Force
     Write-Host "   Subagentes Cavecrew (investigator, builder, reviewer) instalados em: $agentsPoolDir" -ForegroundColor Green
 }
 
@@ -543,8 +523,6 @@ if (Test-Path $gitHooksDir) {
 # Antigravity GSD Kit Auto-Heal Hook
 if [ -f ".agents/kit/patch-agents.cjs" ]; then
     node .agents/kit/patch-agents.cjs >/dev/null 2>&1 || true
-elif [ -f "scripts/patch-agents.cjs" ]; then
-    node scripts/patch-agents.cjs >/dev/null 2>&1 || true
 elif [ -f "gsd-agy-kit/patch-agents.cjs" ]; then
     node gsd-agy-kit/patch-agents.cjs >/dev/null 2>&1 || true
 elif [ -f "tools/gsd-agy-kit/patch-agents.cjs" ]; then
@@ -558,8 +536,6 @@ fi
     '@echo off
 if exist .agents\kit\gsd-graphify-update.cjs (
     start /B node .agents\kit\gsd-graphify-update.cjs >nul 2>&1
-) else if exist scripts\gsd-graphify-update.cjs (
-    start /B node scripts\gsd-graphify-update.cjs >nul 2>&1
 ) else if exist gsd-agy-kit\gsd-graphify-update.cjs (
     start /B node gsd-agy-kit\gsd-graphify-update.cjs >nul 2>&1
 ) else if exist tools\gsd-agy-kit\gsd-graphify-update.cjs (
@@ -571,8 +547,6 @@ if exist .agents\kit\gsd-graphify-update.cjs (
 #!/bin/sh
 if [ -f ".agents/kit/gsd-graphify-update.cjs" ]; then
     node .agents/kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
-elif [ -f "scripts/gsd-graphify-update.cjs" ]; then
-    node scripts/gsd-graphify-update.cjs >/dev/null 2>&1 &
 elif [ -f "gsd-agy-kit/gsd-graphify-update.cjs" ]; then
     node gsd-agy-kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
 elif [ -f "tools/gsd-agy-kit/gsd-graphify-update.cjs" ]; then
@@ -584,20 +558,33 @@ fi
     Write-Host "   Git hooks (post-merge, post-checkout, post-commit assincrono) instalados em .git/hooks" -ForegroundColor Green
 }
 
-# 12.1 Garantir kits, caches e graphify-out no .gitignore do projeto alvo
-$gitignorePath = Join-Path $TargetDir ".gitignore"
-if (Test-Path $gitignorePath) {
-    $giContent = Get-Content $gitignorePath -Raw -Encoding utf8
-    if ($giContent -notmatch "(?m)^gsd-agy-kit/?$") {
-        Add-Content -Path $gitignorePath -Value "`ngsd-agy-kit/" -Encoding utf8
+# 12.1 Garantir exclusões de caches/índices em .git/info/exclude sem sujar .gitignore rastreado
+$gitDir = Join-Path $TargetDir ".git"
+if (Test-Path $gitDir) {
+    $gitInfoDir = Join-Path $gitDir "info"
+    New-Item -ItemType Directory -Path $gitInfoDir -Force | Out-Null
+    $excludePath = Join-Path $gitInfoDir "exclude"
+    $exContent = if (Test-Path $excludePath) { Get-Content $excludePath -Raw -Encoding utf8 } else { "" }
+    foreach ($entry in @("gsd-agy-kit/", ".agents/.cache/", "graphify-out/", ".graphifyignore", ".astgrepignore")) {
+        if ($exContent -notmatch [regex]::Escape($entry)) {
+            Add-Content -Path $excludePath -Value "`n$entry" -Encoding utf8
+        }
     }
-    if ($giContent -notmatch "(?m)^\.agents/\.cache/?$") {
-        Add-Content -Path $gitignorePath -Value "`n.agents/.cache/" -Encoding utf8
+    Write-Host "   Entradas de protecao garantidas em .git/info/exclude" -ForegroundColor Green
+} else {
+    $gitignorePath = Join-Path $TargetDir ".gitignore"
+    if (Test-Path $gitignorePath) {
+        $giContent = Get-Content $gitignorePath -Raw -Encoding utf8
+        if ($giContent -notmatch "(?m)^gsd-agy-kit/?$") {
+            Add-Content -Path $gitignorePath -Value "`ngsd-agy-kit/" -Encoding utf8
+        }
+        if ($giContent -notmatch "(?m)^\.agents/\.cache/?$") {
+            Add-Content -Path $gitignorePath -Value "`n.agents/.cache/" -Encoding utf8
+        }
+        if ($giContent -notmatch "(?m)^graphify-out/?$") {
+            Add-Content -Path $gitignorePath -Value "`ngraphify-out/" -Encoding utf8
+        }
     }
-    if ($giContent -notmatch "(?m)^graphify-out/?$") {
-        Add-Content -Path $gitignorePath -Value "`ngraphify-out/" -Encoding utf8
-    }
-    Write-Host "   Entradas de protecao (.agents/.cache/, graphify-out/ e kits) garantidas no .gitignore" -ForegroundColor Green
 }
 
 # 12.2 Blindagem de Índices (.graphifyignore e .astgrepignore)

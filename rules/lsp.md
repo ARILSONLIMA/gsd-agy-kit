@@ -1,10 +1,9 @@
 ---
-trigger: always_on
-description: Motor Multi-LSP Híbrido para diagnósticos de compilação, tipos e sintaxe.
+trigger: model_decision
+description: Ative ao alterar assinaturas exportadas, renomear símbolos em múltiplos arquivos (lsp_rename) ou depurar diagnósticos de compilação/tipos.
 ---
 
-# Multi-LSP: Tipagem e Diagnósticos
+# Multi-LSP: Referências, Rename e Diagnósticos
 
-- **Após editar arquivo:** Valide sintaxe e tipos com MCP `lsp_diagnostics` (ou `node .agents/mcp-server.cjs lsp diagnostics [arquivo]`).
-- **Antes de mudar assinatura:** Verifique chamadores com `lsp_references` (`node .agents/mcp-server.cjs lsp references "<símbolo>"`).
-- **Inspeção de símbolos:** Use `lsp_definition` para ir ao arquivo/linha do símbolo e `lsp_hover` para assinatura e docstring.
+- Antes de alterar assinaturas compartilhadas, mapeie chamadores com `lsp_references` (`node .agents/mcp-server.cjs lsp references "<símbolo>"`) e aplique renomeações multi-arquivo em 1 operação com `lsp_rename` (`node .agents/mcp-server.cjs lsp rename "<antigo>" "<novo>" src`).
+- Use `lsp_definition` / `lsp_hover` para localizar declarações exatas e `lsp_diagnostics` para isolar falhas sintáticas/tipagem.

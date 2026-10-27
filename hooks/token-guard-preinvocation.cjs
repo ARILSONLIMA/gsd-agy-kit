@@ -447,7 +447,31 @@ function processModeCommands(prompt) {
   return feedback;
 }
 
-function readStdin(maxWaitMs = 300) {
+function consumePendingEditLint() {
+  const lintFile = path.join(CACHE_DIR, 'pending-edit-lint.json');
+  if (!fs.existsSync(lintFile)) return '';
+  try {
+    const raw = JSON.parse(fs.readFileSync(lintFile, 'utf8'));
+    try { fs.unlinkSync(lintFile); } catch {}
+    if (!raw || !raw.items || (Date.now() - Number(raw.timestamp || 0)) > 180000) return '';
+    const entries = [];
+    for (const [relFile, list] of Object.entries(raw.items)) {
+      if (Array.isArray(list) && list.length > 0) {
+        entries.push(`- ${relFile}: ${list.join(' | ')}`);
+      }
+    }
+    if (entries.length === 0) return '';
+    return (
+      `⚡ [Auto-Linter Pós-Edição] Corrija antes do quick_verify/Stop:\n` +
+      entries.slice(0, 5).join('\n')
+    );
+  } catch {
+    try { fs.unlinkSync(lintFile); } catch {}
+    return '';
+  }
+}
+
+function readStdin(maxWaitMs = 150) {
   if (process.stdin.isTTY) return Promise.resolve('');
   return new Promise((resolve) => {
     let data = '';
@@ -466,7 +490,16 @@ function readStdin(maxWaitMs = 300) {
       resolve(result);
     };
     const timer = setTimeout(() => done(data), maxWaitMs);
-    const onData = chunk => { data += chunk; };
+    const onData = chunk => {
+      data += chunk;
+      const trimmed = data.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          JSON.parse(trimmed);
+          done(data);
+        } catch {}
+      }
+    };
     const onEnd = () => done(data);
     const onError = () => done('');
 
@@ -483,20 +516,22 @@ async function main() {
   checkPhaseSync();
   checkJitTtlAndCleanup();
 
-  const rawStdin = await readStdin(300);
+  const rawStdin = await readStdin(150);
   let promptText = '';
   if (rawStdin && rawStdin.trim()) {
     try {
       const parsed = JSON.parse(rawStdin);
-      promptText = parsed.prompt || parsed.lastUserMessage || parsed.message || '';
+      promptText = parsed.lastUserInput || parsed.prompt || parsed.lastUserMessage || parsed.message || '';
     } catch {}
   }
 
   const modeFeedback = processModeCommands(promptText);
+  const pendingLintMsg = consumePendingEditLint();
   const loopAlertMsg = checkLoopAndBudgetAlert();
 
   const messages = [];
   if (modeFeedback) messages.push(modeFeedback);
+  if (pendingLintMsg) messages.push(pendingLintMsg);
   if (loopAlertMsg) messages.push(loopAlertMsg);
 
   const outMsg = messages.length > 0

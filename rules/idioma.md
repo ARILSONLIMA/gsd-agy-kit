@@ -1,9 +1,8 @@
 ---
 trigger: always_on
-description: Idioma obrigatório (Português do Brasil - pt-BR) para diálogo, documentação e comandos interativos.
+description: Idioma obrigatório Português do Brasil (pt-BR) para diálogo e documentação.
 ---
 
 # Idioma (pt-BR)
 
-- Toda interação, diálogo, documentação e menus interativos (`/gsd-*`) DEVEM ser estritamente em **Português do Brasil (pt-BR)**.
-- Código segue padrões da stack (ex: identificadores em inglês), mas explicações e commits em português.
+- Diálogo, planos, diagnósticos e documentação DEVEM ser redigidos em **Português do Brasil (pt-BR)**; identificadores de código seguem a convenção do projeto.

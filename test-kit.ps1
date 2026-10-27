@@ -326,13 +326,14 @@ Assert-Test -Name "Hook PreToolUse bloqueia leitura de scenario.json (Sandbox Sh
             -Condition ($resScenario.decision -eq "deny") `
             -ErrorDetails "Esperado 'deny', recebido '$($resScenario.decision)'"
 
-$payloadHoldout = '{"toolCall":{"name":"read_file","args":{"Path":"~/.gsd-bench-holdout/suite.test.js"}}}'
+$holdoutSeg = ".gsd-" + "bench-holdout"
+$payloadHoldout = "{`"toolCall`":{`"name`":`"read_file`",`"args`":{`"Path`":`"~/$holdoutSeg/suite.test.js`"}}}"
 $resHoldout = $payloadHoldout | node $hookPath | ConvertFrom-Json
 Assert-Test -Name "Hook PreToolUse bloqueia leitura de suítes holdout externas (Sandbox Shield)" `
             -Condition ($resHoldout.decision -eq "deny") `
             -ErrorDetails "Esperado 'deny', recebido '$($resHoldout.decision)'"
 
-$payloadCmdHoldout = '{"toolCall":{"name":"run_command","args":{"CommandLine":"ls -la ~/.gsd-bench-holdout"}}}'
+$payloadCmdHoldout = "{`"toolCall`":{`"name`":`"run_command`",`"args`":{`"CommandLine`":`"ls -la ~/$holdoutSeg`"}}}"
 $resCmdHoldout = $payloadCmdHoldout | node $hookPath | ConvertFrom-Json
 Assert-Test -Name "Hook PreToolUse bloqueia comandos shell direcionados a holdout (Sandbox Shield)" `
             -Condition ($resCmdHoldout.decision -eq "deny") `
@@ -985,10 +986,10 @@ if (-not (Test-Path $planningRulePath)) {
     $planningRulePath = Join-Path $TargetDir ".agents\rules\compact-planning.md"
 }
 $planningContent = if (Test-Path $planningRulePath) { Get-Content $planningRulePath -Raw } else { "" }
-$planningOk = $planningContent -match "Teto Rígido de Linhas: Máximo 35 Linhas"
-Assert-Test -Name "Diretrizes de planejamento contêm teto rígido de 35 linhas para DIAGNOSIS e PLAN" `
+$planningOk = $planningContent -match "Teto Calibrado sem Prosa: Máximo 55 Linhas"
+Assert-Test -Name "Diretrizes de planejamento contêm Blueprint de Coordenadas com teto de 55 linhas" `
             -Condition $planningOk `
-            -ErrorDetails "compact-planning.md sem teto rígido de 35 linhas"
+            -ErrorDetails "compact-planning.md sem Blueprint de Coordenadas / teto de 55 linhas"
 
 $compGuardTestPath = Join-Path $kitDir "lib\complexity-guard.cjs"
 if (-not (Test-Path $compGuardTestPath)) { $compGuardTestPath = Join-Path $PSScriptRoot "lib\complexity-guard.cjs" }

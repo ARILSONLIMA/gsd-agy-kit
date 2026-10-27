@@ -3,7 +3,18 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
+
+function findLibModule(projectRoot, name) {
+  const candidates = [
+    path.resolve(__dirname, 'lib', name),
+    path.resolve(__dirname, 'kit', 'lib', name),
+    path.join(projectRoot, '.agents', 'lib', name),
+    path.join(projectRoot, '.agents', 'kit', 'lib', name),
+    path.join(projectRoot, 'lib', name)
+  ];
+  return candidates.find(p => fs.existsSync(p)) || null;
+}
 
 function findSourceFiles(dir, extensions = ['.js', '.cjs', '.mjs', '.ts']) {
   const results = [];
@@ -14,7 +25,7 @@ function findSourceFiles(dir, extensions = ['.js', '.cjs', '.mjs', '.ts']) {
     for (const ent of entries) {
       const full = path.join(current, ent.name);
       if (ent.isDirectory()) {
-        if (!['node_modules', '.git', '.agents', 'graphify-out', 'coverage', 'dist'].includes(ent.name)) {
+        if (!['node_modules', '.git', '.agents', '.spine', 'graphify-out', 'coverage', 'dist'].includes(ent.name)) {
           walk(full);
         }
       } else if (ent.isFile()) {
@@ -36,7 +47,7 @@ function checkSyntax(projectRoot, files) {
     const ext = path.extname(f).toLowerCase();
     try {
       if (['.js', '.cjs', '.mjs'].includes(ext)) {
-        execSync(`node --check "${f}"`, { stdio: 'pipe' });
+        execFileSync(process.execPath, ['--check', f], { stdio: 'pipe' });
       }
     } catch (err) {
       errors.push({
@@ -57,89 +68,89 @@ function checkCodeQuality(projectRoot, files) {
   let sqlRisks = 0;
   let cyclomaticViolations = 0;
   let longFunctions = 0;
+  let deepNestingViolations = 0;
+  let duplicatedBlocks = 0;
 
-  for (const f of files) {
-    const rel = path.relative(projectRoot, f);
-    const content = fs.readFileSync(f, 'utf8');
-    const lines = content.split(/\r?\n/);
-
-    // Heurística de SQL Injection
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (/db\.(prepare|query|exec|run|all|get)\s*\(/i.test(line)) {
-        if (/\+/.test(line) || /\$\{/.test(line)) {
-          if (!/WHERE.*=\s*\?/i.test(line) && !/VALUES\s*\(/i.test(line)) {
-            sqlRisks++;
-            issues.push({ file: rel, line: i + 1, type: 'SQL_INJECTION_RISK', desc: 'Concatenação/interpolação em query SQL' });
-          }
-        }
+  // 1. SecurityLinter unificado (Anti-SQL Injection)
+  const secMod = findLibModule(projectRoot, 'security-linter.cjs');
+  if (secMod) {
+    try {
+      const SecurityLinter = require(secMod);
+      const linter = new SecurityLinter(projectRoot);
+      const secIssues = linter.scanFiles(files).filter(i => i.severity === 'CRITICAL');
+      sqlRisks = secIssues.length;
+      for (const s of secIssues) {
+        issues.push({
+          file: path.relative(projectRoot, s.file),
+          line: s.line,
+          type: 'SQL_INJECTION_RISK',
+          desc: s.message
+        });
       }
-    }
+    } catch {}
+  }
 
-    // Heurística de Complexidade e Tamanho por Função
-    let currentFn = null;
-    let fnStart = 0;
-    let braceDepth = 0;
-    let complexity = 1;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const fnMatch = line.match(/(?:function\s+([a-zA-Z0-9_$]+)|(?:const|let|var)\s+([a-zA-Z0-9_$]+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>|([a-zA-Z0-9_$]+)\s*\([^)]*\)\s*\{)/);
-
-      if (fnMatch && braceDepth === 0) {
-        currentFn = fnMatch[1] || fnMatch[2] || fnMatch[3] || 'anonymous';
-        fnStart = i + 1;
-        complexity = 1;
+  // 2. ComplexityGuard unificado (mesmos thresholds do Stop Gate e do benchmark estático: 48 linhas, 3 níveis, CC 14)
+  const compMod = findLibModule(projectRoot, 'complexity-guard.cjs');
+  if (compMod) {
+    try {
+      const ComplexityGuard = require(compMod);
+      const guard = new ComplexityGuard({ maxLines: 48, maxNesting: 3, maxComplexity: 14 });
+      const smells = guard.scanFiles(files);
+      for (const s of smells) {
+        if (s.type === 'high_complexity') cyclomaticViolations++;
+        else if (s.type === 'long_method') longFunctions++;
+        else if (s.type === 'deep_nesting') deepNestingViolations++;
+        issues.push({
+          file: path.relative(projectRoot, s.file),
+          line: s.line,
+          type: s.type.toUpperCase(),
+          desc: s.message
+        });
       }
+    } catch {}
+  }
 
-      if (currentFn) {
-        if (/\b(if|else if|for|while|case|catch)\b|\?|\&\&|\|\|/.test(line)) {
-          complexity++;
-        }
-        const opens = (line.match(/\{/g) || []).length;
-        const closes = (line.match(/\}/g) || []).length;
-        braceDepth += opens - closes;
-
-        if (braceDepth <= 0 && opens > 0) {
-          const fnLen = (i + 1) - fnStart;
-          if (complexity > 15) {
-            cyclomaticViolations++;
-            issues.push({ file: rel, line: fnStart, type: 'HIGH_COMPLEXITY', desc: `Função '${currentFn}' tem complexidade estimada ${complexity} (>15)` });
-          }
-          if (fnLen > 60) {
-            longFunctions++;
-            issues.push({ file: rel, line: fnStart, type: 'LONG_METHOD', desc: `Função '${currentFn}' tem ${fnLen} linhas (>60)` });
-          }
-          currentFn = null;
-          braceDepth = 0;
-        }
+  // 3. DryChecker unificado (janelas de 6 linhas idênticas)
+  const dryMod = findLibModule(projectRoot, 'dry-checker.cjs');
+  if (dryMod && files.length >= 2) {
+    try {
+      const DryChecker = require(dryMod);
+      const checker = new DryChecker(6);
+      const dups = checker.checkFiles(files);
+      duplicatedBlocks = dups.length;
+      for (const d of dups.slice(0, 3)) {
+        const locs = d.locations.map(l => `${path.basename(l.file)}:${l.line}`).join(' <-> ');
+        issues.push({
+          file: path.relative(projectRoot, d.locations[0].file),
+          line: d.locations[0].line,
+          type: 'DUPLICATED_CODE',
+          desc: `Bloco duplicado (>= 6 linhas): ${locs}`
+        });
       }
-    }
+    } catch {}
   }
 
   return {
     sql_risks: sqlRisks,
     cyclomatic_violations: cyclomaticViolations,
     long_functions: longFunctions,
+    deep_nesting_violations: deepNestingViolations,
+    duplicated_blocks: duplicatedBlocks,
     total_smells: issues.length,
-    issues: issues.slice(0, 5) // Mostra no máximo os 5 primeiros
+    issues: issues.slice(0, 8)
   };
 }
 
 function runTests(projectRoot) {
   let testCmd = 'npm test';
 
-  // Verifica scenario.json ou package.json
-  const scnFile = path.join(projectRoot, 'scenario.json');
-  if (fs.existsSync(scnFile)) {
-    try {
-      const scn = JSON.parse(fs.readFileSync(scnFile, 'utf8'));
-      if (scn.test_command) {
-        testCmd = Array.isArray(scn.test_command) ? scn.test_command.join(' ') : scn.test_command;
-      }
-    } catch {}
-  } else if (fs.existsSync(path.join(projectRoot, 'go.mod'))) {
+  if (fs.existsSync(path.join(projectRoot, 'go.mod'))) {
     testCmd = 'go test ./...';
+  } else if (fs.existsSync(path.join(projectRoot, 'pytest.ini')) || fs.existsSync(path.join(projectRoot, 'pyproject.toml'))) {
+    if (!fs.existsSync(path.join(projectRoot, 'package.json'))) {
+      testCmd = 'pytest';
+    }
   }
 
   const t0 = Date.now();
@@ -166,24 +177,74 @@ function runTests(projectRoot) {
   }
 }
 
+function checkAmbiguities(projectRoot) {
+  const ambMod = findLibModule(projectRoot, 'ambiguity-guard.cjs');
+  if (!ambMod) {
+    return { required: false, valid: true, ambCount: 0, minRequired: 0, uncoveredSpecItems: [], message: null };
+  }
+  try {
+    const { validateAmbiguities } = require(ambMod);
+    return validateAmbiguities(projectRoot);
+  } catch {
+    return { required: false, valid: true, ambCount: 0, minRequired: 0, uncoveredSpecItems: [], message: null };
+  }
+}
+
 function runFullVerification(projectRoot = process.cwd()) {
   const root = path.resolve(projectRoot);
   const srcDirs = ['src', 'api/src', 'app', 'lib'].filter(d => fs.existsSync(path.join(root, d)));
-  const targetDir = srcDirs.length > 0 ? path.join(root, srcDirs[0]) : root;
+  let files = [];
+  if (srcDirs.length > 0) {
+    const seen = new Set();
+    for (const d of srcDirs) {
+      for (const f of findSourceFiles(path.join(root, d))) {
+        const norm = path.resolve(f);
+        if (!seen.has(norm)) {
+          seen.add(norm);
+          files.push(norm);
+        }
+      }
+    }
+  } else {
+    files = findSourceFiles(root);
+  }
 
-  const files = findSourceFiles(targetDir);
   const syntax = checkSyntax(root, files);
   const quality = checkCodeQuality(root, files);
   const tests = runTests(root);
+  const ambiguities = checkAmbiguities(root);
 
-  const allPassed = syntax.syntax_valid && quality.total_smells === 0 && tests.passed;
+  const allPassed = syntax.syntax_valid && quality.total_smells === 0 && tests.passed && ambiguities.valid;
+
+  const cacheDir = path.join(root, '.agents', '.cache');
+  const lastPassFile = path.join(cacheDir, 'last-verify-pass.json');
+  const pendingLintFile = path.join(cacheDir, 'pending-edit-lint.json');
+  try {
+    if (allPassed) {
+      if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+      fs.writeFileSync(lastPassFile, JSON.stringify({ timestamp: Date.now() }), 'utf8');
+      if (fs.existsSync(pendingLintFile)) fs.unlinkSync(pendingLintFile);
+    } else if (fs.existsSync(lastPassFile)) {
+      fs.unlinkSync(lastPassFile);
+    }
+  } catch {}
+
+  let status = 'PASS';
+  if (!syntax.syntax_valid || !tests.passed || quality.sql_risks > 0) {
+    status = 'FAIL';
+  } else if (!ambiguities.valid) {
+    status = 'FAIL_AMBIGUITIES';
+  } else if (quality.total_smells > 0) {
+    status = 'WARN_CODE_QUALITY';
+  }
 
   return {
-    status: allPassed ? 'PASS' : (tests.passed && syntax.syntax_valid ? 'WARN_CODE_QUALITY' : 'FAIL'),
-    ready_to_complete: syntax.syntax_valid && tests.passed,
+    status,
+    ready_to_complete: allPassed,
     syntax,
     quality,
-    tests
+    tests,
+    ambiguities
   };
 }
 

@@ -1,31 +1,15 @@
 ---
-trigger: always_on
-description: Diretrizes de planejamento enxuto (Compact Planning) para Fases de Diagnóstico e Planejamento do GSD, maximizando economia de tokens e precisão arquitetural.
+trigger: model_decision
+description: Ative ao criar ou atualizar DIAGNOSIS.md e PLAN.md em fases de diagnóstico, arquitetura ou planejamento compacto.
 ---
 
-# Diretrizes Obrigatórias de Planejamento Enxuto (Compact Planning)
+# Diretrizes de Planejamento Enxuto (Blueprint de Coordenadas)
 
-## 1. Teto Rígido de Linhas: Máximo 35 Linhas para DIAGNOSIS.md e PLAN.md
-- **Proibição de Código no Plano:** NUNCA rascunhe código completo ou arquivos inteiros em `DIAGNOSIS.md` ou `PLAN.md`.
-- `DIAGNOSIS.md` e `PLAN.md` **NUNCA** devem exceder **35 linhas** cada.
-
-### Formato Conciso de `DIAGNOSIS.md` (20-30 linhas):
-```markdown
-# Diagnóstico Forense
-- **Falhas Ativas:** [resumo dos testes ou asserções com erro]
-- **Causa Raiz:** [arquivo, linha e lógica responsável pela divergência]
-- **Arquivos Alvo:** `src/controllers/...`, `src/services/...`
-- **Estratégia de Correção:** [1-2 linhas explicando a abordagem cirúrgica]
-```
-
-## 2. Estrutura Padrão Obrigatória do `PLAN.md`
-1. **Tabela de Seams (Interfaces Públicas):**
-   `| ID | Método | Rota / Função | Arquivos a Modificar | Status |`
-2. **DAG de Dependências:** Passos em ordem estrita de execução (Base -> Repos -> Services -> Routes -> Testes).
-3. **Checklist de Aceitação:** Critérios diretos e verificáveis com checkboxes `[ ]`.
-
-## 3. Tracer Bullets Verticais
-- Fatie por comportamento observável de ponta a ponta (banco, regra, rota e teste) em vez de camadas horizontais desconectadas.
-
-## 4. Checklist Obrigatório de Ambiguidades (`AMBIGUITIES.md`)
-- **Gatilho de Final da Fase 1:** Antes de avançar para a redação de `PLAN.md`, audite e registre no `AMBIGUITIES.md` ao menos 3 ambiguidades nos 4 vetores universais de incerteza (Temporal/Fuso, Limites/Divisões, Intermitência de Entrada e Contratos de Payload) em parágrafo único autossuficiente (`### AMB-XX: [Contexto] — [Conflito e Premissa Adotada]`).
+## 1. Teto Calibrado sem Prosa: Máximo 55 Linhas
+- Zero prosa narrativa ou blocos de código colados: `DIAGNOSIS.md` ≤ **35 linhas** e `PLAN.md` ≤ **55 linhas**.
+- **`DIAGNOSIS.md` (15–35 linhas):** Falhas ativas, causa raiz exata (`arquivo:L_ini-L_fim`), utilitários legados reutilizáveis (`src/utils/*.js`) e decisões chave.
+- **`PLAN.md` (30–55 linhas — Blueprint Autossuficiente para Fase 3):** Deve eliminar 100% da releitura de `docs/` e `tests/` na execução contendo:
+  1. **Tabela de Coordenadas Exatas:** `| ID | Arquivo:L_ini-L_fim | Função/Rota + Utilitário Legado (src/utils/*.js) |` — **proibido usar wildcards** (`src/services/*`).
+  2. **Constantes e Contratos Extraídos de `docs/`:** Chaves de env, pesos/fórmulas numéricas, códigos HTTP, nomes exatos de campos/tabelas e regras de borda.
+  3. **Lotes Paralelos de Execução** (Utils/Repos -> Services -> Routes -> Tests) e Checklist `[ ]`.
+- **Gatilho de Fase 1:** Conclua `AMBIGUITIES.md` cobrindo 1-para-1 todos os itens `AMB-XX` de `TASK.md`/`docs/` antes de redigir `PLAN.md`.

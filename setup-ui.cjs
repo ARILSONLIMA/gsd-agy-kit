@@ -570,7 +570,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             ],
             "PostToolUse": [
               {
-                "matcher": "*",
+                "matcher": "edit_file|replace_file_content|multi_replace_file_content|write_file|write_to_file|Write|write|run_command|bash|shell|call_mcp_tool",
                 "hooks": [
                   {
                     "type": "command",
@@ -610,7 +610,6 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
     {
       title: 'Normalizando Subagentes GSD para Antigravity CLI & MCP',
       run: async () => {
-        const originalBackupDir = path.join(agentsDir, '.backup-original-gsd');
         const targetAgentsDir = path.join(agentsDir, 'agents');
         const targetPoolDir = path.join(agentsDir, 'agents-pool');
         if (!fs.existsSync(targetPoolDir)) fs.mkdirSync(targetPoolDir, { recursive: true });
@@ -622,9 +621,6 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         }
 
         if (fs.existsSync(targetAgentsDir)) {
-          if (!fs.existsSync(originalBackupDir)) {
-            try { copyFolderRecursive(targetAgentsDir, originalBackupDir); } catch {}
-          }
           const patchScript = path.join(kitDir, 'patch-agents.cjs');
           if (fs.existsSync(patchScript)) {
             spawnSync(process.execPath, [patchScript, targetDir], { stdio: 'ignore' });
@@ -680,7 +676,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         const kitScripts = [
           "test-kit.sh", "test-kit.ps1",
           "setup-ui.cjs", "setup.sh", "setup.ps1",
-          "install.sh", "install.ps1", "package.json", "CHANGELOG.md",
+          "install.sh", "install.ps1", "package.json",
           "uninstall.sh", "uninstall.ps1",
           "skills-profile.sh", "skills-profile.ps1",
           "optimize-tokens.sh", "optimize-tokens.ps1",
@@ -713,7 +709,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             } catch {}
             const metaPath = path.join(targetKitDir, '.installed-version.json');
             fs.writeFileSync(metaPath, JSON.stringify({
-              version: pkgData.version || '1.5.0',
+              version: pkgData.version || '2.5.0',
               commit: headSha,
               updatedAt: new Date().toISOString()
             }, null, 2) + '\n', 'utf8');
@@ -742,38 +738,10 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             fs.copyFileSync(ignSrc, path.join(targetDir, ign));
           }
         }
-        // Copiar rules/ e skills/ para dentro de .agents/kit/ para hermeticidade total
+        // Copiar rules/ para dentro de .agents/kit/ para hermeticidade sem triplicar skills/ ou poluir scripts/ na raiz
         const kitRulesDir = path.join(kitDir, 'rules');
         if (fs.existsSync(kitRulesDir)) {
           copyFolderRecursive(kitRulesDir, path.join(targetKitDir, 'rules'));
-        }
-        const kitSkillsDir = path.join(kitDir, 'skills');
-        if (fs.existsSync(kitSkillsDir)) {
-          copyFolderRecursive(kitSkillsDir, path.join(targetKitDir, 'skills'));
-        }
-        const kitSubagentsDir = path.join(kitDir, 'subagents');
-        if (fs.existsSync(kitSubagentsDir)) {
-          copyFolderRecursive(kitSubagentsDir, path.join(targetKitDir, 'subagents'));
-        }
-        // Instalar atalhos diretos em scripts/ para conveniência
-        const targetScriptsDir = path.join(targetDir, 'scripts');
-        if (!fs.existsSync(targetScriptsDir)) fs.mkdirSync(targetScriptsDir, { recursive: true });
-        for (const sName of ["test-kit.sh", "test-kit.ps1"]) {
-          const src = path.join(targetKitDir, sName);
-          if (fs.existsSync(src)) {
-            const dest = path.join(targetScriptsDir, sName);
-            fs.copyFileSync(src, dest);
-            if (sName.endsWith('.sh')) {
-              try { fs.chmodSync(dest, 0o755); } catch {}
-            }
-          }
-        }
-        // Atalho verify.sh em scripts/
-        const verifySrc = path.join(kitDir, 'scripts', 'verify.sh');
-        if (fs.existsSync(verifySrc)) {
-          const verifyDest = path.join(targetScriptsDir, 'verify.sh');
-          fs.copyFileSync(verifySrc, verifyDest);
-          try { fs.chmodSync(verifyDest, 0o755); } catch {}
         }
         await sleep(60);
       }
@@ -797,7 +765,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         };
         fs.writeFileSync(mcpJsonPath, JSON.stringify(mcpConfig, null, 2), 'utf8');
 
-        // Compatibilidade também com descoberta em formato de Plugin (.agents/plugins/gsd-economy/)
+        // Compatibilidade com descoberta em formato de Plugin (.agents/plugins/gsd-economy/) via wrapper leve (zero duplicação de lib/)
         const pluginDir = path.join(agentsDir, 'plugins', 'gsd-economy');
         if (!fs.existsSync(pluginDir)) fs.mkdirSync(pluginDir, { recursive: true });
         const pluginManifest = {
@@ -807,16 +775,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
         };
         fs.writeFileSync(path.join(pluginDir, 'plugin.json'), JSON.stringify(pluginManifest, null, 2), 'utf8');
         fs.writeFileSync(path.join(pluginDir, 'mcp_config.json'), JSON.stringify(mcpConfig, null, 2), 'utf8');
-
-        // Copiar motor para dentro do plugin para hermeticidade total
-        const mcpSrc = path.join(kitDir, 'mcp-server.cjs');
-        if (fs.existsSync(mcpSrc)) {
-          fs.copyFileSync(mcpSrc, path.join(pluginDir, 'mcp-server.cjs'));
-        }
-        const libSrc = path.join(kitDir, 'lib');
-        if (fs.existsSync(libSrc)) {
-          copyFolderRecursive(libSrc, path.join(pluginDir, 'lib'));
-        }
+        fs.writeFileSync(path.join(pluginDir, 'mcp-server.cjs'), "#!/usr/bin/env node\n'use strict';\nrequire('../../mcp-server.cjs');\n", 'utf8');
 
         // Registrar plugins locais no Antigravity (.agents/plugins.json)
         const pluginsJsonPath = path.join(agentsDir, 'plugins.json');
@@ -906,11 +865,12 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           } catch {}
         }
 
-        const gitignorePath = path.join(targetDir, '.gitignore');
         const runtimeIgnores = [
           'gsd-agy-kit/',
           '.gsd-agy-kit-tmp/',
           'graphify-out/',
+          '.graphifyignore',
+          '.astgrepignore',
           '.agents/.cache/',
           '.agents/.cache',
           '.agents/.health-cache',
@@ -919,11 +879,26 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           '.agents/.last-synced-phase',
           '.agents/.gsd-profile',
         ];
-        let giContent = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf8') : '';
-        const missing = runtimeIgnores.filter(l => !giContent.split(/\r?\n/).includes(l));
-        if (missing.length > 0) {
-          const sep = giContent && !giContent.endsWith('\n') ? '\n' : '';
-          fs.appendFileSync(gitignorePath, `${sep}\n# Antigravity GSD Kit (caches de runtime)\n${missing.join('\n')}\n`, 'utf8');
+        const gitDir = path.join(targetDir, '.git');
+        if (fs.existsSync(gitDir) && fs.statSync(gitDir).isDirectory()) {
+          // Usar .git/info/exclude para não sujar .gitignore rastreado no repositório (zero M .gitignore)
+          const infoDir = path.join(gitDir, 'info');
+          if (!fs.existsSync(infoDir)) fs.mkdirSync(infoDir, { recursive: true });
+          const excludePath = path.join(infoDir, 'exclude');
+          const exContent = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : '';
+          const missing = runtimeIgnores.filter(l => !exContent.split(/\r?\n/).includes(l));
+          if (missing.length > 0) {
+            const sep = exContent && !exContent.endsWith('\n') ? '\n' : '';
+            fs.appendFileSync(excludePath, `${sep}\n# Antigravity GSD Kit (caches de runtime)\n${missing.join('\n')}\n`, 'utf8');
+          }
+        } else {
+          const gitignorePath = path.join(targetDir, '.gitignore');
+          const giContent = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf8') : '';
+          const missing = runtimeIgnores.filter(l => !giContent.split(/\r?\n/).includes(l));
+          if (missing.length > 0) {
+            const sep = giContent && !giContent.endsWith('\n') ? '\n' : '';
+            fs.appendFileSync(gitignorePath, `${sep}\n# Antigravity GSD Kit (caches de runtime)\n${missing.join('\n')}\n`, 'utf8');
+          }
         }
         await sleep(60);
       }
@@ -1014,7 +989,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
   console.log(`   ${C.bGreen}• .agents/skills/gsd-test/${C.reset} ${C.dim}(skill nativa /gsd-test no Antigravity CLI)${C.reset}`);
   console.log(`   ${C.bGreen}• .agents/skills/gsd-tokens/${C.reset} ${C.dim}(skill nativa /gsd-tokens no Antigravity CLI)${C.reset}`);
   console.log(`   ${C.bGreen}• .agents/skills/gsd-agy-update/${C.reset} ${C.dim}(skill nativa /gsd-agy-update no Antigravity CLI)${C.reset}`);
-  console.log(`   ${C.bGreen}• scripts/test-kit.sh${C.reset} ${C.dim}(atalho para execução direta no terminal)${C.reset}\n`);
+  console.log(`   ${C.bGreen}• .agents/kit/test-kit.sh${C.reset} ${C.dim}(suíte de validação hermética — sem poluir a raiz do repositório)${C.reset}\n`);
 
   if (options.interactivePromptTest && canPromptInteractively()) {
     const runTestAns = await askPrompt(`   ${C.bold}Deseja executar a bateria de testes de validação agora? [S/n]: ${C.reset}`);

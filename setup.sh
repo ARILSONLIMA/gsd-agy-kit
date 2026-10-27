@@ -282,7 +282,7 @@ data["token-efficiency-guard"] = {
   ],
   PostToolUse: [
     {
-      matcher: "*",
+      matcher: "edit_file|replace_file_content|multi_replace_file_content|write_file|write_to_file|Write|write|run_command|bash|shell|call_mcp_tool",
       hooks: [
         {
           type: "command",
@@ -354,7 +354,7 @@ mcpConfig.mcpServers["gsd-economy"] = {
 fs.writeFileSync(file, JSON.stringify(mcpConfig, null, 2), "utf8");
 ' "${MCP_JSON}"
 
-# Também gerar plugin .agents/plugins/gsd-economy/ para compatibilidade total
+# Também gerar plugin .agents/plugins/gsd-economy/ via wrapper leve (zero duplicação de lib/)
 PLUGIN_DIR="${AGENTS_DIR}/plugins/gsd-economy"
 mkdir -p "${PLUGIN_DIR}"
 cat << 'EOF' > "${PLUGIN_DIR}/plugin.json"
@@ -365,13 +365,11 @@ cat << 'EOF' > "${PLUGIN_DIR}/plugin.json"
 }
 EOF
 cp -f "${MCP_JSON}" "${PLUGIN_DIR}/mcp_config.json"
-if [ -f "${KIT_DIR}/mcp-server.cjs" ]; then
-    cp -f "${KIT_DIR}/mcp-server.cjs" "${PLUGIN_DIR}/mcp-server.cjs"
-fi
-if [ -d "${KIT_DIR}/lib" ]; then
-    mkdir -p "${PLUGIN_DIR}/lib"
-    cp -rf "${KIT_DIR}/lib/"* "${PLUGIN_DIR}/lib/"
-fi
+cat << 'EOF' > "${PLUGIN_DIR}/mcp-server.cjs"
+#!/usr/bin/env node
+'use strict';
+require('../../mcp-server.cjs');
+EOF
 
 # Gerar .agents/plugins.json para registro explícito no Antigravity
 cat << 'EOF' > "${AGENTS_DIR}/plugins.json"
@@ -393,17 +391,13 @@ if command -v agy >/dev/null 2>&1; then
     echo -e "   \033[0;32mServidor MCP gsd-economy registrado no runtime Antigravity (agy mcp)\033[0m"
 fi
 
-# 9. Instalar Pacote Completo e Utilitários Nativos (.agents/kit/ e scripts/)
+# 9. Instalar Pacote Completo e Utilitários Nativos (.agents/kit/)
 TARGET_KIT_DIR="${AGENTS_DIR}/kit"
 mkdir -p "${TARGET_KIT_DIR}"
-TARGET_SCRIPTS_DIR="${TARGET_DIR}/scripts"
-mkdir -p "${TARGET_SCRIPTS_DIR}"
 
 if [ -d "${KIT_DIR}/lib" ]; then
     mkdir -p "${TARGET_KIT_DIR}/lib"
     cp -rf "${KIT_DIR}/lib/"* "${TARGET_KIT_DIR}/lib/"
-    mkdir -p "${TARGET_SCRIPTS_DIR}/lib"
-    cp -rf "${KIT_DIR}/lib/"* "${TARGET_SCRIPTS_DIR}/lib/"
 fi
 
 if [ -d "${KIT_DIR}/rules" ]; then
@@ -411,21 +405,12 @@ if [ -d "${KIT_DIR}/rules" ]; then
     cp -rf "${KIT_DIR}/rules/"* "${TARGET_KIT_DIR}/rules/"
 fi
 
-KIT_SCRIPTS=("test-kit.sh" "test-kit.ps1" "setup-ui.cjs" "setup.sh" "setup.ps1" "install.sh" "install.ps1" "package.json" "CHANGELOG.md" "uninstall.sh" "uninstall.ps1" "skills-profile.sh" "skills-profile.ps1" "optimize-tokens.sh" "optimize-tokens.ps1" "sanitize-command.ps1" "token-report.cjs" "gsd-update.cjs" "gsd-state-summary.cjs" "gsd-graphify-update.cjs" "patch-agents.cjs" "optimize-tokens.cjs" "skills-manager.cjs" "compact-state.cjs" "compact-json.cjs" "sanitize-output.cjs" "shrink-prompts.cjs" "gsd-outline.cjs" "mcp-server.cjs" "gsd-read-strip.cjs" "verify.cjs")
+KIT_SCRIPTS=("test-kit.sh" "test-kit.ps1" "setup-ui.cjs" "setup.sh" "setup.ps1" "install.sh" "install.ps1" "package.json" "uninstall.sh" "uninstall.ps1" "skills-profile.sh" "skills-profile.ps1" "optimize-tokens.sh" "optimize-tokens.ps1" "sanitize-command.ps1" "token-report.cjs" "gsd-update.cjs" "gsd-state-summary.cjs" "gsd-graphify-update.cjs" "patch-agents.cjs" "optimize-tokens.cjs" "skills-manager.cjs" "compact-state.cjs" "compact-json.cjs" "sanitize-output.cjs" "shrink-prompts.cjs" "gsd-outline.cjs" "mcp-server.cjs" "gsd-read-strip.cjs" "verify.cjs")
 for sName in "${KIT_SCRIPTS[@]}"; do
     src="${KIT_DIR}/${sName}"
     if [ -f "${src}" ]; then
         cp -f "${src}" "${TARGET_KIT_DIR}/${sName}"
         chmod +x "${TARGET_KIT_DIR}/${sName}" 2>/dev/null || true
-    fi
-done
-
-# Atalhos em scripts/ para conveniência
-for sName in "test-kit.sh" "test-kit.ps1"; do
-    src="${TARGET_KIT_DIR}/${sName}"
-    if [ -f "${src}" ]; then
-        cp -f "${src}" "${TARGET_SCRIPTS_DIR}/${sName}"
-        chmod +x "${TARGET_SCRIPTS_DIR}/${sName}" 2>/dev/null || true
     fi
 done
 echo -e "   \033[0;32mPacote completo do kit instalado nativamente em: ${TARGET_KIT_DIR}\033[0m"
@@ -439,8 +424,6 @@ mkdir -p "${SKILLS_POOL_DIR}"
 if [ -d "${KIT_DIR}/skills" ]; then
     cp -rf "${KIT_DIR}/skills/"* "${SKILLS_POOL_DIR}/"
     cp -rf "${KIT_DIR}/skills/"* "${SKILLS_DIR}/"
-    mkdir -p "${TARGET_KIT_DIR}/skills"
-    cp -rf "${KIT_DIR}/skills/"* "${TARGET_KIT_DIR}/skills/"
     echo -e "   \033[0;32mCatálogo de Skills (incluindo Ponytail & Caveman) instalado em: ${SKILLS_DIR}\033[0m"
 fi
 
@@ -448,8 +431,6 @@ if [ -d "${KIT_DIR}/subagents" ]; then
     AGENTS_POOL_DIR="${AGENTS_DIR}/agents-pool"
     mkdir -p "${AGENTS_POOL_DIR}"
     cp -rf "${KIT_DIR}/subagents/"* "${AGENTS_POOL_DIR}/"
-    mkdir -p "${TARGET_KIT_DIR}/subagents"
-    cp -rf "${KIT_DIR}/subagents/"* "${TARGET_KIT_DIR}/subagents/"
     echo -e "   \033[0;32mSubagentes Cavecrew instalados no pool: ${AGENTS_POOL_DIR}\033[0m"
 fi
 
@@ -530,8 +511,6 @@ if [ -d "${GIT_HOOKS_DIR}" ]; then
 # Antigravity GSD Kit Auto-Heal Hook
 if [ -f ".agents/kit/patch-agents.cjs" ]; then
     node .agents/kit/patch-agents.cjs >/dev/null 2>&1 || true
-elif [ -f "scripts/patch-agents.cjs" ]; then
-    node scripts/patch-agents.cjs >/dev/null 2>&1 || true
 elif [ -f "gsd-agy-kit/patch-agents.cjs" ]; then
     node gsd-agy-kit/patch-agents.cjs >/dev/null 2>&1 || true
 elif [ -f "tools/gsd-agy-kit/patch-agents.cjs" ]; then
@@ -545,8 +524,6 @@ EOF
 #!/bin/sh
 if [ -f ".agents/kit/gsd-graphify-update.cjs" ]; then
     node .agents/kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
-elif [ -f "scripts/gsd-graphify-update.cjs" ]; then
-    node scripts/gsd-graphify-update.cjs >/dev/null 2>&1 &
 elif [ -f "gsd-agy-kit/gsd-graphify-update.cjs" ]; then
     node gsd-agy-kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
 elif [ -f "tools/gsd-agy-kit/gsd-graphify-update.cjs" ]; then
@@ -558,9 +535,19 @@ EOF
     echo -e "   \033[0;32mGit hooks (post-merge, post-checkout, post-commit) instalados em .git/hooks\033[0m"
 fi
 
-# 12.1 Garantir kits, caches e graphify-out no .gitignore
-GITIGNORE_FILE="${TARGET_DIR}/.gitignore"
-if [ -f "${GITIGNORE_FILE}" ]; then
+# 12.1 Garantir exclusões de caches/índices em .git/info/exclude (sem sujar .gitignore rastreado)
+if [ -d "${TARGET_DIR}/.git" ]; then
+    mkdir -p "${TARGET_DIR}/.git/info"
+    EXCLUDE_FILE="${TARGET_DIR}/.git/info/exclude"
+    touch "${EXCLUDE_FILE}"
+    for entry in "gsd-agy-kit/" ".agents/.cache/" "graphify-out/" ".graphifyignore" ".astgrepignore"; do
+        if ! grep -qxF "${entry}" "${EXCLUDE_FILE}" 2>/dev/null; then
+            echo "${entry}" >> "${EXCLUDE_FILE}"
+        fi
+    done
+    echo -e "   \033[0;32mEntradas de proteção garantidas em .git/info/exclude (working tree limpo)\033[0m"
+elif [ -f "${TARGET_DIR}/.gitignore" ]; then
+    GITIGNORE_FILE="${TARGET_DIR}/.gitignore"
     if ! grep -q "^gsd-agy-kit/\?" "${GITIGNORE_FILE}"; then
         echo -e "\ngsd-agy-kit/" >> "${GITIGNORE_FILE}"
     fi
@@ -570,7 +557,6 @@ if [ -f "${GITIGNORE_FILE}" ]; then
     if ! grep -q "^graphify-out/\?" "${GITIGNORE_FILE}"; then
         echo -e "graphify-out/" >> "${GITIGNORE_FILE}"
     fi
-    echo -e "   \033[0;32mEntradas de proteção (.agents/.cache/, graphify-out/ e kits) garantidas no .gitignore\033[0m"
 fi
 
 # 12.1 Blindagem de Índices (.graphifyignore e .astgrepignore)

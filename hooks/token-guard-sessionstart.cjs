@@ -136,13 +136,65 @@ function getTestAndCheckpointBrief(projectRoot) {
   return parts.length > 0 ? parts.join(' | ') : null;
 }
 
+function getBlueprintArtifactBrief(projectRoot) {
+  const planPath = path.join(projectRoot, 'PLAN.md');
+  const diagPath = path.join(projectRoot, 'DIAGNOSIS.md');
+  const ambMod = findLibModule('ambiguity-guard.cjs');
+  let ambWarn = '';
+
+  if (ambMod) {
+    try {
+      const { validateAmbiguities } = require(ambMod);
+      const ambRes = validateAmbiguities(projectRoot);
+      if (ambRes.required && !ambRes.valid && fs.existsSync(path.join(projectRoot, 'AMBIGUITIES.md'))) {
+        ambWarn = `\n⚠️ [Alerta AMBIGUITIES.md]: ${ambRes.message}`;
+      }
+    } catch {}
+  }
+
+  if (fs.existsSync(planPath)) {
+    try {
+      const rawPlan = fs.readFileSync(planPath, 'utf8').trim();
+      if (rawPlan.length > 0) {
+        const clipped = rawPlan.length > 1500 ? rawPlan.slice(0, 1500) + '\n...(truncado)' : rawPlan;
+        return {
+          hasPlan: true,
+          statusLabel: 'Plano Ativo (PLAN.md carregado)',
+          text:
+            `📋 [Blueprint de Execução Zero-Releitura — PLAN.md]\n${clipped}\n` +
+            `⚡ Diretiva: Execute diretamente nos ranges arquivo:linha mapeados acima em batching paralelo (múltiplos read_file/edit_file no mesmo turno). NÃO releia docs/ ou tests/ já consolidados no plano.${ambWarn}`
+        };
+      }
+    } catch {}
+  }
+
+  if (fs.existsSync(diagPath)) {
+    try {
+      const rawDiag = fs.readFileSync(diagPath, 'utf8').trim();
+      if (rawDiag.length > 0) {
+        const clipped = rawDiag.length > 1100 ? rawDiag.slice(0, 1100) + '\n...(truncado)' : rawDiag;
+        return {
+          hasPlan: false,
+          statusLabel: 'Diagnóstico Concluído (DIAGNOSIS.md carregado)',
+          text:
+            `🩺 [Diagnóstico Ativo — DIAGNOSIS.md]\n${clipped}${ambWarn}`
+        };
+      }
+    } catch {}
+  }
+
+  return { hasPlan: false, statusLabel: null, text: ambWarn ? ambWarn.trim() : '' };
+}
+
 function main() {
   const stateBrief = getCompactStateBrief(PROJECT_ROOT);
   const memBrief = getRecentMemPalaceBrief(PROJECT_ROOT);
   const testChkBrief = getTestAndCheckpointBrief(PROJECT_ROOT);
+  const blueprint = getBlueprintArtifactBrief(PROJECT_ROOT);
 
   const sections = [];
   if (stateBrief) sections.push(`📍 Estado GSD: ${stateBrief}`);
+  else if (blueprint.statusLabel) sections.push(`📍 Estado GSD: ${blueprint.statusLabel}`);
   if (memBrief) sections.push(`🏛️ Memória: ${memBrief}`);
   if (testChkBrief) sections.push(testChkBrief);
 
@@ -156,24 +208,26 @@ function main() {
     try {
       const TokenSavingsTracker = require(savingsPath);
       const tracker = new TokenSavingsTracker(PROJECT_ROOT);
-      tracker.recordSaving('session_briefing', 1800);
+      tracker.recordSaving('session_briefing', blueprint.hasPlan ? 2600 : 1800);
     } catch {}
   }
 
   const mapPath = findLibModule('codebase-map.cjs');
   let codebaseMapText = '';
-  if (mapPath) {
+  if (mapPath && !blueprint.hasPlan) {
     try {
       const { buildCodebaseMap } = require(mapPath);
-      codebaseMapText = buildCodebaseMap(PROJECT_ROOT, 1800);
+      codebaseMapText = buildCodebaseMap(PROJECT_ROOT, 1500);
     } catch {}
   }
 
   let briefingText =
     `🚀 [GSD Zero-Read Session Briefing] ${sections.join(' | ')}.\n` +
-    `💡 Protocolo Ativo: Ponytail Senior Dev (reuso/YAGNI) & Caveman Terse (resposta direta). Use tools MCP e consulte o Codebase Map antes de criar código novo.`;
+    `💡 Protocolo Ativo: Ponytail Senior Dev (reuso de src/utils/ + YAGNI) & Caveman Terse (resposta direta + batching paralelo).`;
 
-  if (codebaseMapText) {
+  if (blueprint.text) {
+    briefingText += `\n\n${blueprint.text}`;
+  } else if (codebaseMapText) {
     briefingText += `\n\n${codebaseMapText}`;
   }
 

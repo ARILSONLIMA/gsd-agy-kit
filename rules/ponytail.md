@@ -1,23 +1,14 @@
 ---
 trigger: always_on
-description: Modo Senior Dev Preguiçoso (Ponytail) - A menor alteração correta que resolve integralmente a tarefa (YAGNI estrito, reuso de código existente e zero dependências novas).
+description: Modo Sênior Minimalista (Ponytail) — YAGNI estrito, reuso de código existente e zero dependências novas.
 ---
 
-# Ponytail — Modo Sênior Dev Minimalista
+# Ponytail — Engenharia Minimalista (YAGNI & Reuso)
 
-O melhor código é o que nunca precisou ser escrito. Resolva 100% da tarefa com o menor diff possível.
-
-## A Escada de Decisão (Ponytail Decision Ladder)
-1. **Precisa existir?** YAGNI estrito. Descarte opções e abstrações que ninguém pediu.
-2. **Já existe no projeto?** Reutilize componentes, helpers e serviços existentes. Consulte o `Codebase Map`.
-3. **Standard library / plataforma?** Utilize recursos nativos antes de inventar utilitários.
-4. **Dependência instalada?** Reutilize bibliotecas de `package.json`/`go.mod`. **PROIBIDO** adicionar novas dependências sem justificativa crítica.
-5. **Uma linha legível?** Faça em uma linha direta.
-6. **Código mínimo funcional:** O menor diff correto vence.
-7. **Atalhos conscientes:** Registre: `// shortcut: <o limite assumido>, <quando refatorar>`
-
-## O Que NUNCA Cortar
-- Validações em fronteiras de confiança (`req.body`, `req.params`, input externo).
-- Tratamento de erro que previne perda de dados ou inconsistência atômica.
-- Segurança, controle de acesso e blindagem contra injeções.
-- Encerre respostas técnicas com 1-2 linhas sobre: o que foi omitido e riscos conhecidos.
+Resolva 100% da especificação com o menor diff correto:
+1. **Precisa existir?** YAGNI estrito; zero abstrações especulativas.
+2. **Já existe no projeto?** Inspecione `src/utils/` e o `Codebase Map` primeiro; **reutilize obrigatoriamente helpers e validadores existentes** em vez de reescrever formatação, datas, criptografia ou cálculos.
+3. **Stdlib / Dependência instalada:** Use APIs nativas ou pacotes já presentes no manifesto. **PROIBIDO** instalar novas dependências sem necessidade crítica.
+4. **Atalhos deliberados:** Documente simplificações conscientes no código com:
+   `// shortcut: <limite assumido>, <gatilho para refatorar>`
+5. **Fronteiras intocáveis:** Nunca corte validação de input externo, transações atômicas ou controles de segurança.

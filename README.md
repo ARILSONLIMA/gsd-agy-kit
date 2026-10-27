@@ -1,9 +1,9 @@
-# Antigravity GSD Kit v2.2.0 🚀
+# Antigravity GSD Kit v2.5.0 🚀
 
-[![Release](https://img.shields.io/badge/release-v2.2.0-blue.svg)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.5.0-blue.svg)](CHANGELOG.md)
 [![Ponytail](https://img.shields.io/badge/Ponytail-Senior%20Dev%20Mode-darkgreen.svg)](#-ponytail--senior-dev-mode--yagni-estrito)
 [![Caveman](https://img.shields.io/badge/Caveman-Terse%20pt--BR-orange.svg)](#-caveman--voz-concisa-asd-ste100--shrink-compressor)
-[![Tests](https://img.shields.io/badge/tests-100%25%20passing%20(113%20tests)-brightgreen.svg)](#-bateria-de-testes-nativos-instantânea)
+[![Tests](https://img.shields.io/badge/tests-100%25%20passing%20(122%20tests)-brightgreen.svg)](#-bateria-de-testes-nativos-instantânea)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens com Ponytail Senior Dev e Caveman Terse Voice para GSD no Antigravity CLI**
@@ -203,6 +203,33 @@ O kit opera em 4 camadas complementares:
     - **Central de Erros:** Inspecione e limpe incidentes a qualquer momento com `node .agents/mcp-server.cjs errors` ou `./setup.sh --errors`.
     - **Permanência Automática:** Atualizações via `/gsd-agy-update` ou `gsd-update.cjs` preservam e forçam `strict_errors: true` em `.planning/config.json`.
 
+16. **Batching Paralelo Obrigatório & Zero Re-exploração em Execução (`token-protocol.md`, `compact-planning.md`, `SessionStart`):**
+    - **Batching Paralelo de Turno:** Obrigatoriedade de agrupamento de leituras independentes (`read_file`, `gsd_read_strip`, `query_docs`, `ast_query`) e edições multi-arquivo (`edit_file`) no mesmo turno, reduzindo chamadas sequenciais ociosas.
+    - **Blueprint de Coordenadas (`PLAN.md`):** Teto rígido calibrado de 55 linhas, zero prosa explicativa e exigência de coordenadas exatas (`arquivo:L_ini-L_fim`), utilitários legados e contratos extraídos (proibindo wildcards).
+    - **Injeção Turno 0 no `SessionStart`:** Injeta o Blueprint de Coordenadas diretamente no Turno 0 das Fases 2–5 com diretiva estrita de Zero Re-exploração e supressão de `codebaseMapText` redundante.
+
+17. **SkeletonEngine v2 & Inspetor Cirúrgico `gsd-read-strip.cjs` v2:**
+    - **SkeletonEngine v2 para JS/TS:** Extração completa de métodos de classe, construtores, getters/setters, rotas HTTP Express/Fastify (`app.get/post/...`, `router.use/...`), arrow functions atribuídas e `module.exports` com linhas 1-based exatas.
+    - **Inspetor Cirúrgico v2:** Preserva 100% da numeração original de linhas do disco (`42: código`) mesmo após suprimir comentários de bloco e linhas vazias, mantendo tags Ponytail (`// shortcut:`, `// ponytail:`, `// TODO(gsd):`).
+    - **Limiar Calibrado:** Limiar de esqueleto e strip alinhado para arquivos `> 100` linhas (arquivos `<= 100` linhas lidos direto em 1 turno).
+
+18. **Runner Unificado de Verificação (`verify.cjs`) & AmbiguityGuard (`lib/ambiguity-guard.cjs`):**
+    - **Verificação em 1 Turno:** Execução simultânea de checagem sintática (`node --check`), code smells de Fowler (aninhamento $\le 3$, tamanho $\le 48$, complexidade ciclomática $\le 12$, zero concatenação SQL) e testes automatizados em < 1s.
+    - **Fast-Path no Stop Gate:** Gravação atômica de `last-verify-pass.json` permitindo aprovação instantânea sem retrabalho redundante.
+    - **AmbiguityGuard:** Validação temática cruzada 1-para-1 dos itens `[AMB-XX]` de `TASK.md` contra `AMBIGUITIES.md`, barrando desvios e alucinações de escopo.
+
+19. **Meta-Tool Gateway Dinâmico & Zero-Overhead de Schemas (`mcp-server.cjs`):**
+    - **Corte Drástico de Overhead:** Manifesto expõe apenas ferramentas essenciais e o Gateway Universal (`quick_verify`, `tool_catalog`, `mcp_exec`, `lsp_diagnostics`, `gsd_read_strip`), cortando o overhead de schemas de ~4.500 para ~250 tokens/turno.
+    - **Execução Sob Demanda:** `tool_catalog` e `mcp_exec` permitem consultar e disparar todas as ferramentas do ecossistema sem custo permanente de prompt.
+    - **Resiliência Universal de Aliases:** Normalizador `resolveFilePath` aceita transparentemente `file_path`, `filePath`, `path`, `Path`, `target`, `TargetFile`, `AbsolutePath` em todas as ferramentas.
+    - **Zero Falsos-Erros:** `ast_query` com 0 matches e `quick_verify` com falhas de domínio retornam `isError: false` via JSON-RPC, eliminando incidentes falsos no `ErrorGuard`.
+    - **Compatibilidade Nativa com Lazy MCP:** Manifesto completo sob demanda no Antigravity CLI.
+
+20. **Ponte Efêmera `PostToolUse` → `PreInvocation` & Progressive Disclosure:**
+    - Diagnósticos pós-edição salvos em cache efêmero e consumidos em 1 único turno pelo `PreInvocation` com fast-exit de 150ms (`readStdin(150)`).
+    - Regras situacionais migradas para `trigger: model_decision`, cortando 43,7% do footprint permanente de regras.
+    - Windowed sub-range dedup (180s) e blindagem contra inspeção desperdiçada de arquivos internos do kit (`.agents/`).
+
 ---
 
 ## 🚀 Instalação Rápida com 1 Comando (Direto na Raiz do Projeto)
@@ -374,6 +401,13 @@ O validador testa e confirma 100% dos testes e regras de proteção:
 - ✅ **Suíte Completa Ponytail & Caveman:** integridade e frontmatter válido de 16 skills especializadas.
 - ✅ **Subagentes Cavecrew:** presença e protocolo de concisão em `cavecrew-investigator`, `builder` e `reviewer`.
 - ✅ **Rastreamento de Modos em Tempo Real:** interceptação e confirmação efêmera de `/caveman` e `/ponytail` no `PreInvocation`.
+- ✅ **Batching Paralelo & Blueprint de Coordenadas:** PLAN.md com coordenadas exatas (`arquivo:L_ini-L_fim`) e teto calibrado de 55 linhas sem prosa.
+- ✅ **SkeletonEngine v2:** extração estrutural JS/TS com métodos de classe, rotas Express/Fastify e arrow functions.
+- ✅ **gsd-read-strip v2:** preservação de numeração original de linhas (1-based) e tags Ponytail (`// shortcut:`, `// ponytail:`).
+- ✅ **AmbiguityGuard & Verificador Unificado:** validação temática cruzada 1-para-1 dos itens `[AMB-XX]` e verificação simultânea de sintaxe, smells e testes via `verify.cjs`.
+- ✅ **Ponte Efêmera PostToolUse ➔ PreInvocation:** injeção transitória de linter em 1 turno com fast-exit de 150ms.
+- ✅ **Resiliência MCP v2.5:** suporte universal a aliases camelCase (`filePath`, `file_path`, etc.) e zero falsos erros em `ast_query` ou `quick_verify`.
+- ✅ **Deduplicação em Janela de 180s:** bloqueio de sub-ranges contidos mesmo intercalados e blindagem de foco em `.agents/`.
 
 ---
 

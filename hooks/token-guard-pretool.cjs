@@ -249,11 +249,12 @@ function respond(decision, reason, overwrite) {
       if (fs.existsSync(incidentsFile)) {
         try { incidents = JSON.parse(fs.readFileSync(incidentsFile, 'utf8')); } catch {}
       }
+      const shouldRedactArgs = /SANDBOX SHIELD|SECRET SHIELD/i.test(reason);
       incidents.push({
         type: 'hard_gate_block',
         tool: currentToolName || 'circuit_breaker',
         reason: reason.split('\n')[0],
-        args: currentArgs || {},
+        args: shouldRedactArgs ? { redacted: true } : (currentArgs || {}),
         timestamp: Date.now()
       });
       writeJsonAtomic(incidentsFile, incidents.slice(-50));
@@ -363,9 +364,12 @@ function recordTokenSaving(category, estimatedTokens = 500) {
       );
     }
 
-    // Sandbox Shield Gate (Bloqueia vazamento/contaminação de scenario.json, cold_start e holdout)
-    const isHoldoutPath = /(?:^|[\\/])(?:scenario\.json|\.gsd-bench-holdout|\.benchmark_cold_start\.json|holdout(?:\/.*)?|__hidden_[a-zA-Z0-9_-]+)/i.test(target) ||
-      target.includes('.gsd-bench-holdout') ||
+    // Sandbox Shield Gate (Bloqueia vazamento/contaminação de scenario.json, cold_start, holdout e internos de .agents/)
+    const holdoutDirSeg = ['.gsd', 'bench', 'holdout'].join('-');
+    const hiddenPrefixSeg = ['__hid', 'den_'].join('');
+    const holdoutPathRe = new RegExp(`(?:^|[\\\\/])(?:scenario\\.json|${holdoutDirSeg.replace(/\./g, '\\.')}|\\.benchmark_cold_start\\.json|holdout(?:\\/.*)?|${hiddenPrefixSeg}[a-zA-Z0-9_-]+)`, 'i');
+    const isHoldoutPath = holdoutPathRe.test(target) ||
+      target.toLowerCase().includes(holdoutDirSeg) ||
       target.endsWith('/scenario.json') || target === 'scenario.json' ||
       target.endsWith('.benchmark_cold_start.json');
     if (isHoldoutPath) {
@@ -374,6 +378,17 @@ function recordTokenSaving(category, estimatedTokens = 500) {
         'deny',
         '🛑 SANDBOX SHIELD (ZERO-LEAKAGE): O acesso direto a arquivos de orquestração interna, benchmarks e suítes de teste ocultas é estritamente proibido.\n' +
         'Concentre a análise exclusivamente nos arquivos locais do projeto (TASK.md, src/, docs/, tests/).'
+      );
+    }
+
+    // Proteção contra inspeção desnecessária dos motores internos e suítes de autoteste do próprio Kit
+    const isInternalKitEngine = /(?:^|[\\/])(?:\.agents[\\/](?:lib|hooks|kit)[\\/]|scripts[\\/]test-kit\.(?:sh|ps1)$)/i.test(target);
+    if (isInternalKitEngine) {
+      recordTokenSaving('sandbox_shield', 350);
+      return respond(
+        'deny',
+        '🛑 ECONOMIA DE TOKENS: Não inspecione o código interno dos linters/hooks em .agents/lib ou .agents/hooks.\n' +
+        'Atue diretamente na refatoração do código da aplicação (src/) seguindo a mensagem de diagnóstico recebida.'
       );
     }
 
@@ -504,10 +519,10 @@ function recordTokenSaving(category, estimatedTokens = 500) {
           'deny',
           '🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: É proibido ler arquivos de código (.go, .ts, .js, etc.) inteiros com read_file / view_file!\n' +
           'Ordem obrigatória:\n' +
-          '1) Para entender arquitetura e dependências, consulte o grafo: graphify query "<pergunta>"\n' +
-          `2) ${langToolHint} para localizar o trecho exato.\n` +
-          '3) Para ler o código via read_file/view_file, informe obrigatoriamente StartLine e EndLine cirúrgicos (máximo de 100 linhas).\n' +
-          `4) Para ler toda a estrutura do arquivo de forma barata, use ${outlineScriptPath} <arquivo>.`
+          '1) Para código > 100 linhas sem comentários/docstrings (com linhas 1-based): node .agents/mcp-server.cjs strip "<arquivo>" (gsd_read_strip).\n' +
+          '2) Para mapear classes, métodos, rotas e exports: node .agents/mcp-server.cjs skeleton "<arquivo>" (view_skeleton).\n' +
+          `3) ${langToolHint} para localizar símbolos específicos.\n` +
+          '4) Para read_file/view_file, informe StartLine e EndLine cirúrgicos (máximo de 100 linhas).'
         );
       }
     }
@@ -535,7 +550,7 @@ function recordTokenSaving(category, estimatedTokens = 500) {
         return respond(
           'deny',
           `🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: O intervalo de ${range} linhas excede o limite permitido (máximo 100 linhas para arquivos de código). ` +
-          `Utilize ${outlineScriptPath} <arquivo> para ver a estrutura limpa, ou ${langToolHint} para o bloco exato, reduzindo o range do read_file/view_file.`
+          `Utilize node .agents/mcp-server.cjs strip "<arquivo>" [ini] [fim] (gsd_read_strip), ${outlineScriptPath} <arquivo>, ou ${langToolHint} para reduzir o range.`
         );
       }
     }
@@ -544,44 +559,49 @@ function recordTokenSaving(category, estimatedTokens = 500) {
     const RECENT_READS_FILE = path.join(CACHE_DIR, 'recent-reads.json');
     const RECENT_READS_LEGACY = path.join(PROJECT_ROOT, '.agents', '.recent-reads.json');
     try {
+      const resolvedPath = path.isAbsolute(rawTarget)
+        ? path.normalize(rawTarget)
+        : path.resolve(PROJECT_ROOT, rawTarget);
       let fileMtime = 0;
-      try { fileMtime = fs.statSync(path.resolve(rawTarget)).mtimeMs; } catch {}
+      try { fileMtime = fs.statSync(resolvedPath).mtimeMs; } catch {}
 
-      let recentReads = [];
-      const readsFile = fs.existsSync(RECENT_READS_FILE) ? RECENT_READS_FILE : (fs.existsSync(RECENT_READS_LEGACY) ? RECENT_READS_LEGACY : null);
-      if (readsFile) {
-        try { recentReads = JSON.parse(fs.readFileSync(readsFile, 'utf8')); } catch {}
-      }
+      if (fileMtime > 0) {
+        let recentReads = [];
+        const readsFile = fs.existsSync(RECENT_READS_FILE) ? RECENT_READS_FILE : (fs.existsSync(RECENT_READS_LEGACY) ? RECENT_READS_LEGACY : null);
+        if (readsFile) {
+          try { recentReads = JSON.parse(fs.readFileSync(readsFile, 'utf8')); } catch {}
+        }
 
-      const now = Date.now();
-      recentReads = recentReads.filter(r => (now - r.timestamp) < 120000);
+        const now = Date.now();
+        recentReads = recentReads.filter(r => r && (now - r.timestamp) < 180000);
 
-      const resolvedPath = path.resolve(rawTarget);
-      const lastRead = recentReads[recentReads.length - 1];
-      if (lastRead &&
-          lastRead.target === resolvedPath &&
-          lastRead.startLine === startLine &&
-          lastRead.endLine === endLine &&
-          lastRead.mtime === fileMtime &&
-          (now - lastRead.timestamp) < 60000) {
-        recordTokenSaving('dedup_block', Math.max(150, (endLine - startLine + 1) * 10));
-        return respond(
-          'deny',
-          `ℹ️ DEDUPLICAÇÃO DE LEITURAS (ECONOMIA DE TOKENS):\n` +
-          `O trecho de ${path.basename(rawTarget)} (linhas ${startLine}-${endLine}) foi lido no turno imediatamente anterior e não sofreu alterações no disco.\n` +
-          `Consulte o histórico da conversa para evitar releituras redundantes e economizar tokens de contexto.`
+        const coveringRead = recentReads.find(r =>
+          r.target === resolvedPath &&
+          r.mtime === fileMtime &&
+          r.startLine <= startLine &&
+          r.endLine >= endLine &&
+          (now - r.timestamp) < 180000
         );
-      }
+        if (coveringRead) {
+          recordTokenSaving('dedup_block', Math.max(150, (endLine - startLine + 1) * 10));
+          return respond(
+            'deny',
+            `ℹ️ DEDUPLICAÇÃO DE LEITURAS (ECONOMIA DE TOKENS):\n` +
+            `O trecho de ${path.basename(rawTarget)} (linhas ${startLine}-${endLine}) já está presente no contexto (coberto pela leitura recente das linhas ${coveringRead.startLine}-${coveringRead.endLine}) e o arquivo não sofreu alterações no disco.\n` +
+            `Consulte o histórico da conversa para evitar releituras redundantes.`
+          );
+        }
 
-      recentReads.push({
-        target: resolvedPath,
-        startLine,
-        endLine,
-        mtime: fileMtime,
-        timestamp: now
-      });
-      if (recentReads.length > 10) recentReads = recentReads.slice(-10);
-      writeJsonAtomic(RECENT_READS_FILE, recentReads);
+        recentReads.push({
+          target: resolvedPath,
+          startLine,
+          endLine,
+          mtime: fileMtime,
+          timestamp: now
+        });
+        if (recentReads.length > 15) recentReads = recentReads.slice(-15);
+        writeJsonAtomic(RECENT_READS_FILE, recentReads);
+      }
     } catch {}
 
     return respond('allow', null, modifiedArgs);
@@ -603,7 +623,10 @@ function recordTokenSaving(category, estimatedTokens = 500) {
     }
 
     // 2.0.1 Sandbox Shield Gate para comandos direcionados a holdout, cold_start ou scenario.json
-    const isHoldoutOrScenario = /(?:^|\s|[\\/"'])(\.gsd-bench-holdout|\.benchmark_cold_start\.json|holdout(?:\/.*)?|scenario\.json|__hidden_[a-zA-Z0-9_-]+)(?:$|\s|[\\/"'])/i.test(cmd);
+    const holdoutDirSeg = ['.gsd', 'bench', 'holdout'].join('-');
+    const hiddenPrefixSeg = ['__hid', 'den_'].join('');
+    const holdoutCmdRe = new RegExp(`(?:^|\\s|[\\\\/"'])(${holdoutDirSeg.replace(/\./g, '\\.')}|\\.benchmark_cold_start\\.json|holdout(?:\\/.*)?|scenario\\.json|${hiddenPrefixSeg}[a-zA-Z0-9_-]+)(?:$|\\s|[\\\\/"'])`, 'i');
+    const isHoldoutOrScenario = holdoutCmdRe.test(cmd);
     if (isHoldoutOrScenario) {
       recordTokenSaving('sandbox_shield', 500);
       return respond(

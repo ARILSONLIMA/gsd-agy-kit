@@ -2,6 +2,40 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.5.0] - 2026-10-27
+- **Batching Paralelo Obrigatório & Zero Re-exploração em Execução (`rules/token-protocol.md`, `rules/compact-planning.md`, `hooks/token-guard-sessionstart.cjs`):**
+  - Diretiva explícita de **Batching Paralelo Obrigatório** agrupando leituras independentes (`read_file`, `gsd_read_strip`, `query_docs`, `ast_query`) e edições multi-arquivo (`edit_file`) no mesmo turno, além de uso de `lsp_rename` para renomeações multi-arquivo.
+  - **`PLAN.md` calibrado como Blueprint de Coordenadas (teto de 55 linhas, zero prosa):** exige coordenadas exatas `arquivo:L_ini-L_fim`, utilitários legados de `src/utils/` e constantes/contratos extraídos de `docs/` (proibindo wildcards `src/services/*`).
+  - **`SessionStart` com Injeção Direta de `PLAN.md` / `DIAGNOSIS.md`:** injeta o Blueprint de Coordenadas no Turno 0 das Fases 2–5 com diretiva de Zero Re-exploração e suprime `codebaseMapText` redundante quando `PLAN.md` já mapeia os alvos.
+- **`SkeletonEngine` v2 Completo para JS/TS & Calibração de `gsd_read_strip` (`lib/skeleton-engine.cjs`, `hooks/token-guard-pretool.cjs`):**
+  - Extrai métodos de classe, construtores, getters/setters, rotas HTTP Express/Fastify (`app.get/post/...`, `router.use/...`), arrow functions atribuídas e `module.exports` com linhas exatas 1-based.
+  - Limiar de `skeleton` / `strip` alinhado para arquivos `> 100` linhas (arquivos `<= 100` linhas lidos direto em 1 turno).
+- **Ponte Efêmera `PostToolUse` → `PreInvocation`, Paridade `verify.cjs` ↔ Stop Gate & `AmbiguityGuard` (`lib/ambiguity-guard.cjs`, `verify.cjs`, `hooks/token-guard-diagnostics.cjs`, `hooks/token-guard-preinvocation.cjs`):**
+  - Diagnósticos pós-edição (sintaxe, SQLi, Fowler smells e DRY `>= 1` bloco) gravados em `.agents/.cache/pending-edit-lint.json` e injetados via `ephemeralMessage` no turno seguinte pelo `PreInvocation` (consumo único, zero bloat permanente).
+  - Novo motor `lib/ambiguity-guard.cjs` compartilhado entre `verify.cjs`, `PostToolUse` e `Stop` Gate realizando validação temática cruzada 1-para-1 dos itens `[AMB-XX]` de `TASK.md` / `CHANGE_REQUEST.md` contra `AMBIGUITIES.md`.
+  - `verify.cjs` agora varre todos os diretórios de código existentes, define `ready_to_complete: false` em qualquer code smell ou divergência em `AMBIGUITIES.md`, usa `execFileSync` seguro e grava `last-verify-pass.json` para fast-path no `Stop` Gate.
+  - `PreInvocation` com early-exit JSON imediato em `readStdin(150)` (eliminando stall de 300ms/turno) e suporte nativo a `lastUserInput`.
+- **Progressive Disclosure de Regras (`trigger: model_decision`) & Higiene Hermética de Workspace (`setup-ui.cjs`, `setup.sh`, `setup.ps1`):**
+  - Regras situacionais (`compact-planning.md`, `graphify.md`, `lsp.md`, `ast-grep.md`, `architecture-layers.md`) migradas para `trigger: model_decision`, reduzindo o prompt fixo por turno no Antigravity runtime.
+  - `PostToolUse` restrito a tools de escrita/execução/MCP (zero spawn de Node em `read_file`/`view_file`), exclusões gravadas em `.git/info/exclude` (zero `M .gitignore`), remoção de `scripts/` na raiz e corte de ~2,8 MB de cópias duplicadas em `.agents/`, além de zero strings literais de suítes externas nos hooks/testes instalados.
+- **Resiliência Total de Aliases e Zero Falsos-Erros no MCP Server (`mcp-server.cjs`):**
+  - **Normalizador Universal `resolveFilePath(args)`:** Aceita transparentemente `file_path`, `filePath`, `path`, `Path`, `target`, `TargetFile`, `AbsolutePath` e `file` em todas as tools (`view_skeleton`, `gsd_outline`, `gsd_read_strip`, `lsp_*`, `impact_analysis`, `env_skeleton`, `caveman_shrink`, `ast_query`), eliminando crashes de chamada camelCase.
+  - **`ast_query` Sem Falso Erro em 0 Matches:** Código de saída `1` do `ast-grep` sem `stderr` agora retorna `"Nenhuma correspondência encontrada..."` com `isError: false`, zerando incidentes falsos no `ErrorGuard`.
+  - **`quick_verify` Sem Falso Alarme de Falha de Ferramenta:** Retorna `isError: false` via JSON-RPC mesmo quando a suíte de testes aponta falhas de domínio (`status: FAIL`), mantendo a ferramenta confiável desde a Fase 1, enquanto preserva exit code `1` no modo CLI.
+  - **Compatibilidade Nativa com Lazy MCP do Antigravity CLI:** Manifesto completo (`ALL_TOOLS_MANIFEST`) habilitado por padrão para carregamento sob demanda do AGY CLI (`GSD_MCP_GATEWAY_ONLY=1` disponível para clientes sem lazy loading).
+- **Inspetor Cirúrgico `gsd-read-strip.cjs` v2 com Numeração Original e Tags Ponytail:**
+  - Preserva 100% da numeração original de linhas (`42: código`) mesmo após suprimir docstrings, comentários de bloco (`/* ... */`) e linhas em branco, permitindo `edit_file` cirúrgico imediato sem releitura.
+  - Preserva comentários de governança (`// shortcut:`, `// ponytail:`, `// TODO(gsd):`, `// TODO(security):`) e aceita fatiamento opcional `[startLine] [endLine]`.
+- **Deduplicação em Janela com Sub-Ranges & Blindagem de Motor Interno (`hooks/token-guard-pretool.cjs`):**
+  - **Windowed Sub-Range Dedup:** Bloqueia releituras redundantes em toda a janela de 180s (mesmo intercaladas com outros arquivos) inclusive quando o novo intervalo `[startLine, endLine]` já está contido em uma leitura anterior com mesmo `mtime`.
+  - **Proteção de Foco `.agents/`:** Impede que o agente desperdice turnos auditando arquivos internos do Kit (`.agents/lib/`, `.agents/hooks/`, `.agents/kit/`).
+- **Precisão de Linhas, Nomes de Callbacks e Verificador Unificado (`lib/complexity-guard.cjs` & `verify.cjs`):**
+  - Correção em `stripComments` preservando `\n` dentro de comentários `/* ... */` (100% de paridade com números de linha do disco) e inferência semântica de nomes para rotas Express (`GET /rota`) e callbacks (`callback:tx@L64`).
+  - `verify.cjs` unificado diretamente com `SecurityLinter`, `ComplexityGuard` e `DryChecker`, eliminando divergências entre `quick_verify` e o Stop Gate.
+- **Deduplicação Cirúrgica de Regras e Mapeamento Domain-First de Ambiguidades (`rules/*.md`):**
+  - Redução adicional de 43,7% no footprint `always_on` (de 2.787 palavras / ~3.623 tokens para 1.568 palavras / ~2.038 tokens), eliminando duplicações entre `token-protocol.md`, `ponytail.md`, `caveman.md` e `quality-guardrails.md`, além da exigência redundante de turnos manuais `node -c` pós-edição.
+  - Prioridade 1 absoluta em `AMBIGUITIES.md` para mapear 1-para-1 conflitos e termos de domínio de `TASK.md`/`CHANGE_REQUEST.md`/`docs/` sem viés de cenário específico.
+
 ## [2.4.0] - 2026-10-27
 - **Meta-Tool Gateway Dinâmico & Zero-Overhead de Schemas (`mcp-server.cjs`):**
   - **Eliminação de Bloat de Schemas no Prompt:** O manifesto padrão do MCP agora expõe apenas ferramentas essenciais e o Gateway Universal (`quick_verify`, `tool_catalog`, `mcp_exec`, `lsp_diagnostics`, `gsd_read_strip`), cortando o overhead de schemas de ~4.500 tokens para ~250 tokens por turno.

@@ -1,11 +1,10 @@
 ---
-trigger: always_on
-description: Arquitetura homogênea de 3 camadas (Rotas -> Serviços -> Repositórios) e validadores dedicados.
+trigger: model_decision
+description: Ative ao projetar, criar ou refatorar rotas HTTP, serviços de domínio, repositórios SQL e validadores em camadas.
 ---
 
-# Diretrizes de Arquitetura de 3 Camadas
+# Arquitetura em 3 Camadas
 
-1. **Rotas/Controllers (`routes/`, `controllers/`):** Apenas HTTP. Valida parâmetros básicos, checa permissões RBAC e chama o Service. **PROIBIDO queries SQL ou cálculos de domínio em rotas.**
-2. **Serviços (`services/`):** Orquestra regras de negócio, cálculos puros e transações (`db.transaction`). Delega persistência exclusivamente aos Repositories.
-3. **Repositórios (`repositories/`):** Encapsula SQL 100% parametrizado com `?` (zero concatenação).
-4. **Validadores Dedicados (`validators/`):** Se validações de regras excederem 40 linhas, extraia para módulo puro em `src/validators/`.
+1. **Rotas/Controllers:** Apenas HTTP, coerção de entrada e RBAC; delegue toda regra e SQL aos Services.
+2. **Serviços:** Regras de domínio, cálculos puros e `db.transaction`; persistência delegada aos Repositories.
+3. **Repositórios e Validadores:** SQL 100% parametrizado (`?`) em `repositories/` e validações extensas (> 40 linhas) extraídas em `validators/` ou `utils/`.

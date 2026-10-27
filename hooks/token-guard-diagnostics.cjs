@@ -52,12 +52,41 @@ const MODIFIED_FILES_PATH = path.join(CACHE_DIR, 'session-modified-files.json');
 const STOP_GATE_PATH = path.join(CACHE_DIR, 'stop-verify-gate.json');
 const LAST_TEST_STATUS_PATH = path.join(CACHE_DIR, 'last-test-status.json');
 const FAILED_TESTS_PATH = path.join(CACHE_DIR, 'failed-tests.json');
+const PENDING_LINT_PATH = path.join(CACHE_DIR, 'pending-edit-lint.json');
+const LAST_VERIFY_PASS_PATH = path.join(CACHE_DIR, 'last-verify-pass.json');
+
+function updatePendingEditLint(fullEditedPath, fileAlerts) {
+  try {
+    const rel = path.relative(PROJECT_ROOT, fullEditedPath).replace(/\\/g, '/');
+    let state = { timestamp: Date.now(), items: {} };
+    if (fs.existsSync(PENDING_LINT_PATH)) {
+      try {
+        const prev = JSON.parse(fs.readFileSync(PENDING_LINT_PATH, 'utf8'));
+        if (prev && prev.items && (Date.now() - Number(prev.timestamp || 0)) < 180000) {
+          state.items = prev.items;
+        }
+      } catch {}
+    }
+    if (Array.isArray(fileAlerts) && fileAlerts.length > 0) {
+      state.items[rel] = fileAlerts;
+    } else {
+      delete state.items[rel];
+    }
+    state.timestamp = Date.now();
+    if (Object.keys(state.items).length > 0) {
+      writeJsonAtomic(PENDING_LINT_PATH, state);
+    } else if (fs.existsSync(PENDING_LINT_PATH)) {
+      fs.unlinkSync(PENDING_LINT_PATH);
+    }
+  } catch {}
+}
 
 function findLibModule(name) {
   const candidates = [
     path.resolve(__dirname, '..', 'lib', name),
     path.resolve(__dirname, '..', 'kit', 'lib', name),
     path.join(PROJECT_ROOT, '.agents', 'lib', name),
+    path.join(PROJECT_ROOT, '.agents', 'kit', 'lib', name),
     path.join(PROJECT_ROOT, 'lib', name)
   ];
   return candidates.find(p => fs.existsSync(p)) || null;
@@ -207,122 +236,147 @@ function handlePostToolUse(payload) {
     const editedPath = args.Path || args.TargetFile || args.AbsolutePath || args.path || args.file_path || args.filePath || '';
     recordModifiedCodeFile(editedPath);
 
-    // Auto-validação de sintaxe pós-edição imediata (LSP Engine / Node Check)
+    // Auto-validação de sintaxe, segurança, qualidade e AMBIGUITIES.md pós-edição imediata
     if (editedPath && typeof editedPath === 'string') {
       try {
         const fullEdited = path.isAbsolute(editedPath) ? editedPath : path.resolve(PROJECT_ROOT, editedPath);
+        try { if (fs.existsSync(LAST_VERIFY_PASS_PATH)) fs.unlinkSync(LAST_VERIFY_PASS_PATH); } catch {}
         if (fs.existsSync(fullEdited)) {
           const stat = fs.statSync(fullEdited);
-          if (stat.size <= 256 * 1024) {
-            const lspMod = findLibModule('lsp-engine.cjs');
-          if (lspMod) {
-            const LspEngine = require(lspMod);
-            const lsp = new LspEngine(PROJECT_ROOT);
-            const diag = lsp.diagnostics({ file_path: fullEdited });
-            if (diag && (diag.isError || diag.hasDiagnostics)) {
-              recordIncident({
-                type: 'syntax_error',
-                tool: toolName,
-                stepIdx: stepIdx,
-                error: `Erro de sintaxe em ${path.basename(fullEdited)}: ${diag.text || 'Falha na validação'}`,
-                args: args
-              });
-              if (ErrorGuard) {
-                ErrorGuard.emitError(PROJECT_ROOT, {
-                  category: 'LSP',
-                  component: 'lsp:diagnostics',
-                  title: `Erro de sintaxe/compilação detectado em ${path.basename(fullEdited)}`,
-                  stderr: diag.text || '',
-                  file: fullEdited,
-                  hint: 'Corrija o erro de sintaxe antes de executar os testes.',
-                  severity: 'error'
-                });
-              }
-            }
-          }
+          const fileAlerts = [];
 
-          // Auditoria de Segurança e Anti-SQL Injection pós-edição
-          const secMod = findLibModule('security-linter.cjs');
-          if (secMod) {
-            try {
-              const SecurityLinter = require(secMod);
-              const linter = new SecurityLinter(PROJECT_ROOT);
-              const secIssues = linter.scanFile(fullEdited);
-              const criticalSec = secIssues.filter(i => i.severity === 'CRITICAL');
-              if (criticalSec.length > 0) {
-                const s = criticalSec[0];
+          if (path.basename(fullEdited).toUpperCase() === 'AMBIGUITIES.MD') {
+            const ambMod = findLibModule('ambiguity-guard.cjs');
+            if (ambMod) {
+              try {
+                const { validateAmbiguities } = require(ambMod);
+                const ambRes = validateAmbiguities(PROJECT_ROOT);
+                if (ambRes.required && !ambRes.valid && ambRes.message) {
+                  fileAlerts.push(ambRes.message);
+                }
+              } catch {}
+            }
+            updatePendingEditLint(fullEdited, fileAlerts);
+          } else if (stat.size <= 256 * 1024) {
+            const lspMod = findLibModule('lsp-engine.cjs');
+            if (lspMod) {
+              const LspEngine = require(lspMod);
+              const lsp = new LspEngine(PROJECT_ROOT);
+              const diag = lsp.diagnostics({ file_path: fullEdited });
+              if (diag && (diag.isError || diag.hasDiagnostics)) {
+                const msg = `Erro de sintaxe: ${(diag.text || 'Falha na validação').split(/\r?\n/).slice(0, 2).join(' ')}`;
+                fileAlerts.push(msg);
                 recordIncident({
-                  type: 'security_risk',
+                  type: 'syntax_error',
                   tool: toolName,
                   stepIdx: stepIdx,
-                  error: `Vulnerabilidade SQL em ${path.basename(fullEdited)}:${s.line}: ${s.message}`,
+                  error: `Erro de sintaxe em ${path.basename(fullEdited)}: ${diag.text || 'Falha na validação'}`,
                   args: args
                 });
                 if (ErrorGuard) {
                   ErrorGuard.emitError(PROJECT_ROOT, {
-                    category: 'SECURITY',
-                    component: 'security:linter',
-                    title: `Risco de SQL Injection detectado em ${path.basename(fullEdited)}:${s.line}`,
-                    stderr: `${s.snippet}\n${s.message}`,
+                    category: 'LSP',
+                    component: 'lsp:diagnostics',
+                    title: `Erro de sintaxe/compilação detectado em ${path.basename(fullEdited)}`,
+                    stderr: diag.text || '',
                     file: fullEdited,
-                    hint: 'Substitua concatenação de strings por parâmetros parametrizados (?) imediatamente.',
+                    hint: 'Corrija o erro de sintaxe antes de executar os testes.',
                     severity: 'error'
                   });
                 }
               }
-            } catch {}
-          }
+            }
 
-          // Auditoria de Code Smells e Complexidade Ciclomática pós-edição
-          const compMod = findLibModule('complexity-guard.cjs');
-          if (compMod) {
-            try {
-              const ComplexityGuard = require(compMod);
-              const guard = new ComplexityGuard();
-              const smells = guard.scanFile(fullEdited);
-              const criticalSmells = smells.filter(s => s.type === 'high_complexity' || s.type === 'long_method');
-              if (criticalSmells.length > 0) {
-                const s = criticalSmells[0];
-                if (ErrorGuard) {
-                  ErrorGuard.emitError(PROJECT_ROOT, {
-                    category: 'QUALITY',
-                    component: 'complexity:guard',
-                    title: `Code Smell detectado em ${path.basename(fullEdited)}:${s.line}`,
-                    stderr: s.message,
-                    file: fullEdited,
-                    hint: 'Decomponha rotinas complexas em métodos auxiliares puros.',
-                    severity: 'warning'
+            // Auditoria de Segurança e Anti-SQL Injection pós-edição
+            const secMod = findLibModule('security-linter.cjs');
+            if (secMod) {
+              try {
+                const SecurityLinter = require(secMod);
+                const linter = new SecurityLinter(PROJECT_ROOT);
+                const secIssues = linter.scanFile(fullEdited);
+                const criticalSec = secIssues.filter(i => i.severity === 'CRITICAL');
+                if (criticalSec.length > 0) {
+                  const s = criticalSec[0];
+                  fileAlerts.push(`SQLi L${s.line}: ${s.message} (use placeholder '?')`);
+                  recordIncident({
+                    type: 'security_risk',
+                    tool: toolName,
+                    stepIdx: stepIdx,
+                    error: `Vulnerabilidade SQL em ${path.basename(fullEdited)}:${s.line}: ${s.message}`,
+                    args: args
                   });
+                  if (ErrorGuard) {
+                    ErrorGuard.emitError(PROJECT_ROOT, {
+                      category: 'SECURITY',
+                      component: 'security:linter',
+                      title: `Risco de SQL Injection detectado em ${path.basename(fullEdited)}:${s.line}`,
+                      stderr: `${s.snippet}\n${s.message}`,
+                      file: fullEdited,
+                      hint: 'Substitua concatenação de strings por parâmetros parametrizados (?) imediatamente.',
+                      severity: 'error'
+                    });
+                  }
                 }
-              }
-            } catch {}
-          }
+              } catch {}
+            }
 
-          // Auditoria de Código Duplicado (DRY)
-          const dryMod = findLibModule('dry-checker.cjs');
-          if (dryMod && fs.existsSync(MODIFIED_FILES_PATH)) {
-            try {
-              const DryChecker = require(dryMod);
-              const checker = new DryChecker(6);
-              const modifiedList = JSON.parse(fs.readFileSync(MODIFIED_FILES_PATH, 'utf8')) || [];
-              const filesToCheck = modifiedList.map(m => m.file).filter(f => fs.existsSync(f));
-              if (filesToCheck.length >= 2) {
-                const dups = checker.checkFiles(filesToCheck);
-                if (dups.length > 0 && ErrorGuard) {
-                  ErrorGuard.emitError(PROJECT_ROOT, {
-                    category: 'QUALITY',
-                    component: 'dry:checker',
-                    title: `Duplicação de código detectada (${dups.length} bloco(s) >= 6 linhas)`,
-                    stderr: `Código idêntico detectado entre arquivos tocados:\n` + dups.slice(0, 2).map(d => ` - ${d.locations.map(l => path.basename(l.file) + ':' + l.line).join(' <-> ')}`).join('\n'),
-                    file: fullEdited,
-                    hint: 'Extraia lógica repetida para um helper/utilitário compartilhado em vez de copiar código.',
-                    severity: 'warning'
-                  });
+            // Auditoria de Code Smells e Complexidade Ciclomática pós-edição (mesmos thresholds do Stop Gate)
+            const compMod = findLibModule('complexity-guard.cjs');
+            if (compMod) {
+              try {
+                const ComplexityGuard = require(compMod);
+                const guard = new ComplexityGuard({ maxLines: 48, maxNesting: 3, maxComplexity: 14 });
+                const smells = guard.scanFile(fullEdited);
+                const criticalSmells = smells.filter(s => s.type === 'deep_nesting' || s.type === 'high_complexity' || s.type === 'long_method');
+                if (criticalSmells.length > 0) {
+                  const s = criticalSmells[0];
+                  fileAlerts.push(`Smell L${s.line} (${s.type}): ${s.message}`);
+                  if (ErrorGuard) {
+                    ErrorGuard.emitError(PROJECT_ROOT, {
+                      category: 'QUALITY',
+                      component: 'complexity:guard',
+                      title: `Code Smell detectado em ${path.basename(fullEdited)}:${s.line}`,
+                      stderr: s.message,
+                      file: fullEdited,
+                      hint: 'Decomponha rotinas complexas em métodos auxiliares puros.',
+                      severity: 'warning'
+                    });
+                  }
                 }
-              }
-            } catch {}
+              } catch {}
+            }
+
+            // Auditoria de Código Duplicado (DRY)
+            const dryMod = findLibModule('dry-checker.cjs');
+            if (dryMod && fs.existsSync(MODIFIED_FILES_PATH)) {
+              try {
+                const DryChecker = require(dryMod);
+                const checker = new DryChecker(6);
+                const modifiedList = JSON.parse(fs.readFileSync(MODIFIED_FILES_PATH, 'utf8')) || [];
+                const filesToCheck = modifiedList.map(m => m.file).filter(f => fs.existsSync(f));
+                if (filesToCheck.length >= 2) {
+                  const dups = checker.checkFiles(filesToCheck);
+                  if (dups.length >= 1) {
+                    const firstLocs = dups[0].locations.map(l => `${path.basename(l.file)}:${l.line}`).join(' <-> ');
+                    fileAlerts.push(`DRY: bloco duplicado (>=6 linhas) em ${firstLocs}`);
+                    if (ErrorGuard) {
+                      ErrorGuard.emitError(PROJECT_ROOT, {
+                        category: 'QUALITY',
+                        component: 'dry:checker',
+                        title: `Duplicação de código detectada (${dups.length} bloco(s) >= 6 linhas)`,
+                        stderr: `Código idêntico detectado entre arquivos tocados:\n` + dups.slice(0, 2).map(d => ` - ${d.locations.map(l => path.basename(l.file) + ':' + l.line).join(' <-> ')}`).join('\n'),
+                        file: fullEdited,
+                        hint: 'Extraia lógica repetida para um helper/utilitário compartilhado em vez de copiar código.',
+                        severity: 'warning'
+                      });
+                    }
+                  }
+                }
+              } catch {}
+            }
+
+            updatePendingEditLint(fullEdited, fileAlerts);
           }
-        }
         }
       } catch {}
     }
@@ -410,6 +464,31 @@ function checkAutoVerifyStopGate(terminationReason) {
     try { fs.unlinkSync(STOP_GATE_PATH); } catch {}
     try { if (fs.existsSync(MODIFIED_FILES_PATH)) fs.unlinkSync(MODIFIED_FILES_PATH); } catch {}
     return null;
+  }
+
+  // Fast-path: se quick_verify / verify.cjs passou recentemente (< 120s) e nenhum arquivo foi tocado desde então
+  if (fs.existsSync(LAST_VERIFY_PASS_PATH)) {
+    try {
+      const lastPass = JSON.parse(fs.readFileSync(LAST_VERIFY_PASS_PATH, 'utf8'));
+      const passTs = Number(lastPass && lastPass.timestamp) || 0;
+      if (passTs > 0 && (now - passTs) < 120000) {
+        let modifiedAfter = false;
+        if (fs.existsSync(MODIFIED_FILES_PATH)) {
+          const modList = JSON.parse(fs.readFileSync(MODIFIED_FILES_PATH, 'utf8')) || [];
+          modifiedAfter = modList.some(item => item && Number(item.timestamp || 0) > passTs);
+        }
+        const ambPath = path.join(PROJECT_ROOT, 'AMBIGUITIES.md');
+        if (!modifiedAfter && fs.existsSync(ambPath)) {
+          try {
+            if (fs.statSync(ambPath).mtimeMs > passTs + 500) modifiedAfter = true;
+          } catch {}
+        }
+        if (!modifiedAfter) {
+          try { if (fs.existsSync(MODIFIED_FILES_PATH)) fs.unlinkSync(MODIFIED_FILES_PATH); } catch {}
+          return null;
+        }
+      }
+    } catch {}
   }
 
   // 1. Verificar se o último teste executado na sessão está quebrado (< 5 min)
@@ -529,18 +608,18 @@ function checkAutoVerifyStopGate(terminationReason) {
         } catch {}
       }
 
-      // 2.4 Verificação de Duplicação de Código (DRY Checker)
+      // 2.4 Verificação de Duplicação de Código (DRY Checker — paridade estrita >= 1 bloco)
       const dryMod = findLibModule('dry-checker.cjs');
       if (dryMod && recentFiles.length >= 2) {
         try {
           const DryChecker = require(dryMod);
           const checker = new DryChecker(6);
           const dups = checker.checkFiles(recentFiles.map(r => r.file));
-          if (dups.length >= 2) {
+          if (dups.length >= 1) {
             const first = dups[0];
             recordStopGateInterception(gateState, now);
             return (
-              `🛑 [DRY QUALITY GATE] Parada prematura interceptada: ${dups.length} blocos de CÓDIGO DUPLICADO (>= 6 linhas) detectados entre os arquivos tocados!\n` +
+              `🛑 [DRY QUALITY GATE] Parada prematura interceptada: ${dups.length} bloco(s) de CÓDIGO DUPLICADO (>= 6 linhas) detectado(s) entre os arquivos tocados!\n` +
               `Locais: ${first.locations.map(l => path.basename(l.file) + ':' + l.line).join(' <-> ')}\n` +
               `Trecho: ${first.snippet}\n` +
               `Extraia a lógica repetida para uma função utilitária/helper compartilhado para evitar perda de pontos por duplicação.`
@@ -552,29 +631,34 @@ function checkAutoVerifyStopGate(terminationReason) {
     } catch {}
   }
 
-  // 3. Verificação de Documentação de Ambiguidades (AMBIGUITIES.md) em tarefas com especificações
-  const hasTaskOrCr = fs.existsSync(path.join(PROJECT_ROOT, 'TASK.md')) || fs.existsSync(path.join(PROJECT_ROOT, 'CHANGE_REQUEST.md'));
-  if (hasTaskOrCr) {
-    const ambFile = path.join(PROJECT_ROOT, 'AMBIGUITIES.md');
-    let validAmb = false;
-    if (fs.existsSync(ambFile)) {
-      const content = fs.readFileSync(ambFile, 'utf8');
-      const matches = content.match(/###\s+AMB-\d+/gi) || (content.match(/AMB-\d+/gi) || []);
-      if (content.length >= 250 && matches.length >= 3) {
-        validAmb = true;
+  // 3. Verificação de Documentação de Ambiguidades (AMBIGUITIES.md) com validação temática cruzada
+  const ambMod = findLibModule('ambiguity-guard.cjs');
+  if (ambMod) {
+    try {
+      const { validateAmbiguities } = require(ambMod);
+      const ambRes = validateAmbiguities(PROJECT_ROOT);
+      if (ambRes.required && !ambRes.valid) {
+        recordStopGateInterception(gateState, now);
+        return (
+          `🛑 [AMBIGUITY GATE] Parada prematura interceptada: ${ambRes.message}\n` +
+          'Mantenha formato de bloco atômico único abaixo de cada "### AMB-XX: [Entidade/Fluxo] — [Conflito]" com a premissa determinística adotada.'
+        );
       }
-    }
-    if (!validAmb) {
-      recordStopGateInterception(gateState, now);
-      return (
-        '🛑 [AMBIGUITY GATE] Parada prematura interceptada: O arquivo AMBIGUITIES.md está incompleto!\n' +
-        'O protocolo exige mapear e documentar pelo menos 3 ambiguidades em blocos atômicos nos 4 vetores universais de incerteza:\n' +
-        '1. Temporal/Timezone (ISO UTC vs local)\n' +
-        '2. Limites/Divisões (zero, nulos, fallback 0.0)\n' +
-        '3. Intermitência de Sinais/Falhas (descarte vs média)\n' +
-        '4. Contratos de Payload/APIs (parcial vs total).\n' +
-        'Documente cada uma no formato: "### AMB-XX: [Contexto] — [Conflito e Premissa Adotada]".'
-      );
+    } catch {}
+  } else {
+    const hasTaskOrCr = fs.existsSync(path.join(PROJECT_ROOT, 'TASK.md')) || fs.existsSync(path.join(PROJECT_ROOT, 'CHANGE_REQUEST.md'));
+    if (hasTaskOrCr) {
+      const ambFile = path.join(PROJECT_ROOT, 'AMBIGUITIES.md');
+      let validAmb = false;
+      if (fs.existsSync(ambFile)) {
+        const content = fs.readFileSync(ambFile, 'utf8');
+        const matches = content.match(/###\s+AMB-\d+/gi) || (content.match(/AMB-\d+/gi) || []);
+        if (content.length >= 250 && matches.length >= 3) validAmb = true;
+      }
+      if (!validAmb) {
+        recordStopGateInterception(gateState, now);
+        return '🛑 [AMBIGUITY GATE] Parada prematura interceptada: O arquivo AMBIGUITIES.md está incompleto (>= 3 itens e >= 250 bytes obrigatórios).';
+      }
     }
   }
 

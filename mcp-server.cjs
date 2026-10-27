@@ -149,7 +149,12 @@ async function runAstQuery({ pattern, lang, path: targetPath = '.', limit = 10 }
     }
 
     if (res.status !== 0 && res.status !== null) {
-      const errOut = (res.stderr || '').trim() || `ast-grep encerrou com código ${res.status}`;
+      const stderrClean = (res.stderr || '').trim();
+      // ast-grep CLI retorna exit code 1 com stderr vazio quando há 0 correspondências (não é erro de ferramenta)
+      if (res.status === 1 && !stderrClean) {
+        return { text: `Nenhuma correspondência encontrada para o padrão: "${pattern}".`, isError: false };
+      }
+      const errOut = stderrClean || `ast-grep encerrou com código ${res.status}`;
       return {
         text: `Erro ao executar ast-grep (exit code ${res.status}):\n${errOut}`,
         isError: true,
@@ -517,7 +522,9 @@ const DEFAULT_TOOLS_MANIFEST = [
   ALL_TOOLS_MANIFEST.find(t => t.name === 'gsd_read_strip')
 ].filter(Boolean);
 
-const TOOLS_MANIFEST = DEFAULT_TOOLS_MANIFEST;
+// Por padrão expõe o catálogo completo para clientes com Lazy MCP nativo (Antigravity CLI);
+// clientes sem lazy loading podem ativar GSD_MCP_GATEWAY_ONLY=1 para expor apenas as 5 meta-tools.
+const TOOLS_MANIFEST = ALL_TOOLS_MANIFEST;
 
 function sendJson(msg) {
   try {
@@ -586,13 +593,29 @@ function scanPonytailDebt(projectRoot, customFilter = '') {
   return header + items.join('\n') + footer;
 }
 
-async function handleToolCall(name, args) {
+function resolveFilePath(args = {}) {
+  if (!args || typeof args !== 'object') return undefined;
+  const raw =
+    args.file_path ??
+    args.filePath ??
+    args.path ??
+    args.Path ??
+    args.target ??
+    args.TargetFile ??
+    args.AbsolutePath ??
+    args.file;
+  return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : undefined;
+}
+
+async function handleToolCall(name, rawArgs) {
+  const args = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
   let outcome;
   try {
     switch (name) {
       case 'mempalace_recall': {
+        const query = args.query ?? args.q ?? args.topic ?? '';
         const text = mempalace.formatRecallText({
-          query: args.query,
+          query,
           room: args.room,
           limit: args.limit || 5
         });
@@ -600,10 +623,12 @@ async function handleToolCall(name, args) {
         break;
       }
       case 'mempalace_capture': {
+        const room = args.room || 'decisions';
+        const topic = args.topic || args.title || 'Nota técnica';
         const res = mempalace.capture({
-          room: args.room,
-          topic: args.topic,
-          content: args.content,
+          room,
+          topic,
+          content: args.content || args.text || '',
           rationale: args.rationale || ''
         });
         if (!res.success) {
@@ -616,36 +641,45 @@ async function handleToolCall(name, args) {
           break;
         }
         const msg = res.duplicate
-          ? `ℹ️ Fato já existia no MemPalace [${args.room}]: "${args.topic}".`
-          : `✅ Fato registrado com sucesso no MemPalace [${args.room}] (ID: ${res.id}): "${args.topic}".`;
-        outcome = { text: msg, isError: false };
+          ? `ℹ️ Fato já existia no MemPalace [${room}]: "${topic}".`
+          : `✅ Fato registrado com sucesso no MemPalace [${room}] (ID: ${res.id}): "${topic}".`;
+        outcome = { text, isError: false };
+        outcome.text = msg;
         break;
       }
       case 'query_docs': {
         const text = ragDocs.formatQueryText({
-          query: args.query,
-          maxResults: args.max_results || 3
+          query: args.query ?? args.q ?? '',
+          maxResults: args.max_results ?? args.maxResults ?? args.limit ?? 3
         });
         outcome = { text, isError: false };
         break;
       }
       case 'check_dependency': {
-        const pkgName = args.package_name || args.name;
+        const pkgName = args.package_name || args.packageName || args.name || args.package;
         const res = lockfileLens.inspect(pkgName);
         outcome = { text: res.message, isError: false };
         break;
       }
-      case 'view_skeleton': {
-        const filePath = args.file_path || args.path;
+      case 'view_skeleton':
+      case 'gsd_outline': {
+        const filePath = resolveFilePath(args);
+        if (!filePath) {
+          outcome = {
+            text: 'Informe o caminho do arquivo no parâmetro "file_path" (ou "path" / "filePath").',
+            isError: false
+          };
+          break;
+        }
         const text = skeletonEngine.getOutline(filePath);
         outcome = { text, isError: false };
         break;
       }
       case 'ast_query': {
         outcome = await runAstQuery({
-          pattern: args.pattern,
-          lang: args.lang,
-          path: args.path,
+          pattern: args.pattern || args.query,
+          lang: args.lang || args.language,
+          path: resolveFilePath(args) || '.',
           limit: args.limit || 10
         });
         break;
@@ -678,28 +712,28 @@ async function handleToolCall(name, args) {
       }
       case 'lsp_diagnostics': {
         outcome = lspEngine.diagnostics({
-          file_path: args.file_path || args.path,
-          lang: args.lang
+          file_path: resolveFilePath(args),
+          lang: args.lang || args.language
         });
         break;
       }
       case 'lsp_definition': {
         outcome = lspEngine.definition({
-          symbol: args.symbol,
-          file_path: args.file_path || args.path,
+          symbol: args.symbol || args.name,
+          file_path: resolveFilePath(args),
           line: args.line,
           column: args.column,
-          lang: args.lang
+          lang: args.lang || args.language
         });
         break;
       }
       case 'lsp_references': {
         outcome = lspEngine.references({
-          symbol: args.symbol,
-          file_path: args.file_path || args.path,
+          symbol: args.symbol || args.name,
+          file_path: resolveFilePath(args),
           line: args.line,
           column: args.column,
-          lang: args.lang,
+          lang: args.lang || args.language,
           limit: args.limit || 25
         });
         break;
@@ -707,34 +741,34 @@ async function handleToolCall(name, args) {
       case 'lsp_hover':
       case 'lsp_symbols': {
         outcome = lspEngine.hover({
-          symbol: args.symbol,
-          file_path: args.file_path || args.path,
+          symbol: args.symbol || args.name,
+          file_path: resolveFilePath(args),
           line: args.line,
           column: args.column,
-          lang: args.lang
+          lang: args.lang || args.language
         });
         break;
       }
       case 'lsp_rename': {
         outcome = lspEngine.rename({
-          symbol: args.symbol,
-          new_name: args.new_name,
-          path: args.path || args.file_path || '.',
-          lang: args.lang,
-          dry_run: Boolean(args.dry_run)
+          symbol: args.symbol || args.old_name || args.oldName,
+          new_name: args.new_name || args.newName,
+          path: resolveFilePath(args) || '.',
+          lang: args.lang || args.language,
+          dry_run: Boolean(args.dry_run ?? args.dryRun)
         });
         break;
       }
       case 'impact_analysis': {
         outcome = impactEngine.analyze({
-          symbol: args.symbol,
-          file_path: args.file_path || args.path,
+          symbol: args.symbol || args.name,
+          file_path: resolveFilePath(args),
           limit: args.limit || 20
         });
         break;
       }
       case 'env_skeleton': {
-        const res = envSkeleton.inspect(args.file_path || args.path);
+        const res = envSkeleton.inspect(resolveFilePath(args));
         outcome = { text: res.message, isError: Boolean(res.isError) };
         break;
       }
@@ -744,14 +778,15 @@ async function handleToolCall(name, args) {
         break;
       }
       case 'ponytail_debt': {
-        const text = scanPonytailDebt(PROJECT_ROOT, args.filter || '');
+        const text = scanPonytailDebt(PROJECT_ROOT, args.filter || args.query || '');
         outcome = { text, isError: false };
         break;
       }
       case 'caveman_shrink': {
-        if (args.file_path) {
+        const targetFile = resolveFilePath(args);
+        if (targetFile) {
           try {
-            const res = compressMemoryFile(args.file_path, PROJECT_ROOT);
+            const res = compressMemoryFile(targetFile, PROJECT_ROOT);
             const text = `✅ [Caveman Shrink] ${res.filePath} comprimido (-${res.savedBytes} bytes / ${res.percent}%).\nBackup salvo em: ${res.backupPath}`;
             outcome = { text, isError: false };
           } catch (e) {
@@ -767,18 +802,19 @@ async function handleToolCall(name, args) {
       }
       case 'skill_search': {
         const skillsMgr = require('./skills-manager.cjs');
-        const matches = skillsMgr.searchSkills(PROJECT_ROOT, args.query, {
+        const query = args.query ?? args.q ?? '';
+        const matches = skillsMgr.searchSkills(PROJECT_ROOT, query, {
           limit: args.limit || 3,
           activate: Boolean(args.activate)
         });
         if (matches.length === 0) {
           outcome = {
-            text: `ℹ️ Nenhuma skill especializada encontrada para o termo "${args.query}". O agente pode prosseguir com implementação autônoma em clean code.`,
+            text: `ℹ️ Nenhuma skill especializada encontrada para o termo "${query}". O agente pode prosseguir com implementação autônoma em clean code.`,
             isError: false
           };
           break;
         }
-        let txt = `🔍 [Skill Retrieval] Encontradas ${matches.length} skill(s) relevantes no pool para "${args.query}":\n`;
+        let txt = `🔍 [Skill Retrieval] Encontradas ${matches.length} skill(s) relevantes no pool para "${query}":\n`;
         for (const m of matches) {
           const status = m.isActive ? '🟢 ATIVA' : '📦 NO POOL (sob demanda)';
           txt += `\n• ${m.name} [${status}] (Score: ${m.score})\n`;
@@ -795,10 +831,18 @@ async function handleToolCall(name, args) {
       }
       case 'gsd_read_strip': {
         const readStrip = require('./gsd-read-strip.cjs');
+        const targetPath = resolveFilePath(args);
+        if (!targetPath) {
+          outcome = { text: 'Informe o caminho do arquivo em "path" (ou "file_path" / "filePath").', isError: false };
+          break;
+        }
         try {
-          const res = readStrip.stripFile(args.path || args.file_path);
+          const res = readStrip.stripFile(targetPath, {
+            startLine: args.startLine ?? args.start_line ?? args.StartLine,
+            endLine: args.endLine ?? args.end_line ?? args.EndLine
+          });
           outcome = {
-            text: `=== STRIPPED: ${res.filename} (${res.cleanLines} linhas limpas, economizou ~${res.savedPct}% tokens) ===\n\n${res.content}`,
+            text: `=== STRIPPED: ${res.filename} (${res.cleanLines} linhas úteis com numeração preservada, economizou ~${res.savedPct}% tokens) ===\n\n${res.content}`,
             isError: false
           };
         } catch (e) {
@@ -809,34 +853,30 @@ async function handleToolCall(name, args) {
       case 'quick_verify': {
         const verifyRunner = require('./verify.cjs');
         try {
-          const res = verifyRunner.runFullVerification(args.path || PROJECT_ROOT);
+          const res = verifyRunner.runFullVerification(resolveFilePath(args) || PROJECT_ROOT);
           outcome = {
             text: JSON.stringify(res, null, 2),
-            isError: !res.ready_to_complete
+            // Nunca marcar falha de diagnóstico/teste como erro de protocolo MCP para não disparar ErrorGuard
+            isError: false,
+            readyToComplete: Boolean(res.ready_to_complete)
           };
         } catch (e) {
           outcome = { text: `Erro na verificação unificada: ${e.message}`, isError: true, stderr: e.message };
         }
         break;
       }
-      case 'gsd_outline': {
-        const filePath = args.file_path || args.path;
-        const text = skeletonEngine.getOutline(filePath);
-        outcome = { text, isError: false };
-        break;
-      }
       case 'tool_catalog': {
-        const text = formatToolCatalog(args.query);
+        const text = formatToolCatalog(args.query ?? args.q);
         outcome = { text, isError: false };
         break;
       }
       case 'mcp_exec': {
-        const targetTool = args.tool || args.name;
+        const targetTool = args.tool || args.name || args.ToolName;
         if (!targetTool) {
           outcome = { text: 'Erro: informe o nome da ferramenta a executar no parâmetro "tool". Consulte tool_catalog para ver as opções.', isError: true };
           break;
         }
-        const targetArgs = args.arguments || args.args || {};
+        const targetArgs = args.arguments || args.Arguments || args.args || {};
         outcome = await handleToolCall(targetTool, targetArgs);
         break;
       }
@@ -901,12 +941,12 @@ async function handleMessage(msg) {
       break;
     }
     case 'tools/list': {
-      const showAll = process.env.GSD_MCP_FULL_TOOLS === '1' || process.env.GSD_MCP_ALL === '1';
+      const gatewayOnly = process.env.GSD_MCP_GATEWAY_ONLY === '1' || process.env.GSD_MCP_COMPACT === '1';
       sendJson({
         jsonrpc: '2.0',
         id,
         result: {
-          tools: showAll ? ALL_TOOLS_MANIFEST : DEFAULT_TOOLS_MANIFEST
+          tools: gatewayOnly ? DEFAULT_TOOLS_MANIFEST : ALL_TOOLS_MANIFEST
         }
       });
       break;
@@ -1317,10 +1357,10 @@ async function handleCli(args) {
 
   if (cmd === 'verify' || cmd === 'quick-verify') {
     const target = args[1] || PROJECT_ROOT;
-    const { text, isError } = await handleToolCall('quick_verify', { path: target });
-    if (isError) { console.error(text); exitCli(1); }
-    console.log(text);
-    exitCli(0);
+    const outcome = await handleToolCall('quick_verify', { path: target });
+    if (outcome.isError) { console.error(outcome.text); exitCli(1); }
+    console.log(outcome.text);
+    exitCli(outcome.readyToComplete === false ? 1 : 0);
   }
 
   if (cmd === 'catalog') {
