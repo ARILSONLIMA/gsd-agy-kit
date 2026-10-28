@@ -709,7 +709,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             } catch {}
             const metaPath = path.join(targetKitDir, '.installed-version.json');
             fs.writeFileSync(metaPath, JSON.stringify({
-              version: pkgData.version || '2.5.2',
+              version: pkgData.version || '2.5.5',
               commit: headSha,
               updatedAt: new Date().toISOString()
             }, null, 2) + '\n', 'utf8');

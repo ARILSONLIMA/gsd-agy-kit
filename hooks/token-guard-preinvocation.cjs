@@ -447,6 +447,78 @@ function processModeCommands(prompt) {
   return feedback;
 }
 
+function copyFolderRecursiveSync(source, target) {
+  if (!fs.existsSync(target)) fs.mkdirSync(target, { recursive: true });
+  const entries = fs.readdirSync(source, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(source, entry.name);
+    const destPath = path.join(target, entry.name);
+    if (entry.isDirectory()) {
+      copyFolderRecursiveSync(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+function recordJitSkillPromotion(name, ttl = 5) {
+  try {
+    let data = { skills: {}, agents: {} };
+    const promoFile = fs.existsSync(JIT_PROMOTIONS_FILE) ? JIT_PROMOTIONS_FILE : (fs.existsSync(JIT_PROMOTIONS_LEGACY) ? JIT_PROMOTIONS_LEGACY : null);
+    if (promoFile) {
+      try { data = JSON.parse(fs.readFileSync(promoFile, 'utf8')); } catch {}
+    }
+    if (!data.skills) data.skills = {};
+    data.skills[name] = { ttl, promotedAt: Date.now() };
+    writeJsonAtomic(promoFile || JIT_PROMOTIONS_FILE, data);
+  } catch {}
+}
+
+function processDirectSkillInvocation(prompt) {
+  if (!prompt || typeof prompt !== 'string') return null;
+  const p = prompt.trim();
+  if (!p || p.startsWith('/')) return null;
+
+  // Extrai o primeiro token como comando/skill e o resto como argumentos
+  const match = p.match(/^([a-zA-Z0-9_-]+)(?:[\s\n]+([\s\S]*))?$/);
+  if (!match) return null;
+
+  const candidate = match[1].toLowerCase();
+  const rawArgs = (match[2] || '').trim();
+
+  // Ignora palavras comuns de chat ou verbos regulares que não são skills
+  if (['como', 'qual', 'quando', 'onde', 'porque', 'por', 'ajuda', 'ola', 'oi', 'hello', 'hi', 'show', 'git', 'node', 'npm', 'cat', 'ls', 'dir'].includes(candidate)) {
+    return null;
+  }
+
+  const activeSkillDir = path.join(PROJECT_ROOT, '.agents', 'skills', candidate);
+  const poolSkillDir = path.join(PROJECT_ROOT, '.agents', 'skills-pool', candidate);
+
+  let targetDir = null;
+  if (fs.existsSync(activeSkillDir)) {
+    targetDir = activeSkillDir;
+  } else if (fs.existsSync(poolSkillDir)) {
+    try {
+      copyFolderRecursiveSync(poolSkillDir, activeSkillDir);
+      recordJitSkillPromotion(candidate, 5);
+      targetDir = activeSkillDir;
+    } catch {}
+  }
+
+  if (!targetDir) return null;
+  const skillFile = path.join(targetDir, 'SKILL.md');
+  if (!fs.existsSync(skillFile)) return null;
+
+  let msg = `⚡ [Direct Command] Invocação direta da skill "${candidate}"`;
+  if (rawArgs) {
+    msg += ` com argumentos: "${rawArgs}".\n`;
+    msg += `Leia e execute imediatamente as instruções de .agents/skills/${candidate}/SKILL.md substituindo $ARGUMENTS por "${rawArgs}".`;
+  } else {
+    msg += `.\nLeia e execute imediatamente as instruções de .agents/skills/${candidate}/SKILL.md.`;
+  }
+  return msg;
+}
+
 function consumePendingEditLint() {
   const lintFile = path.join(CACHE_DIR, 'pending-edit-lint.json');
   if (!fs.existsSync(lintFile)) return '';
@@ -526,11 +598,13 @@ async function main() {
   }
 
   const modeFeedback = processModeCommands(promptText);
+  const directSkillMsg = processDirectSkillInvocation(promptText);
   const pendingLintMsg = consumePendingEditLint();
   const loopAlertMsg = checkLoopAndBudgetAlert();
 
   const messages = [];
   if (modeFeedback) messages.push(modeFeedback);
+  if (directSkillMsg) messages.push(directSkillMsg);
   if (pendingLintMsg) messages.push(pendingLintMsg);
   if (loopAlertMsg) messages.push(loopAlertMsg);
 

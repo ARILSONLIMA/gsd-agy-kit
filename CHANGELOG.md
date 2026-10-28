@@ -2,6 +2,13 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.5.5] - 2026-10-28
+- **Invocação Direta de Comandos sem Barra (`<skill-name> [argumentos]`):**
+  - **Intercepção Inteligente no `PreInvocation` Hook (`token-guard-preinvocation.cjs`):** detecta comandos enviados sem barra (ex: `gsd-execute-phase 2`, `gsd-plan-phase 1`, `gsd-profile-user`, `ponytail-debt`), auto-promove a skill de `.agents/skills-pool/` para `.agents/skills/` via JIT (TTL=5) e injeta diretiva efêmera com `$ARGUMENTS` exatos para execução instantânea no 1º turno.
+  - **Eliminação de Bloqueio `Unknown command` do Terminal:** permite acionar qualquer skill do GSD e do kit diretamente pelo nome nativo sem ser barrado pelo parser client-side do Antigravity CLI.
+  - **Diretriz Canônica em `rules/token-protocol.md` e `patch-agents.cjs`:** agentes e subagentes instruídos a resolver comandos sem barra como invocações diretas de workflow.
+  - **Inclusão de `gsd-profile-user` nos Perfis:** skill adicionada formalmente aos perfis `core` e `backend` em `skills-manager.cjs`.
+
 ## [2.5.2] - 2026-10-28
 - **Resiliência Greenfield nos Testes de Conformidade (`test-kit.sh` & `test-kit.ps1`):**
   - **Git Hooks em Projetos sem Git (Teste 8):** validação contextual de `.git/hooks` dispensando a obrigatoriedade dos ganchos quando o workspace ainda não foi inicializado com `git init`, eliminando falso-positivo.

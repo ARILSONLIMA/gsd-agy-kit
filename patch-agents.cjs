@@ -161,6 +161,7 @@ function buildProtocolBlock(targetDir) {
     '3. TEST-DRIVEN FIRST: Se houver suíte de testes, execute-a primeiro pontualmente para capturar o stack trace e asserção exata da falha.',
     '4. NAVEGAÇÃO JIT (SOB DEMANDA): Use view_skeleton (node .agents/mcp-server.cjs skeleton "<arquivo>") para ver números de linhas e assinaturas antes de ler código.',
     '   - Em arquivos > 50 linhas, use view_skeleton antes de ler o código completo.',
+    '   - Invocação direta sem barra (ex: gsd-execute-phase 2): abra diretamente .agents/skills/<skill>/SKILL.md com $ARGUMENTS correspondente.',
     '   - Use graphify query --graph .planning/graphs/graph.json "<pergunta>" apenas se o fluxo envolver múltiplos módulos desconhecidos.',
     `   - Use ${stack.lsp} para validar tipos/assinaturas e diagnósticos pós-edição.`,
     `   - Use ast-grep CLI (ast-grep run -p '<padrão>'${astLang}) para buscas sintáticas na AST.`,

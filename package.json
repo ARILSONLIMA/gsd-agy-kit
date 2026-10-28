@@ -1,6 +1,6 @@
 {
   "name": "gsd-agy-kit",
-  "version": "2.5.2",
+  "version": "2.5.5",
   "description": "Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens com Ponytail Senior Dev e Caveman Terse Voice para GSD no Antigravity CLI",
   "main": "setup-ui.cjs",
   "bin": {
