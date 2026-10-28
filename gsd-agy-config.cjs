@@ -177,6 +177,50 @@ function applyWorkflowPreset(projectRoot, presetName, options = {}) {
   return { configFile, presetName, hasFrontend, enableMempalace, enableCodeReview, gitBranching, commitDocs, config };
 }
 
+async function runCustomWorkflowWizard(projectRoot) {
+  console.log(`\n${C.bWhite}⚡ Assistente Rápido de Workflow (4 Perguntas Essenciais):${C.reset}\n`);
+
+  // 1. Frontend
+  const autoFe = detectFrontendInProject(projectRoot);
+  const feDefault = autoFe ? 'S/n' : 's/N';
+  const ansFe = await promptLine(`   1. Possui Frontend visual (Web/Mobile/Desktop)? [${feDefault}] ${C.dim}(Detectado: ${autoFe ? 'Sim' : 'Não'})${C.reset}: `);
+  let hasFrontend = autoFe;
+  if (ansFe) {
+    hasFrontend = ['s', 'sim', 'y', 'yes', 'true', '1'].includes(ansFe.toLowerCase());
+  }
+
+  // 2. Code Review Automático & Gates de Qualidade
+  const ansCr = await promptLine(`   2. Ativar Code Review Automático & Gates de Segurança? [S/n] ${C.dim}(Padrão: Sim)${C.reset}: `);
+  let enableCodeReview = true;
+  if (ansCr) {
+    enableCodeReview = !['n', 'nao', 'não', 'no', 'false', '0'].includes(ansCr.toLowerCase());
+  }
+
+  // 3. MemPalace (Memória de Longo Prazo SQLite)
+  const ansMp = await promptLine(`   3. Ativar MemPalace (memória episódica de longo prazo SQLite)? [S/n] ${C.dim}(Padrão: Sim)${C.reset}: `);
+  let enableMempalace = true;
+  if (ansMp) {
+    enableMempalace = !['n', 'nao', 'não', 'no', 'false', '0'].includes(ansMp.toLowerCase());
+  }
+
+  // 4. Estratégia de Branching Git
+  console.log(`\n   4. Estratégia de Branching Git:`);
+  console.log(`      [1] none    (Recomendado: commits diretos no branch ativo)`);
+  console.log(`      [2] feature (Branching isolado por funcionalidade)`);
+  console.log(`      [3] task    (Branching isolado por plano/tarefa)`);
+  const ansGit = await promptLine(`      Escolha [1-3, Padrão: 1]: `);
+  let gitBranching = 'none';
+  if (ansGit === '2' || ansGit.toLowerCase() === 'feature') gitBranching = 'feature';
+  else if (ansGit === '3' || ansGit.toLowerCase() === 'task') gitBranching = 'task';
+
+  return applyWorkflowPreset(projectRoot, 'custom', {
+    hasFrontend,
+    enableCodeReview,
+    enableMempalace,
+    gitBranching
+  });
+}
+
 function setConfigKnob(projectRoot, keyPath, rawValue) {
   const { configFile, config } = loadConfig(projectRoot);
   let value = rawValue;
@@ -382,13 +426,13 @@ function showConsolidatedStatus(projectRoot, asJson = false) {
       configFile,
       response_language: config.response_language || 'pt-BR',
       model_profile: config.model_profile || 'inherit',
-      compact_content: config.workflow?.compact_content || true,
-      use_worktrees: config.workflow?.use_worktrees || false,
+      compact_content: config.workflow?.compact_content !== undefined ? Boolean(config.workflow.compact_content) : true,
+      use_worktrees: Boolean(config.workflow?.use_worktrees),
       source_grounding_authority: config.plan_review?.source_grounding_authority || 'ast-grep',
-      ui_phase: config.workflow?.ui_phase || false,
-      code_review: config.workflow?.code_review || true,
-      mempalace: config.mempalace?.enabled || true,
-      graphify: config.graphify?.enabled || true,
+      ui_phase: Boolean(config.workflow?.ui_phase),
+      code_review: config.workflow?.code_review !== undefined ? Boolean(config.workflow.code_review) : true,
+      mempalace: config.mempalace?.enabled !== undefined ? Boolean(config.mempalace.enabled) : true,
+      graphify: config.graphify?.enabled !== undefined ? Boolean(config.graphify.enabled) : true,
       branching_strategy: config.git?.branching_strategy || 'none'
     },
     surface: {
@@ -455,10 +499,7 @@ async function runInteractiveMenu(projectRoot) {
     if (pAns === '2') {
       applyWorkflowPreset(projectRoot, 'fullstack', { hasFrontend: true });
     } else if (pAns === '3') {
-      const fe = detectFrontendInProject(projectRoot);
-      const ansFe = await promptLine(`   Possui Frontend visual? [s/N]: `);
-      const hasFrontend = ansFe ? ['s', 'sim', 'y'].includes(ansFe.toLowerCase()) : fe;
-      applyWorkflowPreset(projectRoot, 'custom', { hasFrontend });
+      await runCustomWorkflowWizard(projectRoot);
     } else {
       applyWorkflowPreset(projectRoot, 'backend', { hasFrontend: false });
     }
@@ -573,8 +614,19 @@ Exemplos:
   }
 
   if (verb === 'custom' || verb === '-c' || (verb === 'workflow' && subArg === 'custom')) {
-    const fe = detectFrontendInProject(projectRoot);
-    applyWorkflowPreset(projectRoot, 'custom', { hasFrontend: fe });
+    const hasFlags = args.some(a => a.startsWith('--no-') || a.startsWith('--review') || a.startsWith('--frontend') || a.startsWith('--branching=') || a.startsWith('--mempalace'));
+    if (!hasFlags && process.stdin.isTTY && !asJson) {
+      await runCustomWorkflowWizard(projectRoot);
+    } else {
+      const autoFe = detectFrontendInProject(projectRoot);
+      const hasFrontend = args.includes('--frontend') ? true : (args.includes('--no-frontend') ? false : autoFe);
+      const enableCodeReview = args.includes('--no-review') || args.includes('--no-code-review') ? false : true;
+      const enableMempalace = args.includes('--no-mempalace') ? false : true;
+      let gitBranching = 'none';
+      const branchFlag = args.find(a => a.startsWith('--branching='));
+      if (branchFlag) gitBranching = branchFlag.split('=')[1];
+      applyWorkflowPreset(projectRoot, 'custom', { hasFrontend, enableCodeReview, enableMempalace, gitBranching });
+    }
     showConsolidatedStatus(projectRoot, asJson);
     return;
   }
@@ -651,6 +703,7 @@ if (require.main === module) {
 module.exports = {
   main,
   applyWorkflowPreset,
+  runCustomWorkflowWizard,
   loadConfig,
   saveConfig,
   loadUserProfile,

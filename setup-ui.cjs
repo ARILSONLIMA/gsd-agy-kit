@@ -458,16 +458,14 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
     }
   }
 
-  let enableMempalace = true;
-  let enableCodeReview = true;
+  let enableMempalace = options.enableMempalace !== undefined ? Boolean(options.enableMempalace) : true;
+  let enableCodeReview = options.enableCodeReview !== undefined ? Boolean(options.enableCodeReview) : true;
 
   if (hasFrontendInput === null && canPromptInteractively()) {
-    console.log(`\n   ${C.bWhite}Recursos Opcionais:${C.reset}`);
-    const memAns = await askPrompt('   Ativar Mempalace (memória de longo prazo)? [S/n]: ');
-    enableMempalace = memAns !== 'n' && memAns !== 'nao';
-
-    const crAns = await askPrompt('   Ativar Code Review Automático? [S/n]: ');
-    enableCodeReview = crAns !== 'n' && crAns !== 'nao';
+    console.log(`\n   ${C.bWhite}Governança Padrão Ativa (Zero-Friction):${C.reset}`);
+    console.log(`   ${C.bGreen}✔${C.reset} MemPalace (Memória Episódica SQLite): ${enableMempalace ? C.bGreen + 'ON' : C.dim + 'OFF'}${C.reset}`);
+    console.log(`   ${C.bGreen}✔${C.reset} Code Review Automático & Gates:      ${enableCodeReview ? C.bGreen + 'ON' : C.dim + 'OFF'}${C.reset}`);
+    console.log(`   ${C.dim}  (Personalize quando quiser via /gsd-agy-config)${C.reset}\n`);
 
     await promptAndInstallLsps(targetDir);
     console.log();
@@ -710,7 +708,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             } catch {}
             const metaPath = path.join(targetKitDir, '.installed-version.json');
             fs.writeFileSync(metaPath, JSON.stringify({
-              version: pkgData.version || '2.5.6',
+              version: pkgData.version || '2.7.0',
               commit: headSha,
               updatedAt: new Date().toISOString()
             }, null, 2) + '\n', 'utf8');
@@ -1328,7 +1326,13 @@ async function main() {
   let command = '';
   let extraArg = '';
 
-  const flagOnlyArgs = new Set(['--cleanup', '--no-cleanup', '--frontend', '--no-frontend', '--yes', '-y', '--check', '--json', '--force']);
+  const flagOnlyArgs = new Set([
+    '--cleanup', '--no-cleanup',
+    '--frontend', '--no-frontend',
+    '--mempalace', '--no-mempalace',
+    '--code-review', '--no-code-review', '--review', '--no-review',
+    '--yes', '-y', '--check', '--json', '--force'
+  ]);
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -1441,7 +1445,20 @@ async function main() {
   if (args.includes('--frontend') || extraArg === 'true' || extraArg === '1') hasFrontend = true;
   if (args.includes('--no-frontend') || extraArg === 'false' || extraArg === '0') hasFrontend = false;
 
-  await runInstaller(targetDir, hasFrontend, { interactivePromptTest: false, cleanup: !noCleanup });
+  let enableMempalace = true;
+  if (args.includes('--no-mempalace')) enableMempalace = false;
+  if (args.includes('--mempalace')) enableMempalace = true;
+
+  let enableCodeReview = true;
+  if (args.includes('--no-code-review') || args.includes('--no-review')) enableCodeReview = false;
+  if (args.includes('--code-review') || args.includes('--review')) enableCodeReview = true;
+
+  await runInstaller(targetDir, hasFrontend, {
+    interactivePromptTest: false,
+    cleanup: !noCleanup,
+    enableMempalace,
+    enableCodeReview
+  });
 }
 
 main().catch(err => {

@@ -760,6 +760,18 @@ GFY_NON_COMMIT_OK=1
 fi
 assert_test "Hook Graphify Update (gsd-graphify-update.cjs) ignora comandos que nao sao commit com saida limpa" "$GFY_NON_COMMIT_OK"
 
+# 26.4: Teste Funcional do gsd-agy-config.cjs (Wizard Custom, Flags & Status JSON)
+AGY_CONFIG_FUNC_OK=0
+AGY_CONF_OUT=$(node "${AGY_CONFIG_PATH}" "${TARGET_DIR}" custom --no-review --no-mempalace --branching=task --json 2>/dev/null || echo "{}")
+if echo "$AGY_CONF_OUT" | grep -q '"code_review": false' && \
+   echo "$AGY_CONF_OUT" | grep -q '"mempalace": false' && \
+   echo "$AGY_CONF_OUT" | grep -q '"branching_strategy": "task"'; then
+  # Reverter para defaults recomendados (review: true, mempalace: true)
+  node "${AGY_CONFIG_PATH}" "${TARGET_DIR}" custom --review --mempalace --branching=none --json >/dev/null 2>&1 || true
+  AGY_CONFIG_FUNC_OK=1
+fi
+assert_test "Central de Governança (gsd-agy-config.cjs) suporta flags customizadas e saída estruturada JSON" "$AGY_CONFIG_FUNC_OK"
+
 # ------------------------------------------------------------------------------
 # Teste 27: Validacao Sintatica Integral de Scripts Shell (.sh) e PowerShell (.ps1)
 # ------------------------------------------------------------------------------

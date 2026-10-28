@@ -25,7 +25,7 @@ Executa a central nativa de governança:
 Predefinições e comandos rápidos suportados:
 - `backend` (ou `-b`, `1`): Preset de workflow para APIs, microsserviços e workers (sem UI).
 - `fullstack` (ou `-f`, `2`): Preset de workflow para Web/Mobile + Backend (com UI phase e review).
-- `custom` (ou `-c`, `3`): Questionário rápido de 4 perguntas de workflow.
+- `custom` (ou `-c`, `3`): Questionário rápido de 4 perguntas de workflow (Frontend, Code Review, MemPalace e Branching).
 - `surface <zero|core|backend|full|list>`: Alterna ou lista o perfil do catálogo de skills.
 - `profile [ponytail <modo> | caveman <modo> | show]`: Ajusta preferências comportamentais do dev.
 - `set <chave> <valor>` / `get <chave>`: Lê ou grava knobs pontuais em `.planning/config.json`.

@@ -923,6 +923,22 @@ Assert-Test -Name "Hook Graphify Update (gsd-graphify-update.cjs) ignora comando
             -Condition $gfyNonCommitOk `
             -ErrorDetails "gsd-graphify-update.cjs nao retornou codigo 0 para git status"
 
+# 26.4: Teste Funcional do gsd-agy-config.cjs (Wizard Custom, Flags & Status JSON)
+$agyConfigFuncOk = $false
+try {
+    $agyConfOut = node $agyConfigPath $TargetDir custom --no-review --no-mempalace --branching=task --json 2>$null | Out-String
+    if ($agyConfOut -match '"code_review":\s*false' -and `
+        $agyConfOut -match '"mempalace":\s*false' -and `
+        $agyConfOut -match '"branching_strategy":\s*"task"') {
+        node $agyConfigPath $TargetDir custom --review --mempalace --branching=none --json 2>$null | Out-Null
+        $agyConfigFuncOk = $true
+    }
+} catch {}
+
+Assert-Test -Name "Central de Governança (gsd-agy-config.cjs) suporta flags customizadas e saída estruturada JSON" `
+            -Condition $agyConfigFuncOk `
+            -ErrorDetails "gsd-agy-config.cjs falhou ao processar custom --no-review --no-mempalace --branching=task --json"
+
 # ------------------------------------------------------------------------------
 # Teste 27: Validacao Sintatica Integral de Scripts PowerShell (.ps1) e Shell (.sh)
 # ------------------------------------------------------------------------------

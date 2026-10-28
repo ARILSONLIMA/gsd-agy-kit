@@ -2,6 +2,24 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.7.0] - 2026-10-28
+- **Instalação Zero-Friction & Defaults Recomendados (`setup-ui.cjs`, `install.sh`, `setup.sh`):**
+  - **Eliminação de Fricção no Onboarding:** Removidas as perguntas interativas de Code Review e MemPalace no instalador, aplicando por padrão os melhores recursos do kit (`MemPalace: true`, `Code Review: true`).
+  - **Painel Informativo Transparente:** O instalador exibe o status ativo de governança (`MemPalace: ON`, `Code Review: ON`) sem pausar a execução ou gerar paralisia de escolha para novos usuários, orientando que ajustes finos são feitos via `/gsd-agy-config`.
+  - **Novas Flags CLI no Instalador:** Suporte direto a `--mempalace`, `--no-mempalace`, `--code-review` e `--no-code-review` / `--no-review` em automações e pipelines CI/CD.
+- **Centralização da Governança no `gsd-agy-config` (`gsd-agy-config.cjs` & `/gsd-agy-config`):**
+  - **Wizard Rápido de 4 Perguntas Essenciais (`custom`):** Implementado assistente completo interativo pós-instalação cobrindo:
+    1. Interface Frontend visual (com auto-detecção em React, Vue, Next, Vite, etc.).
+    2. Code Review Automático & Gates de Segurança (ASVS e cobertura de API).
+    3. Memória Episódica MemPalace em SQLite FTS5.
+    4. Estratégia de Branching Git (`none`, `feature`, `task`).
+  - **Execução CLI com Flags & Saída Estruturada:** O comando `gsd-agy-config custom` aceita flags diretas (ex: `--no-review`, `--no-mempalace`, `--branching=<modo>`) com saída `--json`.
+  - **Correção de Avaliação Booleana:** Corrigido bug em `showConsolidatedStatus` onde flags booleanas falsas (`false`) eram sobrescritas para `true` por fallback indevido (`|| true`).
+- **Suíte de Testes de Conformidade (`test-kit.sh` & `test-kit.ps1`):**
+  - **Novo Teste Unitário 26.4:** Validação funcional de `gsd-agy-config.cjs custom` com flags de desativação, aferição de saída JSON e restauração segura aos defaults.
+- **Bumping de Versão v2.7.0:**
+  - `package.json`, `setup-ui.cjs`, `README.md`, e metadados de instalação atualizados para `v2.7.0`.
+
 ## [2.5.6] - 2026-10-28
 - **Central Unificada de Governança (`/gsd-agy-config` e `gsd-agy-config.cjs`):**
   - **Unificação de 4 Comandos Legados em 1 Central Única:** consolida `gsd-settings`, `gsd-config`, `gsd-surface` e `gsd-profile-user` sob um único comando consolidado `/gsd-agy-config`.
