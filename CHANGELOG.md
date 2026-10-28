@@ -2,6 +2,14 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.5.2] - 2026-10-28
+- **Resiliência Greenfield nos Testes de Conformidade (`test-kit.sh` & `test-kit.ps1`):**
+  - **Git Hooks em Projetos sem Git (Teste 8):** validação contextual de `.git/hooks` dispensando a obrigatoriedade dos ganchos quando o workspace ainda não foi inicializado com `git init`, eliminando falso-positivo.
+  - **CodebaseMap em Repositórios Vazios (Teste 52):** fallback transparente de aferição para `libDir` quando a raiz do projeto é greenfield (zero arquivos de código-fonte), comprovando a operacionalidade do motor sem reprovação indevida.
+  - **MCP CLI `map` e `debt` com Resolução de Diretório e Mensagem Greenfield (Teste 53 & `mcp-server.cjs`):**
+    - `mcp-server.cjs`: subcomandos CLI `map` e `debt` agora aceitam caminhos de diretório arbitrários (`targetRoot`).
+    - Validação de teste atualizada para reconhecer a resposta padrão `"Nenhum código-fonte relevante mapeado."`, eliminando falso-positivo em projetos recém-criados.
+
 ## [2.5.1] - 2026-10-28
 - **Centralização do Grafo de Conhecimento em `.planning/graphs/` & Zero Duplicação de Pastas:**
   - `gsd-graphify-update.cjs`: pós-execução do `graphify update .`, move os artefatos diretamente para `.planning/graphs/` e remove a pasta redundante `graphify-out/`, eliminando duplicidade de arquivos e diretórios no workspace.

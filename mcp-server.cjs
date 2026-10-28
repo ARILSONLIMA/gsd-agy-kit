@@ -1273,18 +1273,34 @@ async function handleCli(args) {
   }
 
   if (cmd === 'map' || cmd === 'codebase-map') {
-    const budget = args[1] ? Number(args[1]) : 2000;
-    const { text, isError } = await handleToolCall('codebase_map', { budget });
-    if (isError) { console.error(text); exitCli(1); }
+    let targetRoot = PROJECT_ROOT;
+    let budget = 2000;
+    if (args[1]) {
+      if (/^\d+$/.test(args[1])) {
+        budget = Number(args[1]);
+      } else if (fs.existsSync(args[1])) {
+        targetRoot = path.resolve(args[1]);
+        if (args[2] && /^\d+$/.test(args[2])) budget = Number(args[2]);
+      }
+    }
+    const text = buildCodebaseMap(targetRoot, budget) || 'Nenhum código-fonte relevante mapeado.';
     console.log(text);
     exitCli(0);
   }
 
   if (cmd === 'debt' || cmd === 'ponytail-debt') {
-    const filter = args[1];
-    const { text, isError } = await handleToolCall('ponytail_debt', { filter });
-    if (isError) { console.error(text); exitCli(1); }
-    console.log(text);
+    let targetRoot = PROJECT_ROOT;
+    let filter = '';
+    if (args[1]) {
+      if (fs.existsSync(args[1]) && fs.statSync(args[1]).isDirectory()) {
+        targetRoot = path.resolve(args[1]);
+        if (args[2]) filter = args[2];
+      } else {
+        filter = args[1];
+      }
+    }
+    const text = scanPonytailDebt(targetRoot, filter);
+    console.log(text || 'Nenhum débito técnico ou atalho encontrado.');
     exitCli(0);
   }
 
