@@ -2,6 +2,14 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.7.1] - 2026-10-28
+- **Correção na Suíte de Testes & Paridade de Regras (`test-kit.sh`, `test-kit.ps1`, `rules/token-protocol.md`):**
+  - **Resolução de Falso Positivo no Catálogo Sintético:** Atualizada a expressão regular de validação em `test-kit.sh` e `test-kit.ps1` para contemplar os termos introduzidos na arquitetura de Descoberta JIT (`Descoberta JIT`, `Auto-Promoção JIT`, `Descoberta & Ativação Autônoma`), evitando falhas em workspaces recém-instalados.
+  - **Fallback Resiliente de Resolução:** Adicionada busca em cascata para `token-protocol.md` em múltiplos layouts de diretórios (`.agents/rules/`, `rules/` e `${KIT_DIR}/rules/`).
+  - **Paridade Canônica:** Seção 5 de `rules/token-protocol.md` ajustada com subtítulo unificado para garantir compatibilidade retroativa com versões pré-2.5.5.
+- **Bumping de Versão v2.7.1:**
+  - `package.json`, `setup-ui.cjs`, `README.md`, e metadados de instalação atualizados para `v2.7.1`.
+
 ## [2.7.0] - 2026-10-28
 - **Instalação Zero-Friction & Defaults Recomendados (`setup-ui.cjs`, `install.sh`, `setup.sh`):**
   - **Eliminação de Fricção no Onboarding:** Removidas as perguntas interativas de Code Review e MemPalace no instalador, aplicando por padrão os melhores recursos do kit (`MemPalace: true`, `Code Review: true`).

@@ -167,9 +167,9 @@ function getWorkspaceStatus(targetDir) {
 function getKitVersion() {
   try {
     const pkgData = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-    return pkgData.version || '2.2.0';
+    return pkgData.version || '2.7.1';
   } catch (_) {
-    return '2.2.0';
+    return '2.7.1';
   }
 }
 
@@ -708,7 +708,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             } catch {}
             const metaPath = path.join(targetKitDir, '.installed-version.json');
             fs.writeFileSync(metaPath, JSON.stringify({
-              version: pkgData.version || '2.7.0',
+              version: pkgData.version || '2.7.1',
               commit: headSha,
               updatedAt: new Date().toISOString()
             }, null, 2) + '\n', 'utf8');

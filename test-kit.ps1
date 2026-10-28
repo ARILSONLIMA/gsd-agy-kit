@@ -385,7 +385,13 @@ Assert-Test -Name "Catalogo de Skills (.agents/skills/) em Zero-Baseline (0 skil
             -ErrorDetails "Esperado 0 skills ativas no modo Zero-Baseline, encontradas $skillsActiveFolders"
 
 $rulesProtocol = Join-Path $TargetDir ".agents\rules\token-protocol.md"
-$hasCatalog = (Test-Path $rulesProtocol) -and ((Get-Content $rulesProtocol -Raw) -match "(Catálogo Sintético|Agentic Skill Retrieval|Descoberta & Ativação Autônoma)")
+if (-not (Test-Path $rulesProtocol)) {
+    $rulesProtocol = Join-Path $TargetDir "rules\token-protocol.md"
+}
+if (-not (Test-Path $rulesProtocol)) {
+    $rulesProtocol = Join-Path $KitDir "rules\token-protocol.md"
+}
+$hasCatalog = (Test-Path $rulesProtocol) -and ((Get-Content $rulesProtocol -Raw) -match "(Catálogo Sintético|Agentic Skill Retrieval|Descoberta & Ativação Autônoma|Descoberta JIT|Auto-Promoção JIT)")
 Assert-Test -Name "Catálogo Sintético presente nas regras (.agents/rules/token-protocol.md)" `
             -Condition $hasCatalog `
             -ErrorDetails "Catálogo Sintético ausente em token-protocol.md"

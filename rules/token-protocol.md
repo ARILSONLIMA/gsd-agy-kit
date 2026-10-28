@@ -27,7 +27,7 @@ description: Protocolo JIT de economia de tokens, batching paralelo, blueprint d
 - Ao concluir entregas de código, execute `quick_verify` (ou `node .agents/mcp-server.cjs verify`).
 - Valida sintaxe, segurança SQL, complexidade/DRY, testes e integridade de `AMBIGUITIES.md` em 1 turno. Se `PASS`, encerre imediatamente sem comandos extras.
 
-## 5. Invocação Direta de Comandos sem Barra & Descoberta JIT
+## 5. Invocação Direta de Comandos sem Barra & Descoberta JIT (Descoberta & Ativação Autônoma)
 - **Comandos Diretos sem Barra (`<skill> [argumentos]`):** Qualquer mensagem iniciada pelo nome exato de uma skill (ex: `gsd-execute-phase 2`, `gsd-plan-phase 1`, `gsd-profile-user`, `ponytail-debt`, `gsd-progress`) é uma **invocação direta de workflow**. Trate a primeira palavra como a skill e o restante como `$ARGUMENTS`. Abra e execute imediatamente as instruções de `.agents/skills/<skill>/SKILL.md` (ou `.agents/skills-pool/<skill>/SKILL.md`) aplicando os argumentos passados, sem preâmbulos.
 - **Zero-Baseline & Auto-Promoção JIT:** Skills no pool (`.agents/skills-pool/`) são auto-promovidas instantaneamente pelo hook ao serem invocadas pelo nome ou acessadas via `read_file`/`view_file` (TTL: 5 turnos). Para busca por intenção ou sintomas, use `skill_search({ query: "<termo>", activate: true })`.
 

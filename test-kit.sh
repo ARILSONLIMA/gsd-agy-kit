@@ -306,7 +306,10 @@ fi
 assert_test "Catalogo de Skills (.agents/skills/) em Zero-Baseline (0 skills ativas por padrao)" "$SKILLS_ZERO_OK"
 
 CATALOG_OK=0
-if grep -E -q "(Catálogo Sintético|Agentic Skill Retrieval|Descoberta & Ativação Autônoma)" "${TARGET_DIR}/.agents/rules/token-protocol.md" 2>/dev/null; then
+TOKEN_RULE_TARGET="${TARGET_DIR}/.agents/rules/token-protocol.md"
+[ ! -f "$TOKEN_RULE_TARGET" ] && TOKEN_RULE_TARGET="${TARGET_DIR}/rules/token-protocol.md"
+[ ! -f "$TOKEN_RULE_TARGET" ] && TOKEN_RULE_TARGET="${KIT_DIR}/rules/token-protocol.md"
+if grep -E -q "(Catálogo Sintético|Agentic Skill Retrieval|Descoberta & Ativação Autônoma|Descoberta JIT|Auto-Promoção JIT)" "$TOKEN_RULE_TARGET" 2>/dev/null; then
 CATALOG_OK=1
 fi
 assert_test "Catálogo Sintético presente nas regras (.agents/rules/token-protocol.md)" "$CATALOG_OK"
