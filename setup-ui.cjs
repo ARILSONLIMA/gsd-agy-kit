@@ -167,9 +167,9 @@ function getWorkspaceStatus(targetDir) {
 function getKitVersion() {
   try {
     const pkgData = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-    return pkgData.version || '2.7.1';
+    return pkgData.version || '2.7.3';
   } catch (_) {
-    return '2.7.1';
+    return '2.7.3';
   }
 }
 
@@ -201,33 +201,27 @@ function renderBanner() {
   console.log(`${C.bCyan}╰────────────────────────────────────────────────────────────────────────╯${C.reset}\n`);
 }
 
-async function promptArchitectureChoice() {
-  console.log(`${C.cyan}╭─ 🎨 Configuração de Interface / Front-End ─────────────────────────────╮${C.reset}`);
-  console.log(`${C.cyan}│${C.reset}                                                                        ${C.cyan}│${C.reset}`);
-  console.log(`${C.cyan}│${C.reset}   Selecione o tipo de arquitetura que este projeto utilizará:          ${C.cyan}│${C.reset}`);
-  console.log(`${C.cyan}│${C.reset}                                                                        ${C.cyan}│${C.reset}`);
-  console.log(`${C.cyan}│${C.reset}   ${C.bGreen}❯ [1] Backend / CLI Only${C.reset} ${C.dim}(Recomendado)${C.reset}                               ${C.cyan}│${C.reset}`);
-  console.log(`${C.cyan}│${C.reset}         ${C.dim}• Perfil enxuto de skills (31 ativas, 43 arquivadas)${C.reset}           ${C.cyan}│${C.reset}`);
-  console.log(`${C.cyan}│${C.reset}         ${C.dim}• Desativa gates e fases de interface gráfica (UI)${C.reset}             ${C.cyan}│${C.reset}`);
-  console.log(`${C.cyan}│${C.reset}                                                                        ${C.cyan}│${C.reset}`);
-  console.log(`${C.cyan}│${C.reset}     ${C.bWhite}[2] Fullstack / Com Front-End${C.reset}                                      ${C.cyan}│${C.reset}`);
-  console.log(`${C.cyan}│${C.reset}         ${C.dim}• Perfil full de skills (100% disponíveis no pool)${C.reset}             ${C.cyan}│${C.reset}`);
-  console.log(`${C.cyan}│${C.reset}         ${C.dim}• Habilita governança de UI e safety gates visuais${C.reset}              ${C.cyan}│${C.reset}`);
-  console.log(`${C.cyan}│${C.reset}                                                                        ${C.cyan}│${C.reset}`);
-  console.log(`${C.cyan}╰────────────────────────────────────────────────────────────────────────╯${C.reset}`);
+function detectFrontendInProject(root) {
+  try {
+    const pkgPath = path.join(root, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      const fePackages = [
+        'react', 'react-dom', 'vue', 'svelte', '@angular/core', 'next',
+        'nuxt', 'astro', 'vite', 'solid-js', 'preact', 'electron', 'expo'
+      ];
+      for (const p of fePackages) {
+        if (deps[p]) return true;
+      }
+    }
+  } catch {}
 
-  if (!canPromptInteractively()) {
-    return false; // Default: Backend
+  const feIndicators = ['src/components', 'src/pages', 'src/views', 'src/app', 'app/layout.tsx', 'public/index.html'];
+  for (const ind of feIndicators) {
+    if (fs.existsSync(path.join(root, ind))) return true;
   }
-
-  const ans = await askPrompt(`\n   ${C.bold}Pressione [1], [2] ou [Enter para padrão Backend]: ${C.reset}`);
-  if (ans === '2' || ans === 's' || ans === 'sim' || ans === 'y' || ans === 'yes') {
-    console.log(`   ${C.bGreen}✔ Modo Front-End ATIVADO${C.reset}\n`);
-    return true;
-  } else {
-    console.log(`   ${C.dim}⚙️ Modo Backend ATIVADO (perfil enxuto e UI desligada)${C.reset}\n`);
-    return false;
-  }
+  return false;
 }
 
 function renderProgressBar(current, total, width = 30) {
@@ -448,25 +442,22 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
   console.log(`   ${C.dim}Diretório Alvo: ${targetDir}${C.reset}\n`);
 
   let hasFrontend = hasFrontendInput;
+  const isAutoDetected = (hasFrontend === null);
   if (hasFrontend === null) {
-    hasFrontend = await promptArchitectureChoice();
-  } else {
-    if (hasFrontend) {
-      console.log(`   ${C.bGreen}✔ Modo Front-End ATIVADO${C.reset}\n`);
-    } else {
-      console.log(`   ${C.dim}⚙️ Modo Backend ATIVADO (perfil enxuto e UI desligada)${C.reset}\n`);
-    }
+    hasFrontend = detectFrontendInProject(targetDir);
   }
 
   let enableMempalace = options.enableMempalace !== undefined ? Boolean(options.enableMempalace) : true;
   let enableCodeReview = options.enableCodeReview !== undefined ? Boolean(options.enableCodeReview) : true;
 
-  if (hasFrontendInput === null && canPromptInteractively()) {
-    console.log(`\n   ${C.bWhite}Governança Padrão Ativa (Zero-Friction):${C.reset}`);
-    console.log(`   ${C.bGreen}✔${C.reset} MemPalace (Memória Episódica SQLite): ${enableMempalace ? C.bGreen + 'ON' : C.dim + 'OFF'}${C.reset}`);
-    console.log(`   ${C.bGreen}✔${C.reset} Code Review Automático & Gates:      ${enableCodeReview ? C.bGreen + 'ON' : C.dim + 'OFF'}${C.reset}`);
-    console.log(`   ${C.dim}  (Personalize quando quiser via /gsd-agy-config)${C.reset}\n`);
+  console.log(`   ${C.bWhite}Governança Padrão Ativa (Zero-Friction & Zero-Baseline):${C.reset}`);
+  console.log(`   ${C.bGreen}✔${C.reset} Zero-Baseline Skill Pool:            ${C.bGreen}ON (0 skills ativas por padrão, JIT sob demanda)${C.reset}`);
+  console.log(`   ${C.bGreen}✔${C.reset} Interface Front-End & UI Gates:      ${hasFrontend ? C.bGreen + 'ON' + (isAutoDetected ? ' (Auto-detectado no Projeto)' : '') : C.dim + 'OFF (Zero-Baseline JIT sob demanda)'}${C.reset}`);
+  console.log(`   ${C.bGreen}✔${C.reset} MemPalace (Memória Episódica SQLite): ${enableMempalace ? C.bGreen + 'ON' : C.dim + 'OFF'}${C.reset}`);
+  console.log(`   ${C.bGreen}✔${C.reset} Code Review Automático & Gates:      ${enableCodeReview ? C.bGreen + 'ON' : C.dim + 'OFF'}${C.reset}`);
+  console.log(`   ${C.dim}  (Personalize quando quiser via /gsd-agy-config)${C.reset}\n`);
 
+  if (options.promptLsps && canPromptInteractively()) {
     await promptAndInstallLsps(targetDir);
     console.log();
   }
@@ -708,7 +699,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             } catch {}
             const metaPath = path.join(targetKitDir, '.installed-version.json');
             fs.writeFileSync(metaPath, JSON.stringify({
-              version: pkgData.version || '2.7.1',
+              version: pkgData.version || '2.7.3',
               commit: headSha,
               updatedAt: new Date().toISOString()
             }, null, 2) + '\n', 'utf8');
@@ -1457,7 +1448,8 @@ async function main() {
     interactivePromptTest: false,
     cleanup: !noCleanup,
     enableMempalace,
-    enableCodeReview
+    enableCodeReview,
+    promptLsps: args.includes('--lsp') || args.includes('--prompt-lsp')
   });
 }
 

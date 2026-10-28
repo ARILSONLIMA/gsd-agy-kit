@@ -145,24 +145,28 @@ fi
 echo -e "\n\033[0;36m🚀 [Antigravity GSD Kit] Iniciando configuração no Linux / POSIX (Modo Fallback)...\033[0m"
 echo -e "   Diretório Alvo: ${TARGET_DIR}"
 
-# Pergunta interativa sobre interface Front-End se não informada via parâmetro
+# Auto-detecção silenciosa de interface Front-End se não informada via parâmetro
 if [ -z "${HAS_FRONTEND}" ]; then
-    if [ -t 0 ]; then
-        echo -e "\n\033[0;36m🎨 Configuração de Interface / Front-End:\033[0m"
-        read -r -p "   O projeto terá interface Front-End (UI/Web/App)? [s/N] (Padrão: N): " resp || resp=""
-        case "${resp}" in
-            [sS]|[sS][iI][mM]|[yY]|[yY][eE][sS]) HAS_FRONTEND=true ;;
-            *) HAS_FRONTEND=false ;;
-        esac
-    else
-        HAS_FRONTEND=false
+    HAS_FRONTEND=false
+    if [ -f "${TARGET_DIR}/package.json" ]; then
+        if grep -E -q '"(react|react-dom|vue|svelte|@angular|next|nuxt|astro|vite|solid-js|preact|electron|expo)"' "${TARGET_DIR}/package.json" 2>/dev/null; then
+            HAS_FRONTEND=true
+        fi
+    fi
+    if [ "$HAS_FRONTEND" = "false" ]; then
+        for fe_ind in "src/components" "src/pages" "src/views" "src/app" "app/layout.tsx" "public/index.html"; do
+            if [ -e "${TARGET_DIR}/${fe_ind}" ]; then
+                HAS_FRONTEND=true
+                break
+            fi
+        done
     fi
 fi
 
 if [ "${HAS_FRONTEND}" = "true" ]; then
-    echo -e "   \033[0;32m🎨 Modo Front-End: ATIVADO (UI phases, safety gates, reviews e perfil de skills full)\033[0m"
+    echo -e "   \033[0;32m🎨 Modo Front-End: ATIVADO (Detectado no Projeto - UI phases, safety gates e reviews)\033[0m"
 else
-    echo -e "   \033[0;37m⚙️ Modo Front-End: DESATIVADO (perfil enxuto backend e UI desligada)\033[0m"
+    echo -e "   \033[0;37m⚙️ Modo Front-End: DESATIVADO (Zero-Baseline JIT sob demanda)\033[0m"
 fi
 
 # 1. Verificar Node.js (Hard Stop)
@@ -567,7 +571,7 @@ echo -e "   - Ferramentas normalizadas para Antigravity CLI (write_to_file, sem 
 echo -e "   - Regras de protocolo de tokens injetadas nos prompts dos subagentes"
 echo -e "   - Hooks de Hard Gate ativos em .agents/hooks.json (Circuit Breaker e Sanitizador)"
 echo -e "   - Lazy Loading de Subagentes ativo (Dynamic Agent Pool)"
-echo -e "   - Perfil de Skills sincronizado conforme Front-End (${SKILL_PROFILE:-backend})"
+echo -e "   - Perfil de Skills em Zero-Baseline (${SKILL_PROFILE:-zero} - 0 ativas, pool dinâmico JIT)"
 echo -e "   - Defaults enxutos e governança gravados no .planning/config.json"
 echo -e "   - Utilitários /gsd-tokens e /gsd-state-summary prontos para uso"
 echo -e "   - Auto-Cura (Self-Healing) ativo para neutralizar futuros updates do GSD\n"

@@ -1,6 +1,6 @@
-# Antigravity GSD Kit v2.7.1 🚀
+# Antigravity GSD Kit v2.7.3 🚀
 
-[![Release](https://img.shields.io/badge/release-v2.7.1-blue.svg)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.7.3-blue.svg)](CHANGELOG.md)
 [![Ponytail](https://img.shields.io/badge/Ponytail-Senior%20Dev%20Mode-darkgreen.svg)](#-ponytail--senior-dev-mode--yagni-estrito)
 [![Caveman](https://img.shields.io/badge/Caveman-Terse%20pt--BR-orange.svg)](#-caveman--voz-concisa-asd-ste100--shrink-compressor)
 [![Tests](https://img.shields.io/badge/tests-100%25%20passing%20(122%20tests)-brightgreen.svg)](#-bateria-de-testes-nativos-instantânea)
@@ -139,7 +139,7 @@ O kit opera em 4 camadas complementares:
 
 6. **Terminal UI & Animações em Tempo Real (`setup-ui.cjs`):**
    - Motor de interface 100% nativo em Node.js (sem dependências npm).
-   - Card interativo estruturado para seleção de arquitetura (Backend vs Fullstack) e **seletor interativo para baixar e instalar servidores LSP por linguagem** (`--lsp`).
+   - Instalação 100% Zero-Friction no padrão **Zero-Baseline Universal** (0 skills ativas, ativação JIT sob demanda), auto-detecção silenciosa de interface Front-End e seletor para baixar e instalar servidores LSP por linguagem (`--lsp`).
    - Barra de progresso geral no topo `[████████░░░░] 50%`.
    - Stepper com spinners animados em tempo real (`⠋ ⠙ ⠹`) e cronometragem precisa por etapa.
    - Dashboard final em estilo Bento com status de governança e métricas de tokens.
@@ -242,30 +242,30 @@ Durante a instalação, o assistente perguntará interativamente se o projeto po
 Execute diretamente na pasta raiz do seu projeto GSD (não deixa nenhuma pasta residual):
 
 ```bash
-# Interativo (pergunta Backend vs Fullstack)
+# Instalação Zero-Friction (Zero-Baseline universal com auto-detecção de Front-End)
 npx --yes --allow-git=all github:ARILSONLIMA/gsd-agy-kit
 
-# Não-interativo (direto para Backend ou Fullstack)
+# Opcional: forçar modo Front-End ou Backend via flag
 npx --yes --allow-git=all github:ARILSONLIMA/gsd-agy-kit --no-frontend
 npx --yes --allow-git=all github:ARILSONLIMA/gsd-agy-kit --frontend
 ```
 
 ### 🐧 Opção 2: One-Liner via `curl` (Linux / macOS / WSL)
 ```bash
-# Interativo com limpeza automática de temporários
+# Instalação Zero-Friction direta
 curl -fsSL https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.sh | bash
 
-# Não-interativo via flags
+# Opcional via flags
 curl -fsSL https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.sh | bash -s -- --no-frontend
 curl -fsSL https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.sh | bash -s -- --frontend
 ```
 
 ### 🪟 Opção 3: One-Liner via `irm` (Windows PowerShell)
 ```powershell
-# Interativo com limpeza automática de temporários
+# Instalação Zero-Friction direta
 irm https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.ps1 | iex
 
-# Não-interativo (Backend ou Fullstack)
+# Opcional via variável de ambiente
 $env:GSD_FRONTEND="false"; irm https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.ps1 | iex
 $env:GSD_FRONTEND="true"; irm https://raw.githubusercontent.com/ARILSONLIMA/gsd-agy-kit/main/install.ps1 | iex
 ```

@@ -2,6 +2,15 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.7.3] - 2026-10-28
+- **Instalação Zero-Friction Total com Zero-Baseline Padrão Universal (`setup-ui.cjs`, `setup.sh`, `setup.ps1`):**
+  - **Eliminação do Prompt Legado Backend vs Fullstack:** Removida a pergunta interativa de seleção de arquitetura do instalador. Com a tecnologia de **Zero-Baseline (0 skills ativas)** e **JIT Auto-Promoter**, a divisão estática de skills tornou-se obsoleta, pois recursos adormecidos no pool consomem zero tokens no contexto e são promovidos sob demanda instantaneamente (<2ms).
+  - **Auto-Detecção Silenciosa de Front-End:** O instalador detecta automaticamente se o projeto possui interface gráfica (React, Vue, Next, Vite, Svelte, Angular, Astro, etc. em `package.json` ou diretórios de UI) e calibra os gates (`ui_phase`, `ui_safety_gate`, `ui_review`) sem interromper o fluxo com perguntas interativas.
+  - **Universalização do Perfil Zero:** Padronizado o perfil `zero` como default absoluto em todos os instaladores e scripts de sincronização de skills.
+  - **Flags CLI Preservadas:** Mantidas as flags `--frontend` e `--no-frontend` como overrides silenciosos de linha de comando para automações e pipelines CI/CD.
+- **Bumping de Versão v2.7.3:**
+  - `package.json`, `setup-ui.cjs`, `README.md`, e metadados de instalação atualizados para `v2.7.3`.
+
 ## [2.7.1] - 2026-10-28
 - **Correção na Suíte de Testes & Paridade de Regras (`test-kit.sh`, `test-kit.ps1`, `rules/token-protocol.md`):**
   - **Resolução de Falso Positivo no Catálogo Sintético:** Atualizada a expressão regular de validação em `test-kit.sh` e `test-kit.ps1` para contemplar os termos introduzidos na arquitetura de Descoberta JIT (`Descoberta JIT`, `Auto-Promoção JIT`, `Descoberta & Ativação Autônoma`), evitando falhas em workspaces recém-instalados.

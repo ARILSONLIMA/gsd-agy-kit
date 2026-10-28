@@ -121,31 +121,35 @@ if (Test-Path $uiScript) {
 Write-Host "`n🚀 [Antigravity GSD Kit] Iniciando configuracao no Windows (Modo Fallback)..." -ForegroundColor Cyan
 Write-Host "   Diretorio Alvo: $TargetDir" -ForegroundColor Gray
 
-# Pergunta interativa sobre interface Front-End se não informada via parâmetro
+# Auto-deteccao silenciosa de interface Front-End se não informada via parâmetro
 if ($null -eq $HasFrontend) {
-    if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
-        Write-Host "`n🎨 Configuracao de Interface / Front-End:" -ForegroundColor Cyan
+    $HasFrontend = $false
+    $pkgJsonPath = Join-Path $TargetDir "package.json"
+    if (Test-Path $pkgJsonPath) {
         try {
-            $prompt = Read-Host "   O projeto tera interface Front-End (UI/Web/App)? [s/N] (Padrao: N)"
-            if ($prompt -and $prompt.Trim() -match "^(s|sim|y|yes)$") {
+            $pkgContent = Get-Content $pkgJsonPath -Raw
+            if ($pkgContent -match '"(react|react-dom|vue|svelte|@angular|next|nuxt|astro|vite|solid-js|preact|electron|expo)"') {
                 $HasFrontend = $true
-            } else {
-                $HasFrontend = $false
             }
-        } catch {
-            $HasFrontend = $false
+        } catch {}
+    }
+    if (-not $HasFrontend) {
+        $feIndicators = @("src/components", "src/pages", "src/views", "src/app", "app/layout.tsx", "public/index.html")
+        foreach ($ind in $feIndicators) {
+            if (Test-Path (Join-Path $TargetDir $ind)) {
+                $HasFrontend = $true
+                break
+            }
         }
-    } else {
-        $HasFrontend = $false
     }
 } else {
     $HasFrontend = [bool]$HasFrontend
 }
 
 if ($HasFrontend) {
-    Write-Host "   🎨 Modo Front-End: ATIVADO (UI phases, safety gates, reviews e perfil de skills full)" -ForegroundColor Green
+    Write-Host "   🎨 Modo Front-End: ATIVADO (Detectado no Projeto - UI phases, safety gates e reviews)" -ForegroundColor Green
 } else {
-    Write-Host "   ⚙️ Modo Front-End: DESATIVADO (perfil enxuto backend e UI desligada)" -ForegroundColor Gray
+    Write-Host "   ⚙️ Modo Front-End: DESATIVADO (Zero-Baseline JIT sob demanda)" -ForegroundColor Gray
 }
 
 # 1. Verificar Node.js (Hard Stop)
