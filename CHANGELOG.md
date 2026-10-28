@@ -2,6 +2,27 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.5.6] - 2026-10-28
+- **Central Unificada de Governança (`/gsd-agy-config` e `gsd-agy-config.cjs`):**
+  - **Unificação de 4 Comandos Legados em 1 Central Única:** consolida `gsd-settings`, `gsd-config`, `gsd-surface` e `gsd-profile-user` sob um único comando consolidado `/gsd-agy-config`.
+  - **Módulo 1 — Workflow & Motores (`.planning/config.json`):**
+    - Presets rápidos `backend` (sem UI, máxima economia de tokens), `fullstack` (com UI phase e review) e `custom` (4 perguntas essenciais).
+    - Subcomandos `set <chave> <valor>` e `get <chave>` para knobs avançados (inline plan threshold, timeouts, branching).
+    - Travas mandatórias Antigravity automáticas: `model_profile: inherit`, `use_worktrees: false`, `compact_content: true`, `source_grounding_authority: ast-grep`, `response_language: pt-BR`.
+  - **Módulo 2 — Superfície de Skills (`skills-manager.cjs`):**
+    - Subcomando `surface <zero|core|backend|full>` para alternar perfis do catálogo de skills sem reinstalação.
+    - Subcomandos `surface enable <skill>`, `surface disable <skill>` e `surface list`.
+  - **Módulo 3 — Perfil do Desenvolvedor (`USER-PROFILE.md`):**
+    - Subcomando `profile` com wizard interativo ou flags diretas (`profile ponytail <modo>`, `profile caveman <modo>`).
+    - Alinhamento explícito aos modos Ponytail (Sênior YAGNI & Escada de Reuso) e Caveman (Voz Concisa ASD-STE100 em pt-BR).
+  - **Módulo 4 — Painel Consolidado de Status:**
+    - Subcomando `show` / `status` exibindo dashboard completo (Workflow + Skills ativas vs pool + Perfil do Dev).
+  - **Retrocompatibilidade Integral & Aliases:**
+    - Mantida skill e script `gsd-agy-settings` como alias transparente redirecionando para `gsd-agy-config`.
+    - Registrado em `GLOBAL_SKILLS`, `core` e `backend` em `skills-manager.cjs`.
+    - Nova opção `[13]` e flag CLI `--config` no Painel de Controle `setup-ui.cjs`.
+    - Adicionado à suíte de testes canônicos em `test-kit.sh` e `test-kit.ps1`.
+
 ## [2.5.5] - 2026-10-28
 - **Invocação Direta de Comandos sem Barra (`<skill-name> [argumentos]`):**
   - **Intercepção Inteligente no `PreInvocation` Hook (`token-guard-preinvocation.cjs`):** detecta comandos enviados sem barra (ex: `gsd-execute-phase 2`, `gsd-plan-phase 1`, `gsd-profile-user`, `ponytail-debt`), auto-promove a skill de `.agents/skills-pool/` para `.agents/skills/` via JIT (TTL=5) e injeta diretiva efêmera com `$ARGUMENTS` exatos para execução instantânea no 1º turno.

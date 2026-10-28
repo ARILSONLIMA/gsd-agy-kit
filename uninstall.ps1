@@ -68,6 +68,8 @@ $filesToRemove = @(
     (Join-Path $agentsDir "skills\gsd-tokens"),
     (Join-Path $agentsDir "skills\gsd-test"),
     (Join-Path $agentsDir "skills\gsd-agy-update"),
+    (Join-Path $agentsDir "skills\gsd-agy-config"),
+    (Join-Path $agentsDir "skills\gsd-agy-settings"),
     (Join-Path $TargetDir "scripts\test-kit.ps1"),
     (Join-Path $TargetDir "scripts\test-kit.sh")
 )

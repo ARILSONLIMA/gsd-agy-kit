@@ -343,6 +343,7 @@ function renderDashboard() {
   console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}mempalace_recall${C.reset}             Busca decisões passadas no SQLite     ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}/gsd-tokens${C.reset}                  Telemetria de uso e cache de tokens   ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}/gsd-agy-update${C.reset}              Verifica versão, melhorias e atualiza ${C.bCyan}│${C.reset}`);
+  console.log(`${C.bCyan}│${C.reset}   • ${C.cyan}/gsd-agy-config${C.reset}              Central unificada de governança       ${C.bCyan}│${C.reset}`);
   console.log(`${C.bCyan}╰────────────────────────────────────────────────────────────────────────╯${C.reset}`);
   console.log(`\n${C.bGreen}✨ Projeto blindado com sucesso e pronto para desenvolvimento!${C.reset}\n`);
 }
@@ -681,7 +682,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           "skills-profile.sh", "skills-profile.ps1",
           "optimize-tokens.sh", "optimize-tokens.ps1",
           "sanitize-command.ps1",
-          "token-report.cjs", "gsd-update.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs",
+          "token-report.cjs", "gsd-update.cjs", "gsd-state-summary.cjs", "gsd-graphify-update.cjs", "gsd-agy-config.cjs", "gsd-agy-settings.cjs",
           "patch-agents.cjs", "optimize-tokens.cjs", "skills-manager.cjs",
           "compact-state.cjs", "compact-json.cjs", "sanitize-output.cjs",
           "gsd-outline.cjs", "shrink-prompts.cjs", "mcp-server.cjs",
@@ -709,7 +710,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             } catch {}
             const metaPath = path.join(targetKitDir, '.installed-version.json');
             fs.writeFileSync(metaPath, JSON.stringify({
-              version: pkgData.version || '2.5.5',
+              version: pkgData.version || '2.5.6',
               commit: headSha,
               updatedAt: new Date().toISOString()
             }, null, 2) + '\n', 'utf8');
@@ -997,6 +998,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
   console.log(`   ${C.bGreen}• .agents/skills/gsd-test/${C.reset} ${C.dim}(skill nativa /gsd-test no Antigravity CLI)${C.reset}`);
   console.log(`   ${C.bGreen}• .agents/skills/gsd-tokens/${C.reset} ${C.dim}(skill nativa /gsd-tokens no Antigravity CLI)${C.reset}`);
   console.log(`   ${C.bGreen}• .agents/skills/gsd-agy-update/${C.reset} ${C.dim}(skill nativa /gsd-agy-update no Antigravity CLI)${C.reset}`);
+  console.log(`   ${C.bGreen}• .agents/skills/gsd-agy-config/${C.reset} ${C.dim}(skill nativa /gsd-agy-config no Antigravity CLI)${C.reset}`);
   console.log(`   ${C.bGreen}• .agents/kit/test-kit.sh${C.reset} ${C.dim}(suíte de validação hermética — sem poluir a raiz do repositório)${C.reset}\n`);
 
   if (options.interactivePromptTest && canPromptInteractively()) {
@@ -1221,6 +1223,22 @@ function runErrors(targetDir) {
   console.log('\n' + ErrorGuard.formatErrorList(list) + '\n');
 }
 
+function runAgyConfig(targetDir, extraFlags = []) {
+  const kitDir = path.resolve(__dirname);
+  const candidates = [
+    path.join(kitDir, 'gsd-agy-config.cjs'),
+    path.join(targetDir, '.agents', 'kit', 'gsd-agy-config.cjs'),
+    path.join(targetDir, 'gsd-agy-config.cjs'),
+    path.join(kitDir, 'gsd-agy-settings.cjs')
+  ];
+  const configPath = candidates.find(p => fs.existsSync(p));
+  if (!configPath) {
+    console.error(`\n${C.bRed}❌ Script gsd-agy-config.cjs não encontrado.${C.reset}\n`);
+    return;
+  }
+  spawnSync(process.execPath, [configPath, targetDir, ...extraFlags], { stdio: 'inherit' });
+}
+
 async function interactiveMenuLoop(targetDir) {
   let running = true;
   while (running) {
@@ -1239,9 +1257,10 @@ async function interactiveMenuLoop(targetDir) {
     console.log(`   ${C.bCyan}[10]${C.reset} 🧠 ${C.bold}Instalar Servidores LSP por Linguagem${C.reset} ${C.dim}(20 ecossistemas)${C.reset}`);
     console.log(`   ${C.bCyan}[11]${C.reset} 🔄 ${C.bold}Verificar / Atualizar GSD Kit${C.reset} ${C.dim}(/gsd-agy-update + Changelog)${C.reset}`);
     console.log(`   ${C.bCyan}[12]${C.reset} 🛑 ${C.bold}Visualizar Log de Erros${C.reset} ${C.dim}(Central ErrorGuard .agents/.cache/error-log.json)${C.reset}`);
+    console.log(`   ${C.bCyan}[13]${C.reset} ⚙️  ${C.bold}Central de Governança GSD${C.reset} ${C.dim}(/gsd-agy-config Central)${C.reset}`);
     console.log(`   ${C.bCyan}[0]${C.reset} 🚪 ${C.dim}Sair${C.reset}\n`);
 
-    const choice = await askPrompt(`   ${C.bold}Escolha uma opção [0-12]: ${C.reset}`);
+    const choice = await askPrompt(`   ${C.bold}Escolha uma opção [0-13]: ${C.reset}`);
 
     switch (choice) {
       case '1':
@@ -1279,6 +1298,9 @@ async function interactiveMenuLoop(targetDir) {
         break;
       case '12':
         runErrors(targetDir);
+        break;
+      case '13':
+        runAgyConfig(targetDir);
         break;
       case '0':
       case 'q':
@@ -1387,6 +1409,10 @@ async function main() {
     if (args.includes('--json')) updateFlags.push('--json');
     if (args.includes('--force')) updateFlags.push('--force');
     runUpdate(targetDir, updateFlags);
+    return;
+  }
+  if (command === '--config' || command === '--settings') {
+    runAgyConfig(targetDir, args.slice(1));
     return;
   }
   if (command === '--uninstall') {

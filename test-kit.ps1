@@ -848,22 +848,25 @@ Assert-Test -Name "Extrator de Estado GSD (gsd-state-summary.cjs) operacional ge
             -ErrorDetails "gsd-state-summary.cjs falhou ao retornar phase_number e phase_status validos"
 
 # ------------------------------------------------------------------------------
-# Teste 26: Integridade Sintatica dos Utilitarios do Kit (patch-agents & graphify-update)
+# Teste 26: Integridade Sintatica dos Utilitarios do Kit (patch-agents, graphify-update e gsd-agy-config)
 # ------------------------------------------------------------------------------
 $patchAgentsPath = Find-KitScript "patch-agents.cjs"
 $graphifyUpdatePath = Find-KitScript "gsd-graphify-update.cjs"
+$agyConfigPath = Find-KitScript "gsd-agy-config.cjs"
 $syntaxOk = $false
 try {
     node --check $patchAgentsPath 2>$null
     $patchOk = ($LASTEXITCODE -eq 0)
     node --check $graphifyUpdatePath 2>$null
     $gfyOk = ($LASTEXITCODE -eq 0)
-    $syntaxOk = ($patchOk -and $gfyOk)
+    node --check $agyConfigPath 2>$null
+    $configOk = ($LASTEXITCODE -eq 0)
+    $syntaxOk = ($patchOk -and $gfyOk -and $configOk)
 } catch {}
 
-Assert-Test -Name "Utilitarios de manutencao (patch-agents.cjs e gsd-graphify-update.cjs) sintaticamente validos" `
+Assert-Test -Name "Utilitarios de manutencao (patch-agents.cjs, gsd-graphify-update.cjs e gsd-agy-config.cjs) sintaticamente validos" `
             -Condition $syntaxOk `
-            -ErrorDetails "patch-agents.cjs ou gsd-graphify-update.cjs possuem erro de sintaxe"
+            -ErrorDetails "patch-agents.cjs, gsd-graphify-update.cjs ou gsd-agy-config.cjs possuem erro de sintaxe"
 
 # 26.2: Teste Funcional Unitário do Normalizador de Agentes (patch-agents.cjs)
 $patchFuncOk = $false
@@ -1068,7 +1071,7 @@ Assert-Test -Name "SecurityLinter intercepta qualquer interpolacao template em S
             -Condition ($secExitCode -eq 0) `
             -ErrorDetails "SecurityLinter permitiu interpolacao em template string SQL"
 
-$canonicalSkills = @("gsd-tokens", "gsd-test", "gsd-agy-update")
+$canonicalSkills = @("gsd-tokens", "gsd-test", "gsd-agy-update", "gsd-agy-config")
 $skillOk = $true
 foreach ($sk in $canonicalSkills) {
     $skPath = if (Test-Path (Join-Path $kitDir "skills\$sk\SKILL.md")) {
@@ -1084,7 +1087,7 @@ foreach ($sk in $canonicalSkills) {
     }
 }
 
-Assert-Test -Name "Skills canônicas (/gsd-tokens, /gsd-test e /gsd-agy-update) presentes com frontmatter valido" `
+Assert-Test -Name "Skills canônicas (/gsd-tokens, /gsd-test, /gsd-agy-update e /gsd-agy-config) presentes com frontmatter valido" `
             -Condition $skillOk `
             -ErrorDetails "Uma ou mais skills canonicas ausentes ou sem frontmatter valido"
 

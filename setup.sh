@@ -405,7 +405,7 @@ if [ -d "${KIT_DIR}/rules" ]; then
     cp -rf "${KIT_DIR}/rules/"* "${TARGET_KIT_DIR}/rules/"
 fi
 
-KIT_SCRIPTS=("test-kit.sh" "test-kit.ps1" "setup-ui.cjs" "setup.sh" "setup.ps1" "install.sh" "install.ps1" "package.json" "uninstall.sh" "uninstall.ps1" "skills-profile.sh" "skills-profile.ps1" "optimize-tokens.sh" "optimize-tokens.ps1" "sanitize-command.ps1" "token-report.cjs" "gsd-update.cjs" "gsd-state-summary.cjs" "gsd-graphify-update.cjs" "patch-agents.cjs" "optimize-tokens.cjs" "skills-manager.cjs" "compact-state.cjs" "compact-json.cjs" "sanitize-output.cjs" "shrink-prompts.cjs" "gsd-outline.cjs" "mcp-server.cjs" "gsd-read-strip.cjs" "verify.cjs")
+KIT_SCRIPTS=("test-kit.sh" "test-kit.ps1" "setup-ui.cjs" "setup.sh" "setup.ps1" "install.sh" "install.ps1" "package.json" "uninstall.sh" "uninstall.ps1" "skills-profile.sh" "skills-profile.ps1" "optimize-tokens.sh" "optimize-tokens.ps1" "sanitize-command.ps1" "token-report.cjs" "gsd-update.cjs" "gsd-state-summary.cjs" "gsd-graphify-update.cjs" "gsd-agy-config.cjs" "gsd-agy-settings.cjs" "patch-agents.cjs" "optimize-tokens.cjs" "skills-manager.cjs" "compact-state.cjs" "compact-json.cjs" "sanitize-output.cjs" "shrink-prompts.cjs" "gsd-outline.cjs" "mcp-server.cjs" "gsd-read-strip.cjs" "verify.cjs")
 for sName in "${KIT_SCRIPTS[@]}"; do
     src="${KIT_DIR}/${sName}"
     if [ -f "${src}" ]; then

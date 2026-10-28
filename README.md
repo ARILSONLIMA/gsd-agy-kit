@@ -1,6 +1,6 @@
-# Antigravity GSD Kit v2.5.5 🚀
+# Antigravity GSD Kit v2.5.6 🚀
 
-[![Release](https://img.shields.io/badge/release-v2.5.5-blue.svg)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.5.6-blue.svg)](CHANGELOG.md)
 [![Ponytail](https://img.shields.io/badge/Ponytail-Senior%20Dev%20Mode-darkgreen.svg)](#-ponytail--senior-dev-mode--yagni-estrito)
 [![Caveman](https://img.shields.io/badge/Caveman-Terse%20pt--BR-orange.svg)](#-caveman--voz-concisa-asd-ste100--shrink-compressor)
 [![Tests](https://img.shields.io/badge/tests-100%25%20passing%20(122%20tests)-brightgreen.svg)](#-bateria-de-testes-nativos-instantânea)
@@ -287,7 +287,7 @@ git clone --depth 1 https://github.com/ARILSONLIMA/gsd-agy-kit.git; pwsh gsd-agy
 O kit instala toda a sua infraestrutura de forma **nativa e permanente** dentro de `.agents/`:
 - **`.agents/kit/`**: Bateria de testes, painel de controle (`setup-ui.cjs`), motor de atualização (`gsd-update.cjs`), utilitários e desinstalador.
 - **`.agents/hooks/` & `.agents/hooks.json`**: Hard gates (`PreInvocation`, `PreToolUse`, `PostToolUse`, `Stop`).
-- **`.agents/skills/gsd-test/`, `gsd-tokens/` & `gsd-agy-update/`**: Skills nativas `/gsd-test`, `/gsd-tokens` e `/gsd-agy-update` (otimizadas com `disable-model-invocation: true`).
+- **`.agents/skills/gsd-test/`, `gsd-tokens/`, `gsd-agy-update/` & `gsd-agy-config/`**: Skills nativas `/gsd-test`, `/gsd-tokens`, `/gsd-agy-update` e `/gsd-agy-config` (otimizadas com `disable-model-invocation: true`).
 - **`scripts/test-kit.sh` & `scripts/test-kit.ps1`**: Atalhos rápidos de validação para terminal.
 
 ---
@@ -312,6 +312,45 @@ Para verificar se você está na última versão do **Antigravity GSD Kit**, con
 
    # Atualizar direto sem confirmação interativa
    node .agents/kit/gsd-update.cjs --yes
+   ```
+
+---
+
+## ⚙️ Central Unificada de Governança (`/gsd-agy-config`)
+
+O `/gsd-agy-config` substitui e unifica **4 comandos fragmentados do GSD original** (`gsd-settings`, `gsd-config`, `gsd-surface` e `gsd-profile-user`) em um centro único de controle:
+- **Workflow & Motores (.planning/config.json):** Presets otimizados (Backend/Fullstack) e knobs pontuais (`set`/`get`).
+- **Superfície de Skills (skills-manager.cjs):** Alternância instantânea de catálogos (`zero`, `core`, `backend`, `full`).
+- **Perfil do Desenvolvedor (USER-PROFILE.md):** Ajuste de modo sênior (Ponytail `full`/`ultra`), tom conciso (Caveman `on`/`ultra`) e idioma (`pt-BR`).
+- **Painel Consolidado:** Visão holística de governança em 1 card visual.
+
+1. **Direto no Chat do Antigravity CLI:**
+   ```markdown
+   # Menu interativo unificado
+   /gsd-agy-config
+
+   # Workflow e Presets rápidos (antigos gsd-settings / gsd-config)
+   /gsd-agy-config backend          # APIs, microsserviços e workers (sem UI)
+   /gsd-agy-config fullstack        # Web e Apps (com UI-Phase, safety gates e review)
+
+   # Superfície de Skills (antigo gsd-surface)
+   /gsd-agy-config surface core     # Alterna para catálogo enxuto (12 skills)
+   /gsd-agy-config surface backend  # Alterna para catálogo de backend (31 skills)
+   /gsd-agy-config surface status   # Exibe skills ativas vs pool
+
+   # Perfil do Desenvolvedor (antigo gsd-profile-user)
+   /gsd-agy-config profile          # Abre wizard de preferências comportamentais
+
+   # Status completo consolidado
+   /gsd-agy-config show
+   ```
+
+2. **Direto no Terminal (CLI ou Painel de Controle):**
+   ```bash
+   node .agents/kit/gsd-agy-config.cjs backend
+   node .agents/kit/gsd-agy-config.cjs surface backend
+   node .agents/kit/gsd-agy-config.cjs show
+   node .agents/kit/setup-ui.cjs --config
    ```
 
 ---

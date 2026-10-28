@@ -704,14 +704,16 @@ fi
 assert_test "Extrator de Estado GSD (gsd-state-summary.cjs) operacional gerando JSON estruturado" "$SUM_OK"
 
 # ------------------------------------------------------------------------------
-# Teste 26: Integridade Sintatica dos Utilitarios do Kit (patch-agents & graphify-update)
+# Teste 26: Integridade Sintatica dos Utilitarios do Kit (patch-agents, graphify-update e gsd-agy-config)
 # ------------------------------------------------------------------------------
 PATCH_PATH=$(find_kit_script "patch-agents.cjs")
 GFY_UPDATE_PATH=$(find_kit_script "gsd-graphify-update.cjs")
+AGY_CONFIG_PATH=$(find_kit_script "gsd-agy-config.cjs")
 node --check "${PATCH_PATH}" >/dev/null 2>&1 && P_OK=1 || P_OK=0
 node --check "${GFY_UPDATE_PATH}" >/dev/null 2>&1 && G_OK=1 || G_OK=0
-SYNTAX_ALL_OK=$(( P_OK && G_OK ))
-assert_test "Utilitarios de manutencao (patch-agents.cjs e gsd-graphify-update.cjs) sintaticamente validos" "$SYNTAX_ALL_OK"
+node --check "${AGY_CONFIG_PATH}" >/dev/null 2>&1 && C_OK=1 || C_OK=0
+SYNTAX_ALL_OK=$(( P_OK && G_OK && C_OK ))
+assert_test "Utilitarios de manutencao (patch-agents.cjs, gsd-graphify-update.cjs e gsd-agy-config.cjs) sintaticamente validos" "$SYNTAX_ALL_OK"
 
 # 26.2: Teste Funcional Unitário do Normalizador de Agentes (patch-agents.cjs)
 TEMP_AGENT_DIR="${TARGET_DIR}/.agents/temp-agent-patch-test"
@@ -885,7 +887,7 @@ if node -e '
 fi
 assert_test "SecurityLinter intercepta qualquer interpolacao template em SQL sem excecao indevida" "$SECURITY_LINTER_OK"
 
-CANONICAL_SKILLS=("gsd-tokens" "gsd-test" "gsd-agy-update")
+CANONICAL_SKILLS=("gsd-tokens" "gsd-test" "gsd-agy-update" "gsd-agy-config")
 SKILL_OK=1
 for sk in "${CANONICAL_SKILLS[@]}"; do
 sk_path=""
@@ -903,7 +905,7 @@ SKILL_OK=0
 break
 fi
 done
-assert_test "Skills canonicas (/gsd-tokens, /gsd-test e /gsd-agy-update) presentes com frontmatter valido" "$SKILL_OK"
+assert_test "Skills canonicas (/gsd-tokens, /gsd-test, /gsd-agy-update e /gsd-agy-config) presentes com frontmatter valido" "$SKILL_OK"
 # ------------------------------------------------------------------------------
 # Teste 29: MemPalace Engine (lib/mempalace-engine.cjs)
 # ------------------------------------------------------------------------------
