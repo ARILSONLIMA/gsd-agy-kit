@@ -2,6 +2,16 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.5.1] - 2026-10-28
+- **Centralização do Grafo de Conhecimento em `.planning/graphs/` & Zero Duplicação de Pastas:**
+  - `gsd-graphify-update.cjs`: pós-execução do `graphify update .`, move os artefatos diretamente para `.planning/graphs/` e remove a pasta redundante `graphify-out/`, eliminando duplicidade de arquivos e diretórios no workspace.
+  - `rules/graphify.md`, `hooks/token-guard-pretool.cjs` e `patch-agents.cjs`: direcionam o modelo e os subagentes a consultarem o grafo canônico sempre com a flag explícita `--graph .planning/graphs/graph.json` (`query`, `path`, `explain`).
+- **Desativação de Git Hooks Automáticos de Commit & Atualização Sob Demanda:**
+  - `setup-ui.cjs`, `setup.sh` e `setup.ps1`: removida a instalação dos hooks `post-commit` e `post-commit.cmd`, com limpeza automática de ganchos legados. A sincronização do Graphify passa a ser estritamente sob demanda via skill `/graphify` ou menu do kit (`auto_update: false` em `.planning/config.json`).
+- **Limpeza de Hooks Órfãos & Governança de Skills:**
+  - Removida chamada legada/órfã de `gsd-graphify-update.sh` do `AfterTool` Bash em `~/.gemini/antigravity/settings.json`.
+  - `skills-manager.cjs`: normalizada a lista de perfis substituindo a skill redundante `gsd-graphify` pela oficial `graphify`.
+
 ## [2.5.0] - 2026-10-27
 - **Batching Paralelo Obrigatório & Zero Re-exploração em Execução (`rules/token-protocol.md`, `rules/compact-planning.md`, `hooks/token-guard-sessionstart.cjs`):**
   - Diretiva explícita de **Batching Paralelo Obrigatório** agrupando leituras independentes (`read_file`, `gsd_read_strip`, `query_docs`, `ast_query`) e edições multi-arquivo (`edit_file`) no mesmo turno, além de uso de `lsp_rename` para renomeações multi-arquivo.

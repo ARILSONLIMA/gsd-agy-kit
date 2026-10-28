@@ -643,7 +643,7 @@ function recordTokenSaving(category, estimatedTokens = 500) {
         'deny',
         '🛑 BLOQUEIO DE TOKENS: Não despeje código bruto no console com cat/type/Get-Content/head!\n' +
         'Utilize:\n' +
-        '- graphify query "<pergunta>" para arquitetura e relações.\n' +
+        '- graphify query --graph .planning/graphs/graph.json "<pergunta>" para arquitetura e relações.\n' +
         '- Multi-LSP Híbrido: node .agents/mcp-server.cjs lsp <definition|references|hover|symbols|diagnostics> (ou tools MCP lsp_*).\n' +
         '- ast-grep run -p \'<padrão>\' para busca sintática.'
       );

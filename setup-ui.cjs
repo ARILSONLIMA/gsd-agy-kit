@@ -709,7 +709,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
             } catch {}
             const metaPath = path.join(targetKitDir, '.installed-version.json');
             fs.writeFileSync(metaPath, JSON.stringify({
-              version: pkgData.version || '2.5.0',
+              version: pkgData.version || '2.5.1',
               commit: headSha,
               updatedAt: new Date().toISOString()
             }, null, 2) + '\n', 'utf8');
@@ -825,7 +825,7 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
 
             if (!rawConfig.graphify) rawConfig.graphify = {};
             rawConfig.graphify.enabled = true;
-            rawConfig.graphify.auto_update = true;
+            rawConfig.graphify.auto_update = false; // Sob demanda via skill /graphify
 
             if (!rawConfig.mempalace) rawConfig.mempalace = {};
             rawConfig.mempalace.enabled = enableMempalace;
@@ -850,18 +850,21 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
           fs.writeFileSync(postMergePath, autoHealContent, 'utf8');
           fs.writeFileSync(postCheckoutPath, autoHealContent, 'utf8');
 
+          // Limpeza de post-commit legado: atualização do graphify é sob demanda via /graphify
           const postCommitCmd = path.join(gitHooksDir, 'post-commit.cmd');
-          const postCommitCmdContent = '@echo off\r\nif exist .agents\\kit\\gsd-graphify-update.cjs (\r\n    node .agents\\kit\\gsd-graphify-update.cjs\r\n)\r\n';
-          fs.writeFileSync(postCommitCmd, postCommitCmdContent, 'utf8');
-
           const postCommitSh = path.join(gitHooksDir, 'post-commit');
-          const postCommitShContent = '#!/bin/sh\nif [ -f .agents/kit/gsd-graphify-update.cjs ]; then\n    node .agents/kit/gsd-graphify-update.cjs\nfi\n';
-          fs.writeFileSync(postCommitSh, postCommitShContent, 'utf8');
+          try {
+            if (fs.existsSync(postCommitCmd) && fs.readFileSync(postCommitCmd, 'utf8').includes('gsd-graphify-update')) {
+              fs.unlinkSync(postCommitCmd);
+            }
+            if (fs.existsSync(postCommitSh) && fs.readFileSync(postCommitSh, 'utf8').includes('gsd-graphify-update')) {
+              fs.unlinkSync(postCommitSh);
+            }
+          } catch {}
 
           try {
             fs.chmodSync(postMergePath, 0o755);
             fs.chmodSync(postCheckoutPath, 0o755);
-            fs.chmodSync(postCommitSh, 0o755);
           } catch {}
         }
 
@@ -904,10 +907,15 @@ async function runInstaller(targetDir, hasFrontendInput = null, options = {}) {
       }
     },
     {
-      title: 'Inicialização do Grafo de Conhecimento (graphify update .)',
+      title: 'Inicialização do Grafo de Conhecimento (.planning/graphs/)',
       run: async () => {
         try {
-          execSync('graphify update .', { cwd: targetDir, stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000, encoding: 'utf8' });
+          const gfyScript = path.join(targetKitDir, 'gsd-graphify-update.cjs');
+          if (fs.existsSync(gfyScript)) {
+            spawnSync(process.execPath, [gfyScript], { cwd: targetDir, stdio: 'ignore', timeout: 30000 });
+          } else {
+            execSync('graphify update .', { cwd: targetDir, stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000, encoding: 'utf8' });
+          }
         } catch (e) {
           const gOut = (e.stderr || e.stdout || e.message || '').toString();
           if (!gOut.toLowerCase().includes('no files') && !gOut.toLowerCase().includes('empty')) {

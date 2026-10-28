@@ -491,7 +491,7 @@ if (Test-Path $configJsonPath) {
             $rawConfig | Add-Member -NotePropertyName "graphify" -NotePropertyValue (New-Object PSObject) -Force
         }
         $rawConfig.graphify | Add-Member -NotePropertyName "enabled" -NotePropertyValue $true -Force
-        $rawConfig.graphify | Add-Member -NotePropertyName "auto_update" -NotePropertyValue $true -Force
+        $rawConfig.graphify | Add-Member -NotePropertyName "auto_update" -NotePropertyValue $false -Force
 
         # 5. MemPalace Semantic Memory
         if (-not $rawConfig.mempalace) {
@@ -532,30 +532,19 @@ fi
     Set-Content -Path (Join-Path $gitHooksDir "post-merge") -Value $autoHealContent -Encoding utf8
     Set-Content -Path (Join-Path $gitHooksDir "post-checkout") -Value $autoHealContent -Encoding utf8
 
+    # Limpeza de post-commit legado: atualização do graphify é sob demanda via /graphify
     $postCommitCmd = Join-Path $gitHooksDir "post-commit.cmd"
-    '@echo off
-if exist .agents\kit\gsd-graphify-update.cjs (
-    start /B node .agents\kit\gsd-graphify-update.cjs >nul 2>&1
-) else if exist gsd-agy-kit\gsd-graphify-update.cjs (
-    start /B node gsd-agy-kit\gsd-graphify-update.cjs >nul 2>&1
-) else if exist tools\gsd-agy-kit\gsd-graphify-update.cjs (
-    start /B node tools\gsd-agy-kit\gsd-graphify-update.cjs >nul 2>&1
-)' | Out-File -FilePath $postCommitCmd -Encoding ascii -Force
-
+    if (Test-Path $postCommitCmd) {
+        $content = Get-Content $postCommitCmd -Raw -ErrorAction SilentlyContinue
+        if ($content -match "gsd-graphify-update") { Remove-Item $postCommitCmd -Force }
+    }
     $postCommitSh = Join-Path $gitHooksDir "post-commit"
-    $postCommitShContent = @"
-#!/bin/sh
-if [ -f ".agents/kit/gsd-graphify-update.cjs" ]; then
-    node .agents/kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
-elif [ -f "gsd-agy-kit/gsd-graphify-update.cjs" ]; then
-    node gsd-agy-kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
-elif [ -f "tools/gsd-agy-kit/gsd-graphify-update.cjs" ]; then
-    node tools/gsd-agy-kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
-fi
-"@
-    Set-Content -Path $postCommitSh -Value $postCommitShContent -Encoding utf8
+    if (Test-Path $postCommitSh) {
+        $content = Get-Content $postCommitSh -Raw -ErrorAction SilentlyContinue
+        if ($content -match "gsd-graphify-update") { Remove-Item $postCommitSh -Force }
+    }
 
-    Write-Host "   Git hooks (post-merge, post-checkout, post-commit assincrono) instalados em .git/hooks" -ForegroundColor Green
+    Write-Host "   Git hooks (post-merge, post-checkout) instalados em .git/hooks" -ForegroundColor Green
 }
 
 # 12.1 Garantir exclusões de caches/índices em .git/info/exclude sem sujar .gitignore rastreado

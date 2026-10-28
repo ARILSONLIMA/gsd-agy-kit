@@ -482,7 +482,7 @@ if [ -f "${CONFIG_JSON}" ]; then
 
         raw.graphify = raw.graphify || {};
         raw.graphify.enabled = true;
-        raw.graphify.auto_update = true;
+        raw.graphify.auto_update = false; // Sob demanda via skill /graphify
 
         raw.mempalace = raw.mempalace || {};
         raw.mempalace.enabled = true;
@@ -503,7 +503,7 @@ if [ -f "${CONFIG_JSON}" ]; then
     ' "${CONFIG_JSON}" "${HAS_FRONTEND}" "${TARGET_DIR}"
 fi
 
-# 12. Configurar Git Hooks (post-merge / post-checkout / post-commit)
+# 12. Configurar Git Hooks (post-merge / post-checkout)
 GIT_HOOKS_DIR="${TARGET_DIR}/.git/hooks"
 if [ -d "${GIT_HOOKS_DIR}" ]; then
     cat << 'EOF' > "${GIT_HOOKS_DIR}/post-merge"
@@ -520,19 +520,12 @@ EOF
     cp -f "${GIT_HOOKS_DIR}/post-merge" "${GIT_HOOKS_DIR}/post-checkout"
     chmod +x "${GIT_HOOKS_DIR}/post-merge" "${GIT_HOOKS_DIR}/post-checkout"
 
-    cat << 'EOF' > "${GIT_HOOKS_DIR}/post-commit"
-#!/bin/sh
-if [ -f ".agents/kit/gsd-graphify-update.cjs" ]; then
-    node .agents/kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
-elif [ -f "gsd-agy-kit/gsd-graphify-update.cjs" ]; then
-    node gsd-agy-kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
-elif [ -f "tools/gsd-agy-kit/gsd-graphify-update.cjs" ]; then
-    node tools/gsd-agy-kit/gsd-graphify-update.cjs >/dev/null 2>&1 &
-fi
-EOF
-    chmod +x "${GIT_HOOKS_DIR}/post-commit"
+    # Limpeza de post-commit legado: atualização do graphify é sob demanda via /graphify
+    if [ -f "${GIT_HOOKS_DIR}/post-commit" ] && grep -q "gsd-graphify-update" "${GIT_HOOKS_DIR}/post-commit"; then
+        rm -f "${GIT_HOOKS_DIR}/post-commit"
+    fi
 
-    echo -e "   \033[0;32mGit hooks (post-merge, post-checkout, post-commit) instalados em .git/hooks\033[0m"
+    echo -e "   \033[0;32mGit hooks (post-merge, post-checkout) instalados em .git/hooks\033[0m"
 fi
 
 # 12.1 Garantir exclusões de caches/índices em .git/info/exclude (sem sujar .gitignore rastreado)

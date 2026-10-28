@@ -212,18 +212,19 @@ async function main() {
 
     if (exitCode === 0) {
       const outDir = path.join(projectRoot, 'graphify-out');
-      const filesToCopy = [
-        ['graph.json', 'graph.json'],
-        ['graph.html', 'graph.html'],
-        ['GRAPH_REPORT.md', 'GRAPH_REPORT.md'],
-      ];
-
-      for (const [src, dest] of filesToCopy) {
-        const srcPath = path.join(outDir, src);
-        const destPath = path.join(graphsDir, dest);
-        if (fs.existsSync(srcPath)) {
-          fs.copyFileSync(srcPath, destPath);
-        }
+      if (fs.existsSync(outDir)) {
+        try {
+          const entries = fs.readdirSync(outDir);
+          for (const entry of entries) {
+            const srcPath = path.join(outDir, entry);
+            const destPath = path.join(graphsDir, entry);
+            try {
+              fs.copyFileSync(srcPath, destPath);
+              fs.unlinkSync(srcPath);
+            } catch {}
+          }
+          fs.rmSync(outDir, { recursive: true, force: true });
+        } catch {}
       }
 
       const targetGraph = path.join(graphsDir, 'graph.json');
@@ -255,7 +256,7 @@ async function main() {
           source: 'graphify-update',
           message: 'Falha ao atualizar grafo Graphify',
           stderr: lastStderr || `Graphify encerrou com código ${exitCode}`,
-          remediation: 'Execute "graphify update ." no terminal para diagnosticar erros no grafo.',
+          remediation: 'Execute "graphify update . && node .agents/kit/gsd-graphify-update.cjs" para atualizar e sincronizar o grafo.',
           fatal: false
         });
       }

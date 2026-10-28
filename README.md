@@ -1,6 +1,6 @@
-# Antigravity GSD Kit v2.5.0 🚀
+# Antigravity GSD Kit v2.5.1 🚀
 
-[![Release](https://img.shields.io/badge/release-v2.5.0-blue.svg)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.5.1-blue.svg)](CHANGELOG.md)
 [![Ponytail](https://img.shields.io/badge/Ponytail-Senior%20Dev%20Mode-darkgreen.svg)](#-ponytail--senior-dev-mode--yagni-estrito)
 [![Caveman](https://img.shields.io/badge/Caveman-Terse%20pt--BR-orange.svg)](#-caveman--voz-concisa-asd-ste100--shrink-compressor)
 [![Tests](https://img.shields.io/badge/tests-100%25%20passing%20(122%20tests)-brightgreen.svg)](#-bateria-de-testes-nativos-instantânea)
@@ -320,7 +320,7 @@ Para verificar se você está na última versão do **Antigravity GSD Kit**, con
 
 Ao inspecionar ou alterar código, a esteira obrigatória é:
 
-1. **`graphify query "<pergunta>"`** (via `run_command`): Análise de arquitetura macro e dependências de pacotes.
+1. **`graphify query --graph .planning/graphs/graph.json "<pergunta>"`** (via `run_command`): Análise de arquitetura macro e dependências de pacotes.
 2. **Motor Multi-LSP Híbrido (`lsp_*` MCP ou `node .agents/mcp-server.cjs lsp ...`)**: Para resolver definições (`definition`), referências cruzadas (`references`), assinaturas (`hover`/`symbols`), renomeações (`rename`) e diagnósticos (`diagnostics`) com precisão em Go, TS/JS, Python, Rust, PHP, C/C++, Java, C#, Ruby e Dart.
 3. **`ast-grep` CLI** (via `run_command: ast-grep run -p '<padrão>'` ou `mcp-server.cjs ast`): Buscas sintáticas e estruturais na AST.
 4. **`view_file` Cirúrgico:** Máximo de 100 linhas com `StartLine` e `EndLine` estritos.
