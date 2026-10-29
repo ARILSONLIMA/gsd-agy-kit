@@ -157,6 +157,8 @@ function analyzeTranscript(transcriptPath, cwd = process.cwd()) {
   let lastTimestamp = null;
   const toolCounts = {};
 
+  let detectedWorkspace = null;
+
   for (const line of lines) {
     try {
       const entry = JSON.parse(line);
@@ -171,6 +173,13 @@ function analyzeTranscript(transcriptPath, cwd = process.cwd()) {
           const tName = (tc && (tc.name || tc.tool_name || (tc.function && tc.function.name))) || null;
           if (tName) {
             toolCounts[tName] = (toolCounts[tName] || 0) + 1;
+          }
+          if (!detectedWorkspace) {
+            const rawArgs = JSON.stringify(tc.function?.arguments || tc.args || tc.arguments || '');
+            const m = rawArgs.match(/"(\/[^"]+?)\/(?:\.planning|\.agents|src|package\.json|comandos-gsd)/);
+            if (m && fs.existsSync(m[1])) {
+              detectedWorkspace = m[1];
+            }
           }
         }
       }
@@ -200,10 +209,12 @@ function analyzeTranscript(transcriptPath, cwd = process.cwd()) {
     .sort((a, b) => b.calls - a.calls)
     .slice(0, 5);
 
-  const { kitSavings, budgetStatus } = loadKitSavingsAndBudget(cwd, totalTokens);
+  const effectiveCwd = (cwd && cwd !== process.cwd()) ? cwd : (detectedWorkspace || cwd || process.cwd());
+  const { kitSavings, budgetStatus } = loadKitSavingsAndBudget(effectiveCwd, totalTokens);
 
   return {
     path: transcriptPath,
+    workspace: effectiveCwd,
     steps,
     inputTokens,
     cacheReadTokens,
@@ -369,13 +380,34 @@ Exemplos:
   // Identificação do alvo
   let targetConvId = null;
   let targetPath = null;
+  let targetWorkspace = null;
   const nonFlagArgs = args.filter(a => !a.startsWith('-'));
 
   if (nonFlagArgs.length > 0) {
     const candidate = nonFlagArgs[0];
     if (fs.existsSync(candidate)) {
-      targetPath = path.resolve(candidate);
-      targetConvId = path.basename(path.dirname(path.dirname(path.dirname(targetPath)))) || 'especificado';
+      const stat = fs.statSync(candidate);
+      if (stat.isDirectory()) {
+        targetWorkspace = path.resolve(candidate);
+        // Tentar mapear via cacheFile
+        targetConvId = getWorkspaceConvId(cacheFile, targetWorkspace);
+        if (!targetConvId) {
+          // Buscar entre sessões recentes
+          for (const s of sessions) {
+            try {
+              const headChunk = fs.readFileSync(s.path, 'utf8').slice(0, 50000);
+              if (headChunk.includes(targetWorkspace)) {
+                targetPath = s.path;
+                targetConvId = s.id;
+                break;
+              }
+            } catch (_) {}
+          }
+        }
+      } else {
+        targetPath = path.resolve(candidate);
+        targetConvId = path.basename(path.dirname(path.dirname(path.dirname(targetPath)))) || 'especificado';
+      }
     } else {
       targetConvId = candidate;
     }
@@ -385,7 +417,7 @@ Exemplos:
     targetConvId = process.env.ANTIGRAVITY_CONVERSATION_ID ||
                    process.env.CONVERSATION_ID ||
                    process.env.CONV_ID ||
-                   getWorkspaceConvId(cacheFile, process.cwd()) ||
+                   getWorkspaceConvId(cacheFile, targetWorkspace || process.cwd()) ||
                    (sessions[0] && sessions[0].id);
   }
 
@@ -404,7 +436,7 @@ Exemplos:
     }
   }
 
-  const metrics = analyzeTranscript(targetPath);
+  const metrics = analyzeTranscript(targetPath, targetWorkspace || process.cwd());
   if (!metrics) {
     console.error(`❌ Falha ao analisar transcript em: ${targetPath}`);
     process.exit(1);
@@ -412,7 +444,7 @@ Exemplos:
 
   const sessionInfo = {
     id: targetConvId,
-    workspace: process.cwd(),
+    workspace: metrics.workspace || targetWorkspace || process.cwd(),
     path: targetPath
   };
 

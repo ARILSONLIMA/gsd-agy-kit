@@ -2,6 +2,17 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.8.0] - 2026-10-29
+- **Otimização Extrema de Tokens em Planejamento & Blindagem Forense (`token-guard-pretool.cjs`, `mcp-server.cjs`, `token-report.cjs`):**
+  - **Teto Adaptativo de `STATE.md` (Eliminação do Ciclo de Recusa Inútil):** Arquivos `STATE.md` concisos (≤ 180 linhas ou < 8 KB) agora são liberados diretamente para leitura via `view_file`/`read_file`, eliminando o ciclo desnecessário de recusa de ferramenta, busca por caminhos inexistentes e comandos bash que desperdiçavam mais de 45.000 tokens por fase. Para arquivos volumosos (> 180 linhas), o bloqueio agora aponta com precisão para `.planning/state.json` e `.agents/kit/gsd-state-summary.cjs`.
+  - **Interceptador JIT de Subagentes Adormecidos (`.agents/agents-pool/*.md`):** Bloqueia tentativas do modelo de ler manualmente arquivos de prompt de 1.000+ linhas com `read_file`/`view_file` para cadastrá-los via `define_subagent`. O hook orienta a invocação direta via `invoke_subagent(TypeName="<agente>")`, ativando a promoção JIT em tempo real (<2ms) e poupando até 50.000 tokens por planejamento de fase.
+  - **Deduplicação Unificada de Documentação & Workflows:** A janela de deduplicação recente (180s) agora protege também arquivos Markdown volumosos (`workflows/*.md`, `*RESEARCH.md`, artefatos de planejamento), impedindo leituras repetidas dos mesmos blocos que causavam estouro de contexto em orquestradores de fase.
+  - **Correção Crítica no `mempalace_capture` (`mcp-server.cjs`):** Corrigido erro de `ReferenceError: text is not defined` na persistência de fatos com sucesso, restabelecendo a memória contínua sem quebras de execução ou amnésia de decisões.
+  - **Suporte Inteligente a Diretórios em `token-report.cjs`:** O comando agora aceita caminhos de diretório de projeto (ex: `node token-report.cjs /caminho/do/projeto`), resolvendo a sessão mais recente no brain e calculando o ROI do workspace alvo sem lançar erro `EISDIR`.
+  - **Diretrizes Canônicas de Subagentes & Batching (`rules/token-protocol.md`, `patch-agents.cjs`):** Inseridas proibições formais contra loops unitários de verificação de pacotes (exigindo batching ou `check_dependency`) e orientação expressa para isolamento de novas conversas após conclusão de fases críticas.
+- **Bumping de Versão v2.8.0:**
+  - `package.json`, `setup-ui.cjs`, `README.md`, e metadados de instalação atualizados para `v2.8.0`.
+
 ## [2.7.3] - 2026-10-28
 - **Instalação Zero-Friction Total com Zero-Baseline Padrão Universal (`setup-ui.cjs`, `setup.sh`, `setup.ps1`):**
   - **Eliminação do Prompt Legado Backend vs Fullstack:** Removida a pergunta interativa de seleção de arquitetura do instalador. Com a tecnologia de **Zero-Baseline (0 skills ativas)** e **JIT Auto-Promoter**, a divisão estática de skills tornou-se obsoleta, pois recursos adormecidos no pool consomem zero tokens no contexto e são promovidos sob demanda instantaneamente (<2ms).

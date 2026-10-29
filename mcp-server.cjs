@@ -643,8 +643,7 @@ async function handleToolCall(name, rawArgs) {
         const msg = res.duplicate
           ? `ℹ️ Fato já existia no MemPalace [${room}]: "${topic}".`
           : `✅ Fato registrado com sucesso no MemPalace [${room}] (ID: ${res.id}): "${topic}".`;
-        outcome = { text, isError: false };
-        outcome.text = msg;
+        outcome = { text: msg, isError: false };
         break;
       }
       case 'query_docs': {

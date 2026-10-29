@@ -344,12 +344,43 @@ function recordTokenSaving(category, estimatedTokens = 500) {
     const rawTarget = sanitizePath(args.Path || args.AbsolutePath || args.TargetFile || args.path || args.file_path || '');
     const target = rawTarget.replace(/\\/g, '/');
 
-    // STATE.md Blocker
-    if (target.endsWith('.planning/STATE.md') || target.endsWith('.planning\\STATE.md')) {
+    // STATE.md Blocker Inteligente (adaptativo por tamanho)
+    if (target.endsWith('.planning/state.md') || target.endsWith('.planning/STATE.md') || target.endsWith('.planning\\state.md') || target.endsWith('.planning\\STATE.md')) {
+      let stateLineCount = 0;
+      let stateFileSize = 0;
+      try {
+        const resolvedState = path.isAbsolute(rawTarget) ? path.normalize(rawTarget) : path.resolve(PROJECT_ROOT, rawTarget);
+        if (fs.existsSync(resolvedState)) {
+          const stat = fs.statSync(resolvedState);
+          stateFileSize = stat.size;
+          const content = fs.readFileSync(resolvedState, 'utf8');
+          stateLineCount = content.split('\n').length;
+        }
+      } catch {}
+
+      // Se o STATE.md for enxuto (<= 180 linhas ou < 8KB), permite leitura direta sem atrito
+      if (stateLineCount > 0 && stateLineCount <= 180 && stateFileSize < 8192) {
+        // Permitido direto - custo menor que o ciclo de rejeição e fallback
+      } else {
+        recordTokenSaving('dedup_block', 1200);
+        return respond(
+          'deny',
+          '🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: O STATE.md possui mais de 180 linhas e consome excesso de tokens em formatação de tabelas Markdown.\n' +
+          'Utilize o arquivo estruturado pré-compilado: leia .planning/state.json ou execute "node .agents/kit/gsd-state-summary.cjs" para obter o resumo cirúrgico.'
+        );
+      }
+    }
+
+    // 1.05 Interceptador de leitura bruta de subagentes no pool (.agents/agents-pool/)
+    const agentPoolMatch = target.match(/\.agents\/agents-pool\/([a-zA-Z0-9_-]+)\.md$/i);
+    if (agentPoolMatch) {
+      const agentName = agentPoolMatch[1];
+      recordTokenSaving('sandbox_shield', 1500);
       return respond(
         'deny',
-        '🛑 BLOQUEIO DE PROTEÇÃO DE TOKENS: A leitura bruta do STATE.md gasta milhares de tokens inúteis em formatação de tabelas Markdown.\n' +
-        'Utilize o arquivo estruturado pré-compilado: leia .planning/state_summary.json ou execute "node gsd-state-summary.cjs" para obter o resumo cirúrgico.'
+        `🛑 ECONOMIA DE TOKENS: Não é necessário ler o arquivo de prompt nem usar define_subagent!\n` +
+        `O subagente "${agentName}" possui ativação JIT automática.\n` +
+        `Invoque-o DIRETAMENTE via invoke_subagent(TypeName="${agentName}", Role="...", Prompt="...") — o Kit promoverá o agente em tempo real.`
       );
     }
 
@@ -428,8 +459,65 @@ function recordTokenSaving(category, estimatedTokens = 500) {
 
     const isCodeFile = /\.(go|ts|tsx|js|jsx|cjs|mjs|py|java|c|cpp|cc|cxx|h|hpp|rs|vue|svelte|cs|php|rb|swift|kt|kts|sql|dart|lua|sh|bash|ex|exs|tf)$/i.test(target);
 
-    // If it's a documentation/config file or planning artifact, allow directly
+    // 1.15 Deduplicação de Leituras Recentes em Documentação, Workflows e Planejamento
     if (!isCodeFile) {
+      const RECENT_READS_FILE = path.join(CACHE_DIR, 'recent-reads.json');
+      const RECENT_READS_LEGACY = path.join(PROJECT_ROOT, '.agents', '.recent-reads.json');
+      try {
+        const resolvedDocPath = path.isAbsolute(rawTarget)
+          ? path.normalize(rawTarget)
+          : path.resolve(PROJECT_ROOT, rawTarget);
+        let docMtime = 0;
+        try { docMtime = fs.statSync(resolvedDocPath).mtimeMs; } catch {}
+
+        if (docMtime > 0) {
+          let recentReads = [];
+          const readsFile = fs.existsSync(RECENT_READS_FILE) ? RECENT_READS_FILE : (fs.existsSync(RECENT_READS_LEGACY) ? RECENT_READS_LEGACY : null);
+          if (readsFile) {
+            try { recentReads = JSON.parse(fs.readFileSync(readsFile, 'utf8')); } catch {}
+          }
+
+          const now = Date.now();
+          recentReads = recentReads.filter(r => r && (now - r.timestamp) < 180000);
+
+          let checkStart = parseInt(args.StartLine ?? args.startLine ?? args.start_line, 10);
+          let checkEnd = parseInt(args.EndLine ?? args.endLine ?? args.end_line, 10);
+          if (isNaN(checkStart)) checkStart = 1;
+          if (isNaN(checkEnd)) {
+            let lineCount = 1000;
+            try { lineCount = fs.readFileSync(resolvedDocPath, 'utf8').split('\n').length; } catch {}
+            checkEnd = lineCount;
+          }
+
+          const coveringRead = recentReads.find(r =>
+            r.target === resolvedDocPath &&
+            r.mtime === docMtime &&
+            r.startLine <= checkStart &&
+            r.endLine >= checkEnd &&
+            (now - r.timestamp) < 180000
+          );
+          if (coveringRead) {
+            recordTokenSaving('dedup_block', Math.max(150, (checkEnd - checkStart + 1) * 10));
+            return respond(
+              'deny',
+              `ℹ️ DEDUPLICAÇÃO DE LEITURAS (ECONOMIA DE TOKENS):\n` +
+              `O trecho de ${path.basename(rawTarget)} (linhas ${checkStart}-${checkEnd}) já está presente no contexto (coberto pela leitura recente das linhas ${coveringRead.startLine}-${coveringRead.endLine}) e o arquivo não sofreu alterações no disco.\n` +
+              `Consulte o histórico da conversa para evitar releituras redundantes.`
+            );
+          }
+
+          recentReads.push({
+            target: resolvedDocPath,
+            startLine: checkStart,
+            endLine: checkEnd,
+            mtime: docMtime,
+            timestamp: now
+          });
+          if (recentReads.length > 25) recentReads = recentReads.slice(-25);
+          writeJsonAtomic(RECENT_READS_FILE, recentReads);
+        }
+      } catch {}
+
       return respond('allow', null, modifiedArgs);
     }
 

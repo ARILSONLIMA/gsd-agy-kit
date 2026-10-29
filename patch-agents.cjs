@@ -142,11 +142,14 @@ function buildProtocolBlock(targetDir) {
       '8. ATALHOS DELIBERADOS: Registre atalhos de escopo no código exatamente como: // shortcut: <limite>, <quando refatorar>.',
       '',
       'REGRAS RÍGIDAS DE SEGURANÇA E CONTEXTO:',
+      '- PROIBIDO: Ler arquivos em .agents/agents-pool/ com read_file/view_file ou usar define_subagent (invoque subagentes diretamente com invoke_subagent(TypeName="<nome>")).',
+      '- PROIBIDO: Executar consultas de dependências/pacotes unitárias em loop (use lote único ou check_dependency).',
       '- PROIBIDO: Usar read_file/view_file sem StartLine/EndLine em arquivos de código.',
       '- PROIBIDO: Usar comandos de despejo bruto no terminal (cat, Get-Content, type, head).',
       '- PROIBIDO: Sobrescrever arquivos de código inteiros existentes (use SEMPRE edit_file/replace_file_content cirúrgico).',
       '- PROIBIDO: Usar ast-grep com flags de reescrita em lote (-r, --rewrite).',
       `- PROIBIDO: Executar testes em modo verboso (${stack.testCmd}) em lote.`,
+      '- TRANSIÇÃO DE FASE: Ao concluir uma fase completa, notifique o usuário para abrir uma nova conversa para o próximo comando gsd, evitando saturação de contexto.',
       '</token_efficiency_protocol>',
       PROTOCOL_MARKER_END
     ].join('\n');
@@ -172,12 +175,15 @@ function buildProtocolBlock(targetDir) {
     '8. INSPEÇÃO CIRÚRGICA: read_file/view_file sempre com StartLine e EndLine restritos (máximo 100 linhas).',
     '',
     'REGRAS RÍGIDAS DE SEGURANÇA E CONTEXTO:',
+    '- PROIBIDO: Ler arquivos em .agents/agents-pool/ com read_file/view_file ou usar define_subagent (invoque subagentes diretamente com invoke_subagent(TypeName="<nome>")).',
+    '- PROIBIDO: Executar consultas de dependências/pacotes unitárias em loop (agrupe checagens em lote único ou use check_dependency).',
     '- PROIBIDO: Encadeamento burocrático de ferramentas na fase de forense/diagnóstico.',
     '- PROIBIDO: Usar read_file/view_file sem StartLine/EndLine em arquivos de código.',
     '- PROIBIDO: Usar comandos de despejo bruto no terminal (cat, Get-Content, type, head).',
     '- PROIBIDO: Sobrescrever arquivos de código existentes com write_file/write_to_file (use SEMPRE edit_file/replace_file_content cirúrgico).',
     '- PROIBIDO: Usar ast-grep com flags de reescrita em lote (-r, --rewrite).',
     `- PROIBIDO: Executar testes em modo verboso (${stack.testCmd}) em lote.`,
+    '- TRANSIÇÃO DE FASE: Ao concluir uma fase completa, notifique o usuário para abrir uma nova conversa para o próximo comando gsd, evitando saturação de contexto.',
     '</token_efficiency_protocol>',
     PROTOCOL_MARKER_END
   ].join('\n');
