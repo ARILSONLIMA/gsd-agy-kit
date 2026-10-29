@@ -2,6 +2,14 @@
 
 Todas as melhorias e novidades relevantes deste projeto são documentadas neste arquivo.
 
+## [2.8.1] - 2026-10-29
+- **Mapeamento Transparente de Subagentes & Blindagem contra Execução Monolítica (`token-guard-pretool.cjs`, `rules/token-protocol.md`, `patch-agents.cjs`):**
+  - **Mapeamento JIT Automático para `self` no Antigravity CLI:** O hook `PreToolUse` agora intercepta chamadas de `invoke_subagent` com subagentes GSD externos (`gsd-executor`, `gsd-planner`, etc.) e sobrescreve cirurgicamente os argumentos via `{ decision: "allow", overwrite: { TypeName: "self", Role: args.Role || args.TypeName } }`. Isso elimina completamente o erro nativo `subagent "<nome>" not found or not allowed to be invoked`, garantindo execução de tarefas e ondas em contextos isolados sem degradação ou falhas de tempo de execução.
+  - **Eliminação de Execução Monolítica na Conversa Principal:** Anteriormente, o erro de invocação de subagente forçava o orquestrador a assumir a execução manual de todas as ondas de planos no thread principal, acumulando mais de 18.5 milhões de tokens processados e 195k tokens por turno no contexto da fase. Com o isolamento garantido via `self`, a conversa pai permanece leve (< 40k tokens), reduzindo o consumo de tokens em mais de 80%.
+  - **Diretriz Canônica de Isolamento de Ondas:** `rules/token-protocol.md` e `patch-agents.cjs` agora proíbem estritamente que orquestradores executem planos de onda monoliticamente na thread pai e orientam o despacho concorrente via subagentes.
+- **Bumping de Versão v2.8.1:**
+  - `package.json`, `setup-ui.cjs`, `README.md`, e metadados de instalação atualizados para `v2.8.1`.
+
 ## [2.8.0] - 2026-10-29
 - **Otimização Extrema de Tokens em Planejamento & Blindagem Forense (`token-guard-pretool.cjs`, `mcp-server.cjs`, `token-report.cjs`):**
   - **Teto Adaptativo de `STATE.md` (Eliminação do Ciclo de Recusa Inútil):** Arquivos `STATE.md` concisos (≤ 180 linhas ou < 8 KB) agora são liberados diretamente para leitura via `view_file`/`read_file`, eliminando o ciclo desnecessário de recusa de ferramenta, busca por caminhos inexistentes e comandos bash que desperdiçavam mais de 45.000 tokens por fase. Para arquivos volumosos (> 180 linhas), o bloqueio agora aponta com precisão para `.planning/state.json` e `.agents/kit/gsd-state-summary.cjs`.

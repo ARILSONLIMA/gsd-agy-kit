@@ -945,7 +945,33 @@ function recordTokenSaving(category, estimatedTokens = 500) {
       }
     }
 
-    return respond('allow');
+    // No Antigravity CLI, subagentes do ecossistema GSD (ex: 'gsd-executor', 'gsd-planner')
+    // devem ser executados via 'self' com preservação de Role e Prompt.
+    // Isso garante execução em contexto de conversa 100% isolado (zero poluição do pai)
+    // sem disparar erro nativo de 'subagent not found or not allowed to be invoked'.
+    let modifiedArgs = null;
+    const nativeSubagents = new Set(['self', 'research', 'image-generator']);
+
+    if (args.TypeName && typeof args.TypeName === 'string' && !nativeSubagents.has(args.TypeName)) {
+      modifiedArgs = Object.assign({}, args, {
+        TypeName: 'self',
+        Role: args.Role || args.TypeName
+      });
+    } else if (Array.isArray(args.Subagents)) {
+      let changed = false;
+      const mapped = args.Subagents.map(s => {
+        if (s && s.TypeName && !nativeSubagents.has(s.TypeName)) {
+          changed = true;
+          return Object.assign({}, s, { TypeName: 'self', Role: s.Role || s.TypeName });
+        }
+        return s;
+      });
+      if (changed) {
+        modifiedArgs = Object.assign({}, args, { Subagents: mapped });
+      }
+    }
+
+    return respond('allow', null, modifiedArgs);
   }
 
   return respond('allow');

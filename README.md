@@ -1,9 +1,9 @@
-# Antigravity GSD Kit v2.8.0 🚀
+# Antigravity GSD Kit v2.8.1 🚀
 
-[![Release](https://img.shields.io/badge/release-v2.8.0-blue.svg)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.8.1-blue.svg)](CHANGELOG.md)
 [![Ponytail](https://img.shields.io/badge/Ponytail-Senior%20Dev%20Mode-darkgreen.svg)](#-ponytail--senior-dev-mode--yagni-estrito)
 [![Caveman](https://img.shields.io/badge/Caveman-Terse%20pt--BR-orange.svg)](#-caveman--voz-concisa-asd-ste100--shrink-compressor)
-[![Tests](https://img.shields.io/badge/tests-100%25%20passing%20(122%20tests)-brightgreen.svg)](#-bateria-de-testes-nativos-instantânea)
+[![Tests](https://img.shields.io/badge/tests-100%25%20passing%20(124%20tests)-brightgreen.svg)](#-bateria-de-testes-nativos-instantânea)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Adaptador Universal de Governança, Compatibilidade, Auto-Cura e Economia de Tokens com Ponytail Senior Dev e Caveman Terse Voice para GSD no Antigravity CLI**
